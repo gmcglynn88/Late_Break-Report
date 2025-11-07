@@ -433,9 +433,9 @@
       }
     }
 
-    // ===== SIMPLIFIED Schedule Data Approach =====
+    // ===== CORRECTED Schedule Data Approach =====
     async function fetchScheduleData(businessUnitId, managementUnitId, fromDate, toDate) {
-      console.log('Using SIMPLIFIED schedule data approach...');
+      console.log('Using CORRECTED schedule data approach...');
       
       const scheduleData = {
         userSchedules: {},
@@ -446,79 +446,123 @@
         // First, fetch activity codes
         await fetchActivityCodes(businessUnitId);
 
-        // Let's try a completely different approach - use the agent schedules query directly
-        const body = {
-          managementUnitIds: [managementUnitId],
-          startDate: `${fromDate}T00:00:00.000Z`,
-          endDate: `${toDate}T23:59:59.999Z`
-        };
-
-        console.log('Trying direct agent schedules query with body:', body);
-
-        // Try the business unit schedules query
-        const response = await fetch(
-          `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/schedules/query`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${state.token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-          }
-        );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.warn('Business Unit schedule query failed:', errorText);
-          throw new Error(`Schedule query failed: ${response.status}`);
+        // Get unique week start dates in the range
+        const weekStarts = new Set();
+        const currentDate = new Date(fromDate);
+        const endDate = new Date(toDate);
+        
+        while (currentDate <= endDate) {
+          const weekStart = getWeekStart(currentDate);
+          weekStarts.add(weekStart);
+          currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        const data = await response.json();
-        console.log('Direct schedule query successful:', data);
+        console.log('Week starts to fetch:', Array.from(weekStarts));
 
-        // Process the user schedules
-        if (data.userSchedules) {
-          Object.keys(data.userSchedules).forEach(userId => {
-            const userSchedule = data.userSchedules[userId];
-            if (userSchedule.shifts && userSchedule.shifts.length > 0) {
-              scheduleData.userSchedules[userId] = {
-                shifts: userSchedule.shifts.map(shift => {
-                  // Process each activity in the shift
-                  const activities = (shift.activities || []).map(activity => {
-                    const activityCodeId = activity.activityCodeId;
-                    const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
-                    
+        // Fetch schedules for each week
+        for (const weekId of weekStarts) {
+          try {
+            console.log(`Fetching schedules for week: ${weekId}`);
+            
+            // GET: Get schedules for this week
+            const schedulesResponse = await api(
+              `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules?includeOnlyPublished=true`
+            );
+            
+            const schedules = schedulesResponse.entities || [];
+            console.log(`Found ${schedules.length} schedules for week ${weekId}`, schedules);
+
+            if (schedules.length === 0) {
+              console.log(`No published schedules found for week ${weekId}`);
+              continue;
+            }
+
+            // Use the first schedule (usually the published one)
+            const schedule = schedules[0];
+            const scheduleId = schedule.id;
+            console.log(`Using schedule: ${scheduleId} for week ${weekId}`);
+
+            // POST: Get agent schedules with management unit ID
+            console.log(`Fetching agent schedules for schedule ${scheduleId}...`);
+            
+            const agentSchedulesResponse = await fetch(
+              `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${scheduleId}/agentschedules/query`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${state.token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  managementUnitId: managementUnitId
+                })
+              }
+            );
+
+            if (!agentSchedulesResponse.ok) {
+              const errorText = await agentSchedulesResponse.text();
+              console.warn(`Agent schedules API error: ${agentSchedulesResponse.status}`, errorText);
+              continue;
+            }
+
+            const agentSchedulesData = await agentSchedulesResponse.json();
+            console.log(`Agent schedules response for ${scheduleId}:`, agentSchedulesData);
+
+            // Process the agent schedules data
+            if (agentSchedulesData.result && agentSchedulesData.result.agentSchedules) {
+              agentSchedulesData.result.agentSchedules.forEach(agentSchedule => {
+                const userId = agentSchedule.user.id;
+                const shifts = agentSchedule.shifts || [];
+                
+                if (shifts.length > 0) {
+                  const processedShifts = shifts.map(shift => {
+                    // Process each activity in the shift
+                    const activities = (shift.activities || []).map(activity => {
+                      const activityCodeId = activity.activityCodeId;
+                      const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
+                      
+                      return {
+                        startDate: activity.startDate,
+                        endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
+                        activityName: activityName,
+                        activityCodeId: activityCodeId,
+                        lengthMinutes: activity.lengthMinutes
+                      };
+                    });
+
                     return {
-                      startDate: activity.startDate,
-                      endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
-                      activityName: activityName,
-                      activityCodeId: activityCodeId,
-                      lengthMinutes: activity.lengthMinutes
+                      startDate: shift.startDate,
+                      endDate: shift.endDate,
+                      activities: activities
                     };
                   });
 
-                  return {
-                    startDate: shift.startDate,
-                    endDate: shift.endDate,
-                    activities: activities
-                  };
-                })
-              };
+                  if (!scheduleData.userSchedules[userId]) {
+                    scheduleData.userSchedules[userId] = {
+                      shifts: processedShifts
+                    };
+                  } else {
+                    scheduleData.userSchedules[userId].shifts = [
+                      ...scheduleData.userSchedules[userId].shifts,
+                      ...processedShifts
+                    ];
+                  }
+                }
+              });
             }
-          });
+
+          } catch (e) {
+            console.warn(`Failed to fetch schedules for week ${weekId}:`, e);
+          }
         }
 
-        console.log('Processed schedule data:', scheduleData);
+        console.log('Final schedule data collected:', scheduleData);
         return scheduleData;
 
       } catch (e) {
-        console.error('Simplified schedule approach failed:', e);
+        console.error('Schedule data approach failed:', e);
         
-        // If all else fails, let's at least show the analytics data with a note about missing schedules
-        console.log('Creating fallback schedule data structure');
-        
-        // We'll return empty schedule data but the process function will handle it gracefully
+        // Return empty schedule data but the process function will handle it gracefully
         return scheduleData;
       }
     }
