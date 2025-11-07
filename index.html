@@ -58,6 +58,11 @@
     /* Debug Styles */
     .debug-info {background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 12px; margin-top: 12px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;}
     .debug-toggle {background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 8px;}
+    
+    /* API Method Selector */
+    .method-selector {display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;}
+    .method-option {flex: 1; min-width: 120px;}
+    .method-option input {margin-right: 6px;}
   </style>
 </head>
 <body>
@@ -118,6 +123,24 @@
           <input id="userSearch" type="text" placeholder="Search by user or team name" style="margin-top:8px;width:100%"/>
         </div>
       </div>
+
+      <!-- API Method Selector -->
+      <div class="method-selector">
+        <label style="width: 100%; margin-bottom: 8px;">API Method:</label>
+        <div class="method-option">
+          <input type="radio" id="methodDirect" name="apiMethod" value="direct" checked>
+          <label for="methodDirect">Direct API</label>
+        </div>
+        <div class="method-option">
+          <input type="radio" id="methodProxy" name="apiMethod" value="proxy">
+          <label for="methodProxy">CORS Proxy</label>
+        </div>
+        <div class="method-option">
+          <input type="radio" id="methodAnalytics" name="apiMethod" value="analytics">
+          <label for="methodAnalytics">Analytics Only</label>
+        </div>
+      </div>
+
       <button id="fetchSchedulesBtn" class="full-width-btn">Fetch Schedules Only</button>
       <button id="fetchAttendanceBtn" class="full-width-btn" style="display:none; margin-top: 8px;">Run Attendance Report</button>
       
@@ -204,7 +227,12 @@
       clientId: 'fe305808-b368-4547-8af9-325d28d552bb',
       redirectUri: 'https://gmcglynn88.github.io/Late_Break-Report/',
       loginHost: 'https://login.mypurecloud.ie',
-      apiHost: 'https://api.mypurecloud.ie'
+      apiHost: 'https://api.mypurecloud.ie',
+      // CORS proxy options
+      corsProxies: [
+        'https://cors-anywhere.herokuapp.com/',
+        'https://api.allorigins.win/raw?url='
+      ]
     };
 
     // Definition of "late"
@@ -252,6 +280,211 @@
     function toggleDebug() {
       const debugInfo = $('debugInfo');
       debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // ===== API Helper with CORS Proxy Support =====
+    function getApiMethod() {
+      return document.querySelector('input[name="apiMethod"]:checked').value;
+    }
+
+    function getApiUrl(path) {
+      const method = getApiMethod();
+      const fullUrl = `${CONFIG.apiHost}${path}`;
+      
+      if (method === 'proxy') {
+        // Use CORS proxy
+        const proxyUrl = CONFIG.corsProxies[0];
+        return `${proxyUrl}${encodeURIComponent(fullUrl)}`;
+      }
+      
+      return fullUrl;
+    }
+
+    async function api(path, options = {}) {
+      if(!state.token) throw new Error('Not authenticated');
+      
+      const url = getApiUrl(path);
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${state.token}`,
+          ...options.headers
+        },
+        ...options
+      };
+      
+      addDebugLog(`API Request: ${path}`, { 
+        method: options.method || 'GET', 
+        url: url,
+        apiMethod: getApiMethod()
+      });
+      
+      try {
+        const res = await fetch(url, config);
+        
+        addDebugLog(`API Response: ${res.status} ${res.statusText}`, {
+          url: url,
+          status: res.status,
+          statusText: res.statusText,
+          apiMethod: getApiMethod()
+        });
+        
+        if(res.status===401||res.status===403) throw new Error(`Authentication error (${res.status}). Please refresh.`);
+        if(!res.ok){ 
+          const t = await res.text().catch(()=> '');
+          throw new Error(`API Error: ${res.status} ${res.statusText}${t?` - ${t.slice(0,200)}`:''}`);
+        }
+        return res.json();
+      } catch (error) {
+        addDebugLog(`API Error: ${error.message}`, { path, error: error.toString(), apiMethod: getApiMethod() });
+        throw error;
+      }
+    }
+
+    // ===== Alternative Schedule Fetching Methods =====
+    async function fetchSchedulesAlternative(businessUnitId, managementUnitId, fromDate, toDate) {
+      const method = getApiMethod();
+      addDebugLog(`Using alternative schedule fetching method: ${method}`);
+      
+      if (method === 'analytics') {
+        return await fetchSchedulesFromAnalytics(businessUnitId, managementUnitId, fromDate, toDate);
+      } else {
+        return await fetchSchedulesDirect(businessUnitId, managementUnitId, fromDate, toDate);
+      }
+    }
+
+    async function fetchSchedulesDirect(businessUnitId, managementUnitId, fromDate, toDate) {
+      addDebugLog('Trying direct schedule fetch with GET requests');
+      
+      const scheduleData = {
+        userSchedules: {},
+        schedulePeriods: []
+      };
+
+      try {
+        // First, fetch activity codes
+        await fetchActivityCodes(businessUnitId);
+
+        // Get users from the management unit
+        const muUsersResponse = await api(`/api/v2/workforcemanagement/managementunits/${managementUnitId}/users`);
+        const muUsers = muUsersResponse.entities || [];
+        addDebugLog(`Found ${muUsers.length} users in management unit`);
+
+        if (muUsers.length === 0) {
+          return scheduleData;
+        }
+
+        // Try to get published schedules using GET endpoints
+        showProgress('Looking for published schedules...', 'Fetching Schedules');
+        
+        // Get business unit weeks to find schedule IDs
+        try {
+          const weeksResponse = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks`);
+          const weeks = weeksResponse.entities || [];
+          addDebugLog(`Found ${weeks.length} weeks in business unit`);
+          
+          // Look for schedules in relevant weeks
+          for (const week of weeks.slice(0, 5)) { // Check recent weeks
+            try {
+              const schedulesResponse = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${week.id}/schedules`);
+              const schedules = schedulesResponse.entities || [];
+              addDebugLog(`Found ${schedules.length} schedules in week ${week.id}`);
+              
+              for (const schedule of schedules) {
+                if (schedule.user && muUsers.some(u => u.id === schedule.user.id)) {
+                  const userId = schedule.user.id;
+                  if (!scheduleData.userSchedules[userId]) {
+                    scheduleData.userSchedules[userId] = { shifts: [] };
+                  }
+                  // Add schedule info (we'll need to process activities later)
+                  scheduleData.userSchedules[userId].shifts.push({
+                    scheduleId: schedule.id,
+                    weekId: week.id,
+                    user: schedule.user
+                  });
+                }
+              }
+            } catch (weekError) {
+              addDebugLog(`Error fetching schedules for week ${week.id}`, { error: weekError.message });
+            }
+          }
+        } catch (weeksError) {
+          addDebugLog('Error fetching weeks', { error: weeksError.message });
+        }
+
+        return scheduleData;
+
+      } catch (e) {
+        addDebugLog('Direct schedule fetch failed', { error: e.message });
+        throw e;
+      }
+    }
+
+    async function fetchSchedulesFromAnalytics(businessUnitId, managementUnitId, fromDate, toDate) {
+      addDebugLog('Trying to infer schedules from analytics data');
+      
+      const scheduleData = {
+        userSchedules: {},
+        schedulePeriods: []
+      };
+
+      try {
+        // Use analytics data to infer schedules
+        const body = {
+          interval: `${fromDate}T00:00:00/${toDate}T23:59:59`,
+          order: "asc",
+          orderBy: "conversationStart",
+          paging: { pageSize: 50, pageNumber: 1 }
+        };
+
+        addDebugLog('Fetching analytics data to infer schedules');
+        const analyticsResponse = await fetch(getApiUrl('/api/v2/analytics/users/details/query'), {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${state.token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!analyticsResponse.ok) {
+          throw new Error(`Analytics error: ${analyticsResponse.status}`);
+        }
+
+        const analyticsData = await analyticsResponse.json();
+        addDebugLog(`Received analytics data with ${analyticsData.userDetails?.length || 0} user details`);
+
+        // Process analytics data to create inferred schedules
+        if (analyticsData.userDetails) {
+          analyticsData.userDetails.forEach(userDetail => {
+            const userId = userDetail.userId;
+            if (userId && userDetail.routingStatus) {
+              const activities = userDetail.routingStatus.filter(activity => 
+                activity.startTime && activity.status
+              );
+              
+              if (activities.length > 0) {
+                scheduleData.userSchedules[userId] = {
+                  shifts: activities.map(activity => ({
+                    startDate: activity.startTime,
+                    endDate: activity.endTime || new Date(new Date(activity.startTime).getTime() + 3600000).toISOString(), // Default 1 hour
+                    activityName: activity.status,
+                    lengthMinutes: 60, // Default duration
+                    paid: true,
+                    inferred: true // Mark as inferred from analytics
+                  }))
+                };
+              }
+            }
+          });
+        }
+
+        addDebugLog(`Inferred ${Object.keys(scheduleData.userSchedules).length} user schedules from analytics`);
+        return scheduleData;
+
+      } catch (e) {
+        addDebugLog('Analytics-based schedule inference failed', { error: e.message });
+        throw e;
+      }
     }
 
     // ===== Utils =====
@@ -378,42 +611,6 @@
       $('authStatus').style.display = 'none';
     }
 
-    // ===== API helper =====
-    async function api(path, options = {}) {
-      if(!state.token) throw new Error('Not authenticated');
-      
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${state.token}`,
-          ...options.headers
-        },
-        ...options
-      };
-      
-      addDebugLog(`API Request: ${path}`, { method: options.method || 'GET', headers: config.headers });
-      
-      try {
-        const res = await fetch(`${CONFIG.apiHost}${path}`, config);
-        
-        addDebugLog(`API Response: ${res.status} ${res.statusText}`, {
-          url: `${CONFIG.apiHost}${path}`,
-          status: res.status,
-          statusText: res.statusText,
-          headers: Object.fromEntries(res.headers.entries())
-        });
-        
-        if(res.status===401||res.status===403) throw new Error(`Authentication error (${res.status}). Please refresh.`);
-        if(!res.ok){ 
-          const t = await res.text().catch(()=> '');
-          throw new Error(`API Error: ${res.status} ${res.statusText}${t?` - ${t.slice(0,200)}`:''}`);
-        }
-        return res.json();
-      } catch (error) {
-        addDebugLog(`API Error: ${error.message}`, { path, error: error.toString() });
-        throw error;
-      }
-    }
-
     // ===== Business Units =====
     async function fetchBusinessUnits(){
       try{
@@ -469,134 +666,6 @@
       }
     }
 
-    // ===== AGENT SCHEDULES APPROACH =====
-    async function fetchSchedulesOnly(businessUnitId, managementUnitId, fromDate, toDate) {
-      addDebugLog('Starting schedule fetch using Agent Schedules approach');
-      
-      const scheduleData = {
-        userSchedules: {},
-        schedulePeriods: []
-      };
-
-      try {
-        // First, fetch activity codes
-        showProgress('Fetching activity codes...', 'Fetching Schedules');
-        await fetchActivityCodes(businessUnitId);
-
-        // Get users from the management unit
-        showProgress('Getting users from management unit...', 'Fetching Schedules');
-        addDebugLog('Fetching users from management unit');
-        const muUsersResponse = await api(`/api/v2/workforcemanagement/managementunits/${managementUnitId}/users`);
-        const muUsers = muUsersResponse.entities || [];
-        addDebugLog(`Found ${muUsers.length} users in management unit`, muUsers);
-
-        if (muUsers.length === 0) {
-          addDebugLog('No users found in management unit');
-          return scheduleData;
-        }
-
-        showProgress(`Fetching schedules for ${muUsers.length} users...`, 'Fetching Schedules');
-        let userIndex = 0;
-
-        // Try agent schedules search for each user
-        for (const user of muUsers) {
-          userIndex++;
-          updateProgress((userIndex / muUsers.length) * 100, userIndex, muUsers.length);
-          
-          try {
-            addDebugLog(`Fetching schedule for user: ${user.name} (${user.id})`);
-            
-            // Use the agent schedules search endpoint
-            const body = {
-              startDate: `${fromDate}T00:00:00.000Z`,
-              endDate: `${toDate}T23:59:59.999Z`,
-              userIds: [user.id]
-            };
-
-            addDebugLog(`Making agent schedules request for user ${user.id}`, body);
-            
-            const response = await fetch(
-              `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/agentschedules/search`,
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${state.token}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
-              }
-            );
-
-            addDebugLog(`Agent schedules response status: ${response.status}`, {
-              userId: user.id,
-              status: response.status,
-              statusText: response.statusText
-            });
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              addDebugLog(`Agent schedules search failed for user ${user.name}`, {
-                status: response.status,
-                error: errorText
-              });
-              continue;
-            }
-
-            const data = await response.json();
-            addDebugLog(`Agent schedules data received for user ${user.name}`, data);
-
-            // Process the agent schedules
-            if (data.entities && data.entities.length > 0) {
-              const userShifts = [];
-              
-              data.entities.forEach(entity => {
-                if (entity.agentSchedule && entity.agentSchedule.shifts) {
-                  entity.agentSchedule.shifts.forEach(shift => {
-                    if (shift.activities) {
-                      shift.activities.forEach(activity => {
-                        // Map activity code to name
-                        const activityCodeId = activity.activityCodeId;
-                        const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
-                        
-                        userShifts.push({
-                          startDate: activity.startDate,
-                          endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
-                          activityName: activityName,
-                          activityCodeId: activityCodeId,
-                          lengthMinutes: activity.lengthMinutes,
-                          paid: activity.paid
-                        });
-                      });
-                    }
-                  });
-                }
-              });
-
-              if (userShifts.length > 0) {
-                scheduleData.userSchedules[user.id] = {
-                  shifts: userShifts
-                };
-                addDebugLog(`Found ${userShifts.length} shifts for user ${user.name}`);
-              }
-            } else {
-              addDebugLog(`No schedule entities found for user ${user.name}`);
-            }
-          } catch (e) {
-            console.warn(`Failed to fetch schedule for user ${user.name}:`, e);
-            addDebugLog(`Failed to fetch schedule for user ${user.name}`, { error: e.message });
-          }
-        }
-
-        addDebugLog('Final schedule data collected', scheduleData);
-        return scheduleData;
-
-      } catch (e) {
-        console.error('Agent schedules approach failed:', e);
-        addDebugLog('Agent schedules approach failed', { error: e.message });
-        throw e;
-      }
-    }
-
     // ===== Process Schedule Data for Display =====
     function processScheduleData(scheduleData) {
       const rows = [];
@@ -612,7 +681,7 @@
         
         userSchedule.shifts.forEach(shift => {
           uniqueActivities.add(shift.activityName);
-          totalShiftLength += shift.lengthMinutes;
+          totalShiftLength += shift.lengthMinutes || 60; // Default to 60 minutes if not specified
           shiftCount++;
 
           const userTeams = state.teamsByUserId[userId] || [];
@@ -624,12 +693,13 @@
             userName,
             teamNames,
             teamIds,
-            date: shift.startDate.slice(0, 10),
-            scheduledActivity: shift.activityName,
+            date: shift.startDate ? shift.startDate.slice(0, 10) : 'Unknown',
+            scheduledActivity: shift.activityName || 'Unknown Activity',
             scheduledStart: shift.startDate,
             scheduledEnd: shift.endDate,
-            lengthMinutes: shift.lengthMinutes,
-            paid: shift.paid
+            lengthMinutes: shift.lengthMinutes || 60,
+            paid: shift.paid !== undefined ? shift.paid : true,
+            inferred: shift.inferred || false
           };
 
           rows.push(row);
@@ -657,7 +727,7 @@
       addDebugLog(`Rendering schedules, total rows: ${state.scheduleRows.length}`);
       
       if (!state.scheduleRows.length) {
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No schedule data available for the selected period.</div><div class="muted" style="margin-top:8px;">Check that schedules are published for the selected date range.</div></div>';
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No schedule data available for the selected period.</div><div class="muted" style="margin-top:8px;">Try different API methods or date ranges.</div></div>';
         return;
       }
 
@@ -700,15 +770,15 @@
                   <th>Start Time</th>
                   <th>End Time</th>
                   <th>Duration</th>
-                  <th>Paid</th>
+                  <th>Type</th>
                 </tr>
               </thead>
               <tbody>
                 ${rows.map(r => {
                   try {
                     const duration = formatHours(r.lengthMinutes);
-                    const paidStatus = r.paid ? 'Yes' : 'No';
-                    const paidClass = r.paid ? 'on-time' : 'muted';
+                    const type = r.inferred ? 'Inferred' : 'Scheduled';
+                    const typeClass = r.inferred ? 'muted' : 'on-time';
                     
                     return `
                       <tr>
@@ -716,10 +786,10 @@
                         <td>${escapeHtml(r.teamNames || 'No Team')}</td>
                         <td>${fmtDMY(r.date)}</td>
                         <td>${escapeHtml(r.scheduledActivity)}</td>
-                        <td>${fmtTime(r.scheduledStart)}</td>
-                        <td>${fmtTime(r.scheduledEnd)}</td>
+                        <td>${r.scheduledStart ? fmtTime(r.scheduledStart) : 'N/A'}</td>
+                        <td>${r.scheduledEnd ? fmtTime(r.scheduledEnd) : 'N/A'}</td>
                         <td>${duration}</td>
-                        <td><span class="${paidClass}">${paidStatus}</span></td>
+                        <td><span class="${typeClass}">${type}</span></td>
                       </tr>
                     `;
                   } catch (e) {
@@ -778,8 +848,8 @@
         showProgress('Fetching schedule data…', 'Fetching Schedules');
         updateProgress(50, 1, 2);
 
-        // Fetch schedule data only
-        const scheduleData = await fetchSchedulesOnly(businessUnitId, managementUnitId, from, to);
+        // Fetch schedule data using alternative methods
+        const scheduleData = await fetchSchedulesAlternative(businessUnitId, managementUnitId, from, to);
         
         updateProgress(100, 2, 2);
         showProgress('Processing schedule data…', 'Fetching Schedules');
@@ -794,7 +864,7 @@
         if (state.scheduleRows.length) {
           setStatus(`Schedules loaded - ${state.scheduleRows.length} shifts found`);
         } else {
-          setStatus('No schedule data found for the selected period.');
+          setStatus('No schedule data found for the selected period. Try a different API method.');
         }
       } catch (e) {
         console.error('Error in fetchSchedules:', e);
@@ -808,7 +878,6 @@
     // ===== Existing Attendance Functions (simplified) =====
     async function fetchAttendance() {
       // Your existing attendance function here
-      // This will use the schedule data we already have
       console.log('Fetching attendance data...');
       setStatus('Attendance feature coming soon...');
     }
@@ -824,22 +893,16 @@
     $('teamSelect').addEventListener('change', function() {
       if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
         renderSchedules();
-      } else {
-        // renderAttendance(); // Uncomment when attendance is implemented
       }
     });
     $('userSelect').addEventListener('change', function() {
       if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
         renderSchedules();
-      } else {
-        // renderAttendance(); // Uncomment when attendance is implemented
       }
     });
     $('userSearch').addEventListener('input', function() {
       if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
         renderSchedules();
-      } else {
-        // renderAttendance(); // Uncomment when attendance is implemented
       }
     });
 
