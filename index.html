@@ -407,110 +407,56 @@
       }
     }
 
-    // ===== Schedule Data =====
+    // ===== Schedule Data - UPDATED APPROACH =====
     async function fetchScheduleData(businessUnitId, managementUnitId, fromDate, toDate) {
-      const scheduleData = {
-        userSchedules: {},
-        schedulePeriods: []
-      };
-
       try {
-        console.log('Fetching schedule data for:', { businessUnitId, managementUnitId, fromDate, toDate });
+        console.log('Fetching schedule data using bulk query...', {
+          businessUnitId,
+          managementUnitId,
+          fromDate,
+          toDate
+        });
 
-        // Get unique week start dates in the range
-        const weekStarts = new Set();
-        const currentDate = new Date(fromDate);
-        const endDate = new Date(toDate);
-        
-        while (currentDate <= endDate) {
-          const weekStart = getWeekStart(currentDate);
-          weekStarts.add(weekStart);
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
+        // Use the bulk schedule query API
+        const body = {
+          managementUnitIds: [managementUnitId],
+          startDate: `${fromDate}T00:00:00.000Z`,
+          endDate: `${toDate}T23:59:59.999Z`
+        };
 
-        console.log('Week starts to fetch:', Array.from(weekStarts));
+        console.log('Schedule query body:', body);
 
-        // Fetch schedules for each week
-        for (const weekId of weekStarts) {
-          try {
-            console.log(`Fetching schedules for week: ${weekId}`);
-            
-            // GET: Get schedules for this week
-            const schedulesResponse = await api(
-              `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules?includeOnlyPublished=true`
-            );
-            
-            const schedules = schedulesResponse.entities || [];
-            console.log(`Found ${schedules.length} schedules for week ${weekId}`, schedules);
-
-            for (const schedule of schedules) {
-              if (schedule.id) {
-                console.log(`Fetching agent schedules for schedule: ${schedule.id}, week: ${weekId}`);
-                
-                try {
-                  // POST: Get agent schedules with management unit ID
-                  const agentSchedulesResponse = await fetch(
-                    `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${schedule.id}/agentschedules/query`,
-                    {
-                      method: 'POST',
-                      headers: {
-                        'Authorization': `Bearer ${state.token}`,
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({
-                        managementUnitId: managementUnitId
-                      })
-                    }
-                  );
-
-                  if (!agentSchedulesResponse.ok) {
-                    const errorText = await agentSchedulesResponse.text();
-                    console.warn(`Agent schedules API error: ${agentSchedulesResponse.status}`, errorText);
-                    continue;
-                  }
-
-                  const agentSchedulesData = await agentSchedulesResponse.json();
-                  console.log(`Agent schedules response for ${schedule.id}:`, agentSchedulesData);
-
-                  // Handle async operation if needed
-                  if (agentSchedulesData.status === 'Processing' || agentSchedulesData.status === 'Pending') {
-                    console.log(`Schedule query is processing, operationId: ${agentSchedulesData.operationId}`);
-                    // For now, skip processing async operations
-                    continue;
-                  }
-
-                  // Process the agent schedules data
-                  if (agentSchedulesData.result && agentSchedulesData.result.agentSchedules) {
-                    agentSchedulesData.result.agentSchedules.forEach(agentSchedule => {
-                      const userId = agentSchedule.user.id;
-                      if (!scheduleData.userSchedules[userId]) {
-                        scheduleData.userSchedules[userId] = {
-                          shifts: agentSchedule.shifts || []
-                        };
-                      } else {
-                        // Merge shifts if user already exists
-                        scheduleData.userSchedules[userId].shifts = [
-                          ...scheduleData.userSchedules[userId].shifts,
-                          ...(agentSchedule.shifts || [])
-                        ];
-                      }
-                    });
-                  }
-                } catch (e) {
-                  console.warn(`Failed to fetch agent schedules for schedule ${schedule.id}:`, e);
-                }
-              }
-            }
-          } catch (e) {
-            console.warn(`Failed to fetch schedules for week ${weekId}:`, e);
+        const response = await fetch(
+          `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/schedules/query`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
           }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Schedule query failed: ${response.status} - ${errorText}`);
         }
 
-        console.log('Final schedule data collected:', scheduleData);
-        return scheduleData;
+        const data = await response.json();
+        console.log('Schedule query result:', data);
+
+        return {
+          userSchedules: data.userSchedules || {},
+          schedulePeriods: data.schedulePeriods || []
+        };
       } catch (e) {
         console.error('Failed to fetch schedule data:', e);
-        return scheduleData;
+        // Return empty structure instead of throwing so we can still show analytics data
+        return {
+          userSchedules: {},
+          schedulePeriods: []
+        };
       }
     }
 
@@ -533,13 +479,40 @@
           
           if (!userSchedule) {
             console.log(`No schedule found for user ${userName} (${userId})`);
+            // Even if no schedule, we can still show their activities
+            const activities = userDetail.routingStatus || userDetail.activities || [];
+            if (activities.length > 0) {
+              // Create rows for actual activities without schedule comparison
+              for (const activity of activities.slice(0, 5)) { // Limit to first 5 activities
+                const actualStart = activity.startTime || activity.dateStart || activity.conversationStart;
+                const actualStatus = activity.status || activity.presence || activity.systemPresence || 'Unknown';
+                
+                const row = {
+                  userId,
+                  userName,
+                  teamNames: (state.teamsByUserId[userId] || []).map(t => t.name).join(', '),
+                  teamIds: (state.teamsByUserId[userId] || []).map(t => t.id),
+                  date: actualStart ? actualStart.slice(0, 10) : 'Unknown',
+                  scheduledActivity: 'No Schedule',
+                  scheduledStart: null,
+                  scheduledEnd: null,
+                  actualStart,
+                  actualActivity: actualStatus,
+                  durationMs: 0,
+                  isLate: false,
+                  lateMs: 0,
+                  statusMatch: 'no-schedule'
+                };
+                rows.push(row);
+              }
+            }
             continue;
           }
 
           console.log(`Processing schedule for user ${userName}:`, userSchedule);
 
           // Get user's activities
-          const activities = userDetail.presence || userDetail.routingStatus || userDetail.activities || [];
+          const activities = userDetail.routingStatus || userDetail.activities || [];
           if (!activities.length) {
             console.log(`No activities found for user ${userName}`);
             continue;
@@ -551,8 +524,6 @@
 
           for (const shift of shifts) {
             try {
-              console.log('Processing shift:', shift);
-              
               if (!shift.startDate || !shift.endDate) {
                 console.log('Shift missing start/end date:', shift);
                 continue;
@@ -560,19 +531,42 @@
 
               const scheduledStart = shift.startDate;
               const scheduledEnd = shift.endDate;
-              const scheduledActivity = shift.activityCategory || shift.category || 'Scheduled Activity';
+              
+              // Get the main activity from the shift (usually the first activity)
+              const scheduledActivity = shift.activities && shift.activities.length > 0 
+                ? (shift.activities[0].activityCodeId === '0' ? 'On Queue' : 'Break')
+                : 'Scheduled Activity';
               
               // Find actual activities during this scheduled shift
               const shiftStart = new Date(scheduledStart);
               const shiftEnd = new Date(scheduledEnd);
               
               const actualActivities = activities.filter(activity => {
+                if (!activity.startTime && !activity.dateStart && !activity.conversationStart) return false;
                 const activityTime = new Date(activity.startTime || activity.dateStart || activity.conversationStart);
                 return activityTime >= shiftStart && activityTime <= shiftEnd;
               });
 
               if (actualActivities.length === 0) {
                 console.log(`No actual activities found during shift for ${userName} at ${scheduledStart}`);
+                // Still create a row to show the scheduled shift with no actual activity
+                const row = {
+                  userId,
+                  userName,
+                  teamNames: (state.teamsByUserId[userId] || []).map(t => t.name).join(', '),
+                  teamIds: (state.teamsByUserId[userId] || []).map(t => t.id),
+                  date: scheduledStart.slice(0, 10),
+                  scheduledActivity,
+                  scheduledStart,
+                  scheduledEnd,
+                  actualStart: null,
+                  actualActivity: 'No Activity',
+                  durationMs: new Date(scheduledEnd) - new Date(scheduledStart),
+                  isLate: false,
+                  lateMs: 0,
+                  statusMatch: 'no-activity'
+                };
+                rows.push(row);
                 continue;
               }
 
@@ -690,6 +684,8 @@
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Team</th>
+                  <th>Date</th>
                   <th>Scheduled Activity</th>
                   <th>Schedule Start</th>
                   <th>Actual Start</th>
@@ -701,18 +697,35 @@
               <tbody>
                 ${rows.map(r => {
                   try {
-                    const statusClass = r.isLate ? 'late' : 'on-time';
-                    const statusText = r.isLate ? 'Late' : 'On Time';
-                    const rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
-                    const lateMinutes = r.isLate ? Math.round(r.lateMs / 60000) : 0;
-                    const statusDisplay = r.isLate ? `Late (${lateMinutes}m)` : 'On Time';
+                    let statusClass = 'on-time';
+                    let statusDisplay = 'On Time';
+                    let rowClass = '';
+                    
+                    if (r.statusMatch === 'no-schedule') {
+                      statusClass = 'muted';
+                      statusDisplay = 'No Schedule';
+                      rowClass = 'schedule-mismatch';
+                    } else if (r.statusMatch === 'no-activity') {
+                      statusClass = 'late';
+                      statusDisplay = 'No Activity';
+                      rowClass = 'schedule-mismatch';
+                    } else if (r.isLate) {
+                      statusClass = 'late';
+                      const lateMinutes = Math.round(r.lateMs / 60000);
+                      statusDisplay = `Late (${lateMinutes}m)`;
+                      rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
+                    } else {
+                      rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
+                    }
                     
                     return `
                       <tr class="${rowClass}">
                         <td>${escapeHtml(r.userName)}</td>
+                        <td>${escapeHtml(r.teamNames || 'No Team')}</td>
+                        <td>${fmtDMY(r.date)}</td>
                         <td>${escapeHtml(r.scheduledActivity)}</td>
-                        <td>${fmtTime(r.scheduledStart)}</td>
-                        <td>${fmtTime(r.actualStart)}</td>
+                        <td>${r.scheduledStart ? fmtTime(r.scheduledStart) : 'N/A'}</td>
+                        <td>${r.actualStart ? fmtTime(r.actualStart) : 'N/A'}</td>
                         <td>${escapeHtml(r.actualActivity)}</td>
                         <td>${formatDuration(r.durationMs)}</td>
                         <td><span class="${statusClass}">${statusDisplay}</span></td>
@@ -720,7 +733,7 @@
                     `;
                   } catch (e) {
                     console.warn('Error rendering row:', r, e);
-                    return '<tr><td colspan="7" style="color: red;">Error rendering row</td></tr>';
+                    return '<tr><td colspan="9" style="color: red;">Error rendering row</td></tr>';
                   }
                 }).join('')}
               </tbody>
@@ -757,7 +770,7 @@
         showProgress('Fetching schedule data…');
         updateProgress(25, 1, 4);
 
-        // Fetch schedule data
+        // Fetch schedule data using the new approach
         const scheduleData = await fetchScheduleData(businessUnitId, managementUnitId, from, to);
         
         updateProgress(50, 2, 4);
