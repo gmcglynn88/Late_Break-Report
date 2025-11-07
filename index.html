@@ -203,14 +203,6 @@
       return div.innerHTML;
     }
 
-    // Get Monday of the week for a given date
-    function getWeekStart(date) {
-      const d = new Date(date);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
-      return new Date(d.setDate(diff)).toISOString().split('T')[0];
-    }
-
     // ===== Date Range Limiting =====
     function setupDateLimits() {
       const today = new Date().toISOString().split('T')[0];
@@ -264,17 +256,9 @@
     }
 
     // ===== API helper =====
-    async function api(path, options = {}){
+    async function api(path){
       if(!state.token) throw new Error('Not authenticated');
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${state.token}`,
-          ...options.headers
-        },
-        ...options
-      };
-      
-      const res = await fetch(`${CONFIG.apiHost}${path}`, config);
+      const res = await fetch(`${CONFIG.apiHost}${path}`, { headers:{Authorization:`Bearer ${state.token}`} });
       if(res.status===401||res.status===403) throw new Error(`Authentication error (${res.status}). Please refresh.`);
       if(!res.ok){ const t = await res.text().catch(()=> ''); throw new Error(`API Error: ${res.status} ${res.statusText}${t?` - ${t.slice(0,200)}`:''}`); }
       return res.json();
@@ -415,98 +399,46 @@
       };
 
       try {
-        console.log('Fetching schedule data for:', { businessUnitId, managementUnitId, fromDate, toDate });
-
-        // Get unique week start dates in the range
-        const weekStarts = new Set();
-        const currentDate = new Date(fromDate);
+        // Get users in management unit
+        const usersData = await api(`/api/v2/workforcemanagement/managementunits/${managementUnitId}/users`);
+        const muUsers = usersData.entities || [];
+        
+        // Get schedules for each week in the date range
+        const startDate = new Date(fromDate);
         const endDate = new Date(toDate);
         
+        let currentDate = new Date(startDate);
         while (currentDate <= endDate) {
-          const weekStart = getWeekStart(currentDate);
-          weekStarts.add(weekStart);
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        console.log('Week starts to fetch:', Array.from(weekStarts));
-
-        // Fetch schedules for each week
-        for (const weekId of weekStarts) {
+          // Get Monday of the week
+          const weekStart = new Date(currentDate);
+          weekStart.setDate(currentDate.getDate() - currentDate.getDay() + 1); // Monday
+          const weekId = weekStart.toISOString().split('T')[0];
+          
           try {
-            console.log(`Fetching schedules for week: ${weekId}`);
-            
-            // GET: Get schedules for this week
-            const schedulesResponse = await api(
-              `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules?includeOnlyPublished=true`
-            );
-            
+            // Get schedule for this week
+            const schedulesResponse = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules`);
             const schedules = schedulesResponse.entities || [];
-            console.log(`Found ${schedules.length} schedules for week ${weekId}`, schedules);
-
+            
             for (const schedule of schedules) {
               if (schedule.id) {
-                console.log(`Fetching agent schedules for schedule: ${schedule.id}, week: ${weekId}`);
+                // Get agent schedules for this schedule
+                const agentSchedulesResponse = await api(
+                  `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${schedule.id}/agentschedules/query`
+                );
                 
-                try {
-                  // POST: Get agent schedules with management unit ID
-                  const agentSchedulesResponse = await fetch(
-                    `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${schedule.id}/agentschedules/query`,
-                    {
-                      method: 'POST',
-                      headers: {
-                        'Authorization': `Bearer ${state.token}`,
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({
-                        managementUnitId: managementUnitId
-                      })
-                    }
-                  );
-
-                  if (!agentSchedulesResponse.ok) {
-                    const errorText = await agentSchedulesResponse.text();
-                    console.warn(`Agent schedules API error: ${agentSchedulesResponse.status}`, errorText);
-                    continue;
-                  }
-
-                  const agentSchedulesData = await agentSchedulesResponse.json();
-                  console.log(`Agent schedules response for ${schedule.id}:`, agentSchedulesData);
-
-                  // Handle async operation if needed
-                  if (agentSchedulesData.status === 'Processing' || agentSchedulesData.status === 'Pending') {
-                    console.log(`Schedule query is processing, operationId: ${agentSchedulesData.operationId}`);
-                    // For now, skip processing async operations
-                    continue;
-                  }
-
-                  // Process the agent schedules data
-                  if (agentSchedulesData.result && agentSchedulesData.result.agentSchedules) {
-                    agentSchedulesData.result.agentSchedules.forEach(agentSchedule => {
-                      const userId = agentSchedule.user.id;
-                      if (!scheduleData.userSchedules[userId]) {
-                        scheduleData.userSchedules[userId] = {
-                          shifts: agentSchedule.shifts || []
-                        };
-                      } else {
-                        // Merge shifts if user already exists
-                        scheduleData.userSchedules[userId].shifts = [
-                          ...scheduleData.userSchedules[userId].shifts,
-                          ...(agentSchedule.shifts || [])
-                        ];
-                      }
-                    });
-                  }
-                } catch (e) {
-                  console.warn(`Failed to fetch agent schedules for schedule ${schedule.id}:`, e);
+                if (agentSchedulesResponse.result && agentSchedulesResponse.result.userSchedules) {
+                  Object.assign(scheduleData.userSchedules, agentSchedulesResponse.result.userSchedules);
                 }
               }
             }
           } catch (e) {
-            console.warn(`Failed to fetch schedules for week ${weekId}:`, e);
+            console.warn(`Failed to fetch schedule for week ${weekId}:`, e);
           }
+          
+          // Move to next week
+          currentDate.setDate(currentDate.getDate() + 7);
         }
-
-        console.log('Final schedule data collected:', scheduleData);
+        
         return scheduleData;
       } catch (e) {
         console.error('Failed to fetch schedule data:', e);
@@ -520,8 +452,6 @@
       const details = analyticsData?.userDetails || analyticsData?.results || [];
       
       console.log(`Processing ${details.length} user details with schedule data`);
-      console.log('Schedule data available:', scheduleData);
-      console.log('Users with schedules:', Object.keys(scheduleData.userSchedules));
 
       for (const userDetail of details) {
         try {
@@ -529,39 +459,27 @@
           if (!userId) continue;
           
           const userName = state.usersById[userId]?.name || userDetail.user?.name || `User ${userId}`;
-          const userSchedule = scheduleData.userSchedules[userId];
+          const userSchedules = scheduleData.userSchedules[userId];
           
-          if (!userSchedule) {
-            console.log(`No schedule found for user ${userName} (${userId})`);
+          if (!userSchedules) {
+            console.log(`No schedule found for user ${userName}`);
             continue;
           }
-
-          console.log(`Processing schedule for user ${userName}:`, userSchedule);
 
           // Get user's activities
           const activities = userDetail.presence || userDetail.routingStatus || userDetail.activities || [];
-          if (!activities.length) {
-            console.log(`No activities found for user ${userName}`);
-            continue;
-          }
+          if (!activities.length) continue;
 
           // Process each scheduled shift
-          const shifts = userSchedule.shifts || [];
-          console.log(`User ${userName} has ${shifts.length} scheduled shifts`);
-
+          const shifts = userSchedules.shifts || [];
           for (const shift of shifts) {
             try {
-              console.log('Processing shift:', shift);
-              
-              if (!shift.startDate || !shift.endDate) {
-                console.log('Shift missing start/end date:', shift);
-                continue;
-              }
-
               const scheduledStart = shift.startDate;
               const scheduledEnd = shift.endDate;
-              const scheduledActivity = shift.activityCategory || shift.category || 'Scheduled Activity';
+              const scheduledActivity = shift.activityCategory || 'Scheduled Activity';
               
+              if (!scheduledStart) continue;
+
               // Find actual activities during this scheduled shift
               const shiftStart = new Date(scheduledStart);
               const shiftEnd = new Date(scheduledEnd);
@@ -571,10 +489,7 @@
                 return activityTime >= shiftStart && activityTime <= shiftEnd;
               });
 
-              if (actualActivities.length === 0) {
-                console.log(`No actual activities found during shift for ${userName} at ${scheduledStart}`);
-                continue;
-              }
+              if (actualActivities.length === 0) continue;
 
               // Sort activities by time
               actualActivities.sort((a, b) => 
@@ -595,7 +510,7 @@
               const teamNames = userTeams.map(t => t.name).join(', ');
               const teamIds = userTeams.map(t => t.id);
 
-              const row = {
+              rows.push({
                 userId,
                 userName,
                 teamNames,
@@ -610,10 +525,7 @@
                 isLate,
                 lateMs,
                 statusMatch: scheduledActivity.toLowerCase().includes(actualStatus.toLowerCase()) ? 'match' : 'mismatch'
-              };
-
-              console.log('Created row:', row);
-              rows.push(row);
+              });
 
             } catch (e) {
               console.warn('Error processing shift:', shift, e);
@@ -704,8 +616,6 @@
                     const statusClass = r.isLate ? 'late' : 'on-time';
                     const statusText = r.isLate ? 'Late' : 'On Time';
                     const rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
-                    const lateMinutes = r.isLate ? Math.round(r.lateMs / 60000) : 0;
-                    const statusDisplay = r.isLate ? `Late (${lateMinutes}m)` : 'On Time';
                     
                     return `
                       <tr class="${rowClass}">
@@ -715,7 +625,7 @@
                         <td>${fmtTime(r.actualStart)}</td>
                         <td>${escapeHtml(r.actualActivity)}</td>
                         <td>${formatDuration(r.durationMs)}</td>
-                        <td><span class="${statusClass}">${statusDisplay}</span></td>
+                        <td><span class="${statusClass}">${statusText}</span></td>
                       </tr>
                     `;
                   } catch (e) {
@@ -797,7 +707,7 @@
         if(state.attendanceRows.length){
           setStatus(`Report completed - ${state.attendanceRows.length} shifts analyzed`);
         }else{
-          setStatus('No schedule vs actual data found for the selected period. Check console for details.');
+          setStatus('No schedule vs actual data found for the selected period.');
         }
       }catch(e){
         console.error('Error in fetchAttendance:', e);
