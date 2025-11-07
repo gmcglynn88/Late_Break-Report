@@ -168,7 +168,8 @@
       managementUnits: [],
       scheduleData: {},
       activityCodes: {}, // Store activity code mappings
-      attendanceRows: []
+      attendanceRows: [],
+      managementUnitUsers: {} // Store users by management unit
     };
 
     // ===== Utils =====
@@ -312,6 +313,28 @@
       }
     }
 
+    // ===== Get Users from Management Unit =====
+    async function fetchManagementUnitUsers(managementUnitId) {
+      try {
+        console.log(`Fetching users for management unit: ${managementUnitId}`);
+        const data = await api(`/api/v2/workforcemanagement/managementunits/${managementUnitId}/users`);
+        
+        const users = data.entities || [];
+        console.log(`Found ${users.length} users in management unit`, users);
+        
+        // Store users by management unit
+        state.managementUnitUsers[managementUnitId] = users.map(user => ({
+          id: user.id,
+          name: user.name
+        }));
+        
+        return state.managementUnitUsers[managementUnitId];
+      } catch (e) {
+        console.error(`Failed to fetch users for management unit ${managementUnitId}:`, e);
+        return [];
+      }
+    }
+
     // ===== Activity Codes =====
     async function fetchActivityCodes(businessUnitId) {
       try {
@@ -433,9 +456,9 @@
       }
     }
 
-    // ===== ROBUST Schedule Data Approach =====
+    // ===== CORRECT Schedule Data Approach =====
     async function fetchScheduleData(businessUnitId, managementUnitId, fromDate, toDate) {
-      console.log('Using ROBUST schedule data approach...');
+      console.log('Using CORRECT schedule data approach...');
       
       const scheduleData = {
         userSchedules: {},
@@ -446,145 +469,15 @@
         // First, fetch activity codes
         await fetchActivityCodes(businessUnitId);
 
-        // Try the Management Unit schedules query first - this is the most reliable
-        console.log('Trying Management Unit schedules query...');
-        
-        const muBody = {
-          startDate: `${fromDate}T00:00:00.000Z`,
-          endDate: `${toDate}T23:59:59.999Z`
-        };
+        // Get users from the management unit
+        const muUsers = await fetchManagementUnitUsers(managementUnitId);
+        console.log(`Found ${muUsers.length} users in management unit`, muUsers);
 
-        const muResponse = await fetch(
-          `${CONFIG.apiHost}/api/v2/workforcemanagement/managementunits/${managementUnitId}/schedules/query`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${state.token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(muBody)
-          }
-        );
-
-        if (muResponse.ok) {
-          const muData = await muResponse.json();
-          console.log('Management Unit schedule query successful:', muData);
-          
-          // Process the user schedules from Management Unit API
-          if (muData.userSchedules) {
-            Object.keys(muData.userSchedules).forEach(userId => {
-              const userSchedule = muData.userSchedules[userId];
-              if (userSchedule.shifts && userSchedule.shifts.length > 0) {
-                scheduleData.userSchedules[userId] = {
-                  shifts: userSchedule.shifts.map(shift => {
-                    // Process each activity in the shift
-                    const activities = (shift.activities || []).map(activity => {
-                      const activityCodeId = activity.activityCodeId;
-                      const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
-                      
-                      return {
-                        startDate: activity.startDate,
-                        endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
-                        activityName: activityName,
-                        activityCodeId: activityCodeId,
-                        lengthMinutes: activity.lengthMinutes
-                      };
-                    });
-
-                    return {
-                      startDate: shift.startDate,
-                      endDate: shift.endDate,
-                      activities: activities
-                    };
-                  })
-                };
-              }
-            });
-          }
-          
-          console.log('Processed schedule data from Management Unit:', scheduleData);
+        if (muUsers.length === 0) {
+          console.log('No users found in management unit, cannot fetch schedules');
           return scheduleData;
         }
 
-        // If Management Unit API fails, try Business Unit schedules query
-        console.log('Management Unit API failed, trying Business Unit schedules query...');
-        
-        const buBody = {
-          managementUnitIds: [managementUnitId],
-          startDate: `${fromDate}T00:00:00.000Z`,
-          endDate: `${toDate}T23:59:59.999Z`
-        };
-
-        const buResponse = await fetch(
-          `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/schedules/query`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${state.token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(buBody)
-          }
-        );
-
-        if (buResponse.ok) {
-          const buData = await buResponse.json();
-          console.log('Business Unit schedule query successful:', buData);
-          
-          // Process the user schedules from Business Unit API
-          if (buData.userSchedules) {
-            Object.keys(buData.userSchedules).forEach(userId => {
-              const userSchedule = buData.userSchedules[userId];
-              if (userSchedule.shifts && userSchedule.shifts.length > 0) {
-                scheduleData.userSchedules[userId] = {
-                  shifts: userSchedule.shifts.map(shift => {
-                    // Process each activity in the shift
-                    const activities = (shift.activities || []).map(activity => {
-                      const activityCodeId = activity.activityCodeId;
-                      const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
-                      
-                      return {
-                        startDate: activity.startDate,
-                        endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
-                        activityName: activityName,
-                        activityCodeId: activityCodeId,
-                        lengthMinutes: activity.lengthMinutes
-                      };
-                    });
-
-                    return {
-                      startDate: shift.startDate,
-                      endDate: shift.endDate,
-                      activities: activities
-                    };
-                  })
-                };
-              }
-            });
-          }
-          
-          console.log('Processed schedule data from Business Unit:', scheduleData);
-          return scheduleData;
-        }
-
-        // If both APIs fail, try the weekly approach as fallback
-        console.log('Both APIs failed, trying weekly approach as fallback...');
-        return await fetchScheduleDataWeekly(businessUnitId, managementUnitId, fromDate, toDate);
-
-      } catch (e) {
-        console.error('All schedule data approaches failed:', e);
-        return scheduleData;
-      }
-    }
-
-    // Fallback weekly approach
-    async function fetchScheduleDataWeekly(businessUnitId, managementUnitId, fromDate, toDate) {
-      const scheduleData = {
-        userSchedules: {},
-        schedulePeriods: []
-      };
-
-      try {
         // Get unique week start dates in the range
         const weekStarts = new Set();
         const currentDate = new Date(fromDate);
@@ -598,10 +491,10 @@
 
         console.log('Week starts to fetch:', Array.from(weekStarts));
 
-        // Try to find valid schedules for each week
+        // Fetch schedules for each week and each user
         for (const weekId of weekStarts) {
           try {
-            console.log(`Looking for schedules for week: ${weekId}`);
+            console.log(`Fetching schedules for week: ${weekId}`);
             
             // Get schedules for this week
             const schedulesResponse = await api(
@@ -616,92 +509,79 @@
               continue;
             }
 
-            // Try each schedule until we find one that works
-            for (const schedule of schedules) {
-              const scheduleId = schedule.id;
-              console.log(`Trying schedule: ${scheduleId} for week ${weekId}`);
+            // Use the first schedule (usually the published one)
+            const schedule = schedules[0];
+            const scheduleId = schedule.id;
+            console.log(`Using schedule: ${scheduleId} for week ${weekId}`);
 
+            // Fetch individual agent schedules using the agent history endpoint
+            showProgress(`Fetching schedules for ${muUsers.length} users...`);
+            let userIndex = 0;
+            
+            for (const user of muUsers) {
+              userIndex++;
+              updateProgress((userIndex / muUsers.length) * 50, userIndex, muUsers.length);
+              
               try {
-                // POST: Get agent schedules with management unit ID
-                const agentSchedulesResponse = await fetch(
-                  `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${scheduleId}/agentschedules/query`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${state.token}`,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                      managementUnitId: managementUnitId
-                    })
-                  }
+                // GET: Get individual agent schedule history
+                const agentScheduleResponse = await api(
+                  `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${scheduleId}/history/agents/${user.id}`
                 );
+                
+                console.log(`Agent schedule for ${user.name}:`, agentScheduleResponse);
 
-                if (agentSchedulesResponse.ok) {
-                  const agentSchedulesData = await agentSchedulesResponse.json();
-                  console.log(`Agent schedules response for ${scheduleId}:`, agentSchedulesData);
-
-                  // Process the agent schedules data
-                  if (agentSchedulesData.result && agentSchedulesData.result.agentSchedules) {
-                    agentSchedulesData.result.agentSchedules.forEach(agentSchedule => {
-                      const userId = agentSchedule.user.id;
-                      const shifts = agentSchedule.shifts || [];
-                      
-                      if (shifts.length > 0) {
-                        const processedShifts = shifts.map(shift => {
-                          // Process each activity in the shift
-                          const activities = (shift.activities || []).map(activity => {
-                            const activityCodeId = activity.activityCodeId;
-                            const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
-                            
-                            return {
-                              startDate: activity.startDate,
-                              endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
-                              activityName: activityName,
-                              activityCodeId: activityCodeId,
-                              lengthMinutes: activity.lengthMinutes
-                            };
-                          });
-
-                          return {
-                            startDate: shift.startDate,
-                            endDate: shift.endDate,
-                            activities: activities
-                          };
+                if (agentScheduleResponse && agentScheduleResponse.shifts) {
+                  // Process the agent's shifts
+                  const userShifts = [];
+                  
+                  agentScheduleResponse.shifts.forEach(shift => {
+                    if (shift.activities) {
+                      shift.activities.forEach(activity => {
+                        // Map activity code to name
+                        const activityCodeId = activity.activityCodeId;
+                        const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
+                        
+                        userShifts.push({
+                          startDate: activity.startDate,
+                          endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
+                          activityName: activityName,
+                          activityCodeId: activityCodeId,
+                          lengthMinutes: activity.lengthMinutes,
+                          paid: activity.paid
                         });
+                      });
+                    }
+                  });
 
-                        if (!scheduleData.userSchedules[userId]) {
-                          scheduleData.userSchedules[userId] = {
-                            shifts: processedShifts
-                          };
-                        } else {
-                          scheduleData.userSchedules[userId].shifts = [
-                            ...scheduleData.userSchedules[userId].shifts,
-                            ...processedShifts
-                          ];
-                        }
-                      }
-                    });
+                  if (userShifts.length > 0) {
+                    if (!scheduleData.userSchedules[user.id]) {
+                      scheduleData.userSchedules[user.id] = {
+                        shifts: userShifts
+                      };
+                    } else {
+                      scheduleData.userSchedules[user.id].shifts = [
+                        ...scheduleData.userSchedules[user.id].shifts,
+                        ...userShifts
+                      ];
+                    }
                   }
-                  break; // Found a working schedule, move to next week
-                } else {
-                  console.log(`Schedule ${scheduleId} failed for week ${weekId}`);
                 }
               } catch (e) {
-                console.warn(`Failed to fetch agent schedules for schedule ${scheduleId}:`, e);
+                console.warn(`Failed to fetch schedule for user ${user.name}:`, e);
+                // Continue with other users even if one fails
               }
             }
 
           } catch (e) {
-            console.warn(`Failed to process week ${weekId}:`, e);
+            console.warn(`Failed to fetch schedules for week ${weekId}:`, e);
           }
         }
 
-        console.log('Final schedule data from weekly approach:', scheduleData);
+        console.log('Final schedule data collected:', scheduleData);
         return scheduleData;
 
       } catch (e) {
-        console.error('Weekly schedule approach failed:', e);
+        console.error('Schedule data approach failed:', e);
         return scheduleData;
       }
     }
@@ -789,76 +669,74 @@
             continue;
           }
 
-          // Process each scheduled shift and its activities
+          // Process each scheduled activity
           const shifts = userSchedule.shifts || [];
-          console.log(`User ${userName} has ${shifts.length} scheduled shifts`);
+          console.log(`User ${userName} has ${shifts.length} scheduled activities`);
 
           for (const shift of shifts) {
             try {
-              // Process each activity within the shift
-              const shiftActivities = shift.activities || [];
-              
-              for (const scheduledActivity of shiftActivities) {
-                if (!scheduledActivity.startDate || !scheduledActivity.endDate) {
-                  continue;
-                }
-
-                const scheduledStart = scheduledActivity.startDate;
-                const scheduledEnd = scheduledActivity.endDate;
-                const scheduledActivityName = scheduledActivity.activityName;
-                
-                // Find actual activities during this scheduled activity
-                const activityStart = new Date(scheduledStart);
-                const activityEnd = new Date(scheduledEnd);
-                
-                const actualActivities = activities.filter(activity => {
-                  if (!activity.startTime && !activity.dateStart && !activity.conversationStart) return false;
-                  const activityTime = new Date(activity.startTime || activity.dateStart || activity.conversationStart);
-                  return activityTime >= activityStart && activityTime <= activityEnd;
-                });
-
-                if (actualActivities.length === 0) {
-                  continue;
-                }
-
-                // Sort activities by time and get the first one
-                actualActivities.sort((a, b) => 
-                  new Date(a.startTime || a.dateStart || a.conversationStart) - 
-                  new Date(b.startTime || b.dateStart || b.conversationStart)
-                );
-
-                const firstActualActivity = actualActivities[0];
-                const actualStart = firstActualActivity.startTime || firstActualActivity.dateStart || firstActualActivity.conversationStart;
-                const actualStatus = firstActualActivity.status || firstActualActivity.presence || firstActualActivity.systemPresence || 'Unknown';
-                
-                // Calculate lateness
-                const lateMs = new Date(actualStart) - new Date(scheduledStart);
-                const isLate = lateMs > (ATTENDANCE_CONFIG.lateThresholdMinutes * 60 * 1000);
-                const durationMs = new Date(scheduledEnd) - new Date(scheduledStart);
-
-                const userTeams = state.teamsByUserId[userId] || [];
-                const teamNames = userTeams.map(t => t.name).join(', ');
-                const teamIds = userTeams.map(t => t.id);
-
-                const row = {
-                  userId,
-                  userName,
-                  teamNames,
-                  teamIds,
-                  date: scheduledStart.slice(0, 10),
-                  scheduledActivity: scheduledActivityName,
-                  scheduledStart,
-                  scheduledEnd,
-                  actualStart,
-                  actualActivity: actualStatus,
-                  durationMs,
-                  isLate,
-                  lateMs,
-                  statusMatch: scheduledActivityName.toLowerCase().includes(actualStatus.toLowerCase()) ? 'match' : 'mismatch'
-                };
-
-                rows.push(row);
+              if (!shift.startDate || !shift.endDate) {
+                console.log('Shift missing start/end date:', shift);
+                continue;
               }
+
+              const scheduledStart = shift.startDate;
+              const scheduledEnd = shift.endDate;
+              const scheduledActivity = shift.activityName;
+              
+              // Find actual activities during this scheduled activity
+              const shiftStart = new Date(scheduledStart);
+              const shiftEnd = new Date(scheduledEnd);
+              
+              const actualActivities = activities.filter(activity => {
+                if (!activity.startTime && !activity.dateStart && !activity.conversationStart) return false;
+                const activityTime = new Date(activity.startTime || activity.dateStart || activity.conversationStart);
+                return activityTime >= shiftStart && activityTime <= shiftEnd;
+              });
+
+              if (actualActivities.length === 0) {
+                console.log(`No actual activities found during scheduled activity for ${userName} at ${scheduledStart}`);
+                continue;
+              }
+
+              // Sort activities by time and get the first one
+              actualActivities.sort((a, b) => 
+                new Date(a.startTime || a.dateStart || a.conversationStart) - 
+                new Date(b.startTime || b.dateStart || b.conversationStart)
+              );
+
+              const firstActualActivity = actualActivities[0];
+              const actualStart = firstActualActivity.startTime || firstActualActivity.dateStart || firstActualActivity.conversationStart;
+              const actualStatus = firstActualActivity.status || firstActualActivity.presence || firstActualActivity.systemPresence || 'Unknown';
+              
+              // Calculate lateness
+              const lateMs = new Date(actualStart) - new Date(scheduledStart);
+              const isLate = lateMs > (ATTENDANCE_CONFIG.lateThresholdMinutes * 60 * 1000);
+              const durationMs = new Date(scheduledEnd) - new Date(scheduledStart);
+
+              const userTeams = state.teamsByUserId[userId] || [];
+              const teamNames = userTeams.map(t => t.name).join(', ');
+              const teamIds = userTeams.map(t => t.id);
+
+              const row = {
+                userId,
+                userName,
+                teamNames,
+                teamIds,
+                date: scheduledStart.slice(0, 10),
+                scheduledActivity,
+                scheduledStart,
+                scheduledEnd,
+                actualStart,
+                actualActivity: actualStatus,
+                durationMs,
+                isLate,
+                lateMs,
+                statusMatch: scheduledActivity.toLowerCase().includes(actualStatus.toLowerCase()) ? 'match' : 'mismatch'
+              };
+
+              console.log('Created row:', row);
+              rows.push(row);
 
             } catch (e) {
               console.warn('Error processing shift:', shift, e);
@@ -948,22 +826,10 @@
               <tbody>
                 ${rows.map(r => {
                   try {
-                    let statusClass = 'on-time';
-                    let statusDisplay = 'On Time';
-                    let rowClass = '';
-                    
-                    if (r.statusMatch === 'no-schedule') {
-                      statusClass = 'muted';
-                      statusDisplay = 'No Schedule Data';
-                      rowClass = 'schedule-mismatch';
-                    } else if (r.isLate) {
-                      statusClass = 'late';
-                      const lateMinutes = Math.round(r.lateMs / 60000);
-                      statusDisplay = `Late (${lateMinutes}m)`;
-                      rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
-                    } else {
-                      rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
-                    }
+                    const statusClass = r.isLate ? 'late' : 'on-time';
+                    const lateMinutes = r.isLate ? Math.round(r.lateMs / 60000) : 0;
+                    const statusDisplay = r.isLate ? `Late (${lateMinutes}m)` : 'On Time';
+                    const rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
                     
                     return `
                       <tr class="${rowClass}">
@@ -971,8 +837,8 @@
                         <td>${escapeHtml(r.teamNames || 'No Team')}</td>
                         <td>${fmtDMY(r.date)}</td>
                         <td>${escapeHtml(r.scheduledActivity)}</td>
-                        <td>${r.scheduledStart ? fmtTime(r.scheduledStart) : 'N/A'}</td>
-                        <td>${r.actualStart ? fmtTime(r.actualStart) : 'N/A'}</td>
+                        <td>${fmtTime(r.scheduledStart)}</td>
+                        <td>${fmtTime(r.actualStart)}</td>
                         <td>${escapeHtml(r.actualActivity)}</td>
                         <td>${formatDuration(r.durationMs)}</td>
                         <td><span class="${statusClass}">${statusDisplay}</span></td>
