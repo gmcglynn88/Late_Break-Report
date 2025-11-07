@@ -433,34 +433,31 @@
       }
     }
 
-    // ===== Schedule Data - NEW APPROACH USING MANAGEMENT UNIT =====
+    // ===== SIMPLIFIED Schedule Data Approach =====
     async function fetchScheduleData(businessUnitId, managementUnitId, fromDate, toDate) {
+      console.log('Using SIMPLIFIED schedule data approach...');
+      
       const scheduleData = {
         userSchedules: {},
         schedulePeriods: []
       };
 
       try {
-        console.log('Fetching schedule data using Management Unit API...', {
-          businessUnitId,
-          managementUnitId,
-          fromDate,
-          toDate
-        });
-
         // First, fetch activity codes
         await fetchActivityCodes(businessUnitId);
 
-        // Use the Management Unit schedules query API
+        // Let's try a completely different approach - use the agent schedules query directly
         const body = {
+          managementUnitIds: [managementUnitId],
           startDate: `${fromDate}T00:00:00.000Z`,
           endDate: `${toDate}T23:59:59.999Z`
         };
 
-        console.log('Management Unit schedule query body:', body);
+        console.log('Trying direct agent schedules query with body:', body);
 
+        // Try the business unit schedules query
         const response = await fetch(
-          `${CONFIG.apiHost}/api/v2/workforcemanagement/managementunits/${managementUnitId}/schedules/query`,
+          `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/schedules/query`,
           {
             method: 'POST',
             headers: {
@@ -473,22 +470,21 @@
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.warn('Management Unit schedule query failed:', errorText);
-          // Try alternative approach
-          return await fetchScheduleDataAlternative(businessUnitId, managementUnitId, fromDate, toDate);
+          console.warn('Business Unit schedule query failed:', errorText);
+          throw new Error(`Schedule query failed: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('Management Unit schedule query result:', data);
+        console.log('Direct schedule query successful:', data);
 
-        // Process the schedule data
+        // Process the user schedules
         if (data.userSchedules) {
           Object.keys(data.userSchedules).forEach(userId => {
             const userSchedule = data.userSchedules[userId];
-            if (userSchedule.shifts) {
+            if (userSchedule.shifts && userSchedule.shifts.length > 0) {
               scheduleData.userSchedules[userId] = {
                 shifts: userSchedule.shifts.map(shift => {
-                  // Process activities within each shift
+                  // Process each activity in the shift
                   const activities = (shift.activities || []).map(activity => {
                     const activityCodeId = activity.activityCodeId;
                     const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
@@ -517,87 +513,13 @@
         return scheduleData;
 
       } catch (e) {
-        console.error('Failed to fetch schedule data via Management Unit:', e);
-        // Try alternative approach
-        return await fetchScheduleDataAlternative(businessUnitId, managementUnitId, fromDate, toDate);
-      }
-    }
-
-    // Alternative approach using Business Unit schedules query
-    async function fetchScheduleDataAlternative(businessUnitId, managementUnitId, fromDate, toDate) {
-      const scheduleData = {
-        userSchedules: {},
-        schedulePeriods: []
-      };
-
-      try {
-        console.log('Trying alternative schedule data approach...');
-
-        const body = {
-          managementUnitIds: [managementUnitId],
-          startDate: `${fromDate}T00:00:00.000Z`,
-          endDate: `${toDate}T23:59:59.999Z`
-        };
-
-        console.log('Alternative schedule query body:', body);
-
-        const response = await fetch(
-          `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/schedules/query`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${state.token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-          }
-        );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Alternative schedule query failed: ${response.status} - ${errorText}`);
-        }
-
-        const data = await response.json();
-        console.log('Alternative schedule query result:', data);
-
-        // Process the schedule data
-        if (data.userSchedules) {
-          Object.keys(data.userSchedules).forEach(userId => {
-            const userSchedule = data.userSchedules[userId];
-            if (userSchedule.shifts) {
-              scheduleData.userSchedules[userId] = {
-                shifts: userSchedule.shifts.map(shift => {
-                  // Process activities within each shift
-                  const activities = (shift.activities || []).map(activity => {
-                    const activityCodeId = activity.activityCodeId;
-                    const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
-                    
-                    return {
-                      startDate: activity.startDate,
-                      endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
-                      activityName: activityName,
-                      activityCodeId: activityCodeId,
-                      lengthMinutes: activity.lengthMinutes
-                    };
-                  });
-
-                  return {
-                    startDate: shift.startDate,
-                    endDate: shift.endDate,
-                    activities: activities
-                  };
-                })
-              };
-            }
-          });
-        }
-
+        console.error('Simplified schedule approach failed:', e);
+        
+        // If all else fails, let's at least show the analytics data with a note about missing schedules
+        console.log('Creating fallback schedule data structure');
+        
+        // We'll return empty schedule data but the process function will handle it gracefully
         return scheduleData;
-
-      } catch (e) {
-        console.error('Alternative schedule data approach also failed:', e);
-        return scheduleData; // Return empty structure
       }
     }
 
@@ -606,10 +528,64 @@
       const rows = [];
       const details = analyticsData?.userDetails || analyticsData?.results || [];
       
-      console.log(`Processing ${details.length} user details with schedule data`);
+      console.log(`Processing ${details.length} user details`);
       console.log('Schedule data available:', scheduleData);
       console.log('Users with schedules:', Object.keys(scheduleData.userSchedules));
 
+      // If no schedule data, create rows from analytics data only
+      if (Object.keys(scheduleData.userSchedules).length === 0) {
+        console.log('No schedule data available, showing analytics data only');
+        
+        for (const userDetail of details) {
+          try {
+            const userId = userDetail.userId || userDetail.user?.id;
+            if (!userId) continue;
+            
+            const userName = state.usersById[userId]?.name || userDetail.user?.name || `User ${userId}`;
+            
+            // Get user's activities
+            const activities = userDetail.routingStatus || userDetail.activities || [];
+            if (!activities.length) continue;
+
+            // Create rows for actual activities
+            for (const activity of activities.slice(0, 10)) { // Limit to first 10 activities
+              const actualStart = activity.startTime || activity.dateStart || activity.conversationStart;
+              const actualStatus = activity.status || activity.presence || activity.systemPresence || 'Unknown';
+              
+              if (!actualStart) continue;
+
+              const userTeams = state.teamsByUserId[userId] || [];
+              const teamNames = userTeams.map(t => t.name).join(', ');
+              const teamIds = userTeams.map(t => t.id);
+
+              const row = {
+                userId,
+                userName,
+                teamNames,
+                teamIds,
+                date: actualStart.slice(0, 10),
+                scheduledActivity: 'No Schedule Data',
+                scheduledStart: null,
+                scheduledEnd: null,
+                actualStart,
+                actualActivity: actualStatus,
+                durationMs: 0,
+                isLate: false,
+                lateMs: 0,
+                statusMatch: 'no-schedule'
+              };
+              rows.push(row);
+            }
+          } catch (e) {
+            console.warn('Error processing user detail:', userDetail, e);
+          }
+        }
+        
+        console.log(`Created ${rows.length} analytics-only rows`);
+        return rows;
+      }
+
+      // Process with schedule data
       for (const userDetail of details) {
         try {
           const userId = userDetail.userId || userDetail.user?.id;
@@ -622,8 +598,6 @@
             console.log(`No schedule found for user ${userName} (${userId})`);
             continue;
           }
-
-          console.log(`Processing schedule for user ${userName}:`, userSchedule);
 
           // Get user's activities
           const activities = userDetail.routingStatus || userDetail.activities || [];
@@ -643,7 +617,6 @@
               
               for (const scheduledActivity of shiftActivities) {
                 if (!scheduledActivity.startDate || !scheduledActivity.endDate) {
-                  console.log('Scheduled activity missing start/end date:', scheduledActivity);
                   continue;
                 }
 
@@ -662,7 +635,6 @@
                 });
 
                 if (actualActivities.length === 0) {
-                  console.log(`No actual activities found during scheduled activity for ${userName} at ${scheduledStart}`);
                   continue;
                 }
 
@@ -702,7 +674,6 @@
                   statusMatch: scheduledActivityName.toLowerCase().includes(actualStatus.toLowerCase()) ? 'match' : 'mismatch'
                 };
 
-                console.log('Created row:', row);
                 rows.push(row);
               }
 
@@ -743,7 +714,7 @@
       
       if(!state.attendanceRows.length){
         $('resultsSection').style.display='none';
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No schedule vs actual data available.</div></div>';
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No data available for the selected period.</div><div class="muted" style="margin-top:8px;">Check that schedules are published and users have activity data.</div></div>';
         return;
       }
       
@@ -794,10 +765,22 @@
               <tbody>
                 ${rows.map(r => {
                   try {
-                    const statusClass = r.isLate ? 'late' : 'on-time';
-                    const lateMinutes = r.isLate ? Math.round(r.lateMs / 60000) : 0;
-                    const statusDisplay = r.isLate ? `Late (${lateMinutes}m)` : 'On Time';
-                    const rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
+                    let statusClass = 'on-time';
+                    let statusDisplay = 'On Time';
+                    let rowClass = '';
+                    
+                    if (r.statusMatch === 'no-schedule') {
+                      statusClass = 'muted';
+                      statusDisplay = 'No Schedule Data';
+                      rowClass = 'schedule-mismatch';
+                    } else if (r.isLate) {
+                      statusClass = 'late';
+                      const lateMinutes = Math.round(r.lateMs / 60000);
+                      statusDisplay = `Late (${lateMinutes}m)`;
+                      rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
+                    } else {
+                      rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
+                    }
                     
                     return `
                       <tr class="${rowClass}">
@@ -805,8 +788,8 @@
                         <td>${escapeHtml(r.teamNames || 'No Team')}</td>
                         <td>${fmtDMY(r.date)}</td>
                         <td>${escapeHtml(r.scheduledActivity)}</td>
-                        <td>${fmtTime(r.scheduledStart)}</td>
-                        <td>${fmtTime(r.actualStart)}</td>
+                        <td>${r.scheduledStart ? fmtTime(r.scheduledStart) : 'N/A'}</td>
+                        <td>${r.actualStart ? fmtTime(r.actualStart) : 'N/A'}</td>
                         <td>${escapeHtml(r.actualActivity)}</td>
                         <td>${formatDuration(r.durationMs)}</td>
                         <td><span class="${statusClass}">${statusDisplay}</span></td>
@@ -851,7 +834,7 @@
         showProgress('Fetching schedule data…');
         updateProgress(25, 1, 4);
 
-        // Fetch schedule data using the new approach
+        // Fetch schedule data
         const scheduleData = await fetchScheduleData(businessUnitId, managementUnitId, from, to);
         
         updateProgress(50, 2, 4);
