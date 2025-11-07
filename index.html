@@ -54,15 +54,6 @@
     .tab.active {background: var(--primary-color); color: white; border-color: var(--primary-color);}
     .tab-content {display: none;}
     .tab-content.active {display: block;}
-    
-    /* Debug Styles */
-    .debug-info {background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 12px; margin-top: 12px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;}
-    .debug-toggle {background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 8px;}
-    
-    /* API Method Selector */
-    .method-selector {display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;}
-    .method-option {flex: 1; min-width: 120px;}
-    .method-option input {margin-right: 6px;}
   </style>
 </head>
 <body>
@@ -82,7 +73,7 @@
   <div id="mainContent" style="display:none;">
     <!-- Tab Navigation -->
     <div class="tabs">
-      <div class="tab active" data-tab="schedules">Schedules Only</div>
+      <div class="tab active" data-tab="schedules">Actual Activities</div>
       <div class="tab" data-tab="attendance">Schedule vs Actual</div>
     </div>
 
@@ -102,56 +93,26 @@
           </div>
         </div>
         <div>
-          <label>Business Unit & Management Unit</label>
+          <label>Management Unit & Users</label>
           <div class="filter-controls">
-            <select id="businessUnitSelect">
-              <option value="">Loading business units...</option>
-            </select>
             <select id="managementUnitSelect">
-              <option value="">Select business unit first</option>
-            </select>
-          </div>
-          <label style="margin-top:12px;">Team & User Filters</label>
-          <div class="filter-controls">
-            <select id="teamSelect">
-              <option value="all">All teams</option>
+              <option value="">Loading management units...</option>
             </select>
             <select id="userSelect">
               <option value="all">All users</option>
             </select>
           </div>
-          <input id="userSearch" type="text" placeholder="Search by user or team name" style="margin-top:8px;width:100%"/>
+          <label style="margin-top:12px;">Team Filters</label>
+          <div class="filter-controls">
+            <select id="teamSelect">
+              <option value="all">All teams</option>
+            </select>
+          </div>
+          <input id="userSearch" type="text" placeholder="Search by user name" style="margin-top:8px;width:100%"/>
         </div>
       </div>
-
-      <!-- API Method Selector -->
-      <div class="method-selector">
-        <label style="width: 100%; margin-bottom: 8px;">API Method:</label>
-        <div class="method-option">
-          <input type="radio" id="methodDirect" name="apiMethod" value="direct" checked>
-          <label for="methodDirect">Direct API</label>
-        </div>
-        <div class="method-option">
-          <input type="radio" id="methodProxy" name="apiMethod" value="proxy">
-          <label for="methodProxy">CORS Proxy</label>
-        </div>
-        <div class="method-option">
-          <input type="radio" id="methodAnalytics" name="apiMethod" value="analytics">
-          <label for="methodAnalytics">Analytics Only</label>
-        </div>
-      </div>
-
-      <button id="fetchSchedulesBtn" class="full-width-btn">Fetch Schedules Only</button>
+      <button id="fetchActivitiesBtn" class="full-width-btn">Fetch Actual Activities</button>
       <button id="fetchAttendanceBtn" class="full-width-btn" style="display:none; margin-top: 8px;">Run Attendance Report</button>
-      
-      <!-- Debug Section -->
-      <div style="margin-top: 16px;">
-        <button class="debug-toggle" onclick="toggleDebug()">Toggle Debug Info</button>
-        <div id="debugInfo" class="debug-info" style="display: none;">
-          <div><strong>Debug Information:</strong></div>
-          <div id="debugContent"></div>
-        </div>
-      </div>
     </div>
 
     <div id="statusMessage" class="muted" style="margin-top:10px;"></div>
@@ -168,29 +129,29 @@
       </div>
     </div>
 
-    <!-- Schedules Only Tab -->
+    <!-- Activities Tab -->
     <div id="schedulesTab" class="tab-content active">
       <div class="card">
-        <h2 style="margin:0 0 12px;">Scheduled Activities</h2>
+        <h2 style="margin:0 0 12px;">Actual User Activities</h2>
         <div class="stats">
           <div class="stat-card">
-            <div class="stat-number" id="totalScheduledShifts">0</div>
-            <div class="stat-label">Total Scheduled Shifts</div>
+            <div class="stat-number" id="totalActivities">0</div>
+            <div class="stat-label">Total Activities</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number" id="scheduledUsers">0</div>
-            <div class="stat-label">Users with Schedules</div>
+            <div class="stat-number" id="activeUsers">0</div>
+            <div class="stat-label">Active Users</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number" id="uniqueActivities">0</div>
-            <div class="stat-label">Unique Activities</div>
+            <div class="stat-number" id="uniqueStatuses">0</div>
+            <div class="stat-label">Unique Statuses</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number" id="avgShiftLength">0h</div>
-            <div class="stat-label">Avg Shift Length</div>
+            <div class="stat-number" id="avgActivityLength">0h</div>
+            <div class="stat-label">Avg Activity Length</div>
           </div>
         </div>
-        <div id="schedulesResults"></div>
+        <div id="activitiesResults"></div>
       </div>
     </div>
 
@@ -227,17 +188,7 @@
       clientId: 'fe305808-b368-4547-8af9-325d28d552bb',
       redirectUri: 'https://gmcglynn88.github.io/Late_Break-Report/',
       loginHost: 'https://login.mypurecloud.ie',
-      apiHost: 'https://api.mypurecloud.ie',
-      // CORS proxy options
-      corsProxies: [
-        'https://cors-anywhere.herokuapp.com/',
-        'https://api.allorigins.win/raw?url='
-      ]
-    };
-
-    // Definition of "late"
-    const ATTENDANCE_CONFIG = {
-      lateThresholdMinutes: 5,      // >= 5 mins after scheduled start
+      apiHost: 'https://api.mypurecloud.ie'
     };
 
     // ===== State =====
@@ -248,252 +199,14 @@
       teams: [],
       teamMembersByTeamId: {},
       teamsByUserId: {},
-      businessUnits: [],
       managementUnits: [],
-      scheduleData: {},
-      activityCodes: {}, // Store activity code mappings
-      attendanceRows: [],
-      scheduleRows: [], // Store schedule-only data
-      debugLog: []
+      activityRows: [],
+      attendanceRows: []
     };
-
-    // ===== Debug Functions =====
-    function addDebugLog(message, data = null) {
-      const timestamp = new Date().toLocaleTimeString();
-      const logEntry = {
-        timestamp,
-        message,
-        data: data ? JSON.stringify(data, null, 2) : null
-      };
-      state.debugLog.push(logEntry);
-      updateDebugDisplay();
-    }
-
-    function updateDebugDisplay() {
-      const debugContent = $('debugContent');
-      debugContent.innerHTML = state.debugLog.map(entry => 
-        `<div><strong>[${entry.timestamp}]</strong> ${entry.message}</div>` +
-        (entry.data ? `<pre style="margin: 4px 0; padding: 8px; background: white; border-radius: 4px; font-size: 10px;">${entry.data}</pre>` : '')
-      ).join('');
-    }
-
-    function toggleDebug() {
-      const debugInfo = $('debugInfo');
-      debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
-    }
-
-    // ===== API Helper with CORS Proxy Support =====
-    function getApiMethod() {
-      return document.querySelector('input[name="apiMethod"]:checked').value;
-    }
-
-    function getApiUrl(path) {
-      const method = getApiMethod();
-      const fullUrl = `${CONFIG.apiHost}${path}`;
-      
-      if (method === 'proxy') {
-        // Use CORS proxy
-        const proxyUrl = CONFIG.corsProxies[0];
-        return `${proxyUrl}${encodeURIComponent(fullUrl)}`;
-      }
-      
-      return fullUrl;
-    }
-
-    async function api(path, options = {}) {
-      if(!state.token) throw new Error('Not authenticated');
-      
-      const url = getApiUrl(path);
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${state.token}`,
-          ...options.headers
-        },
-        ...options
-      };
-      
-      addDebugLog(`API Request: ${path}`, { 
-        method: options.method || 'GET', 
-        url: url,
-        apiMethod: getApiMethod()
-      });
-      
-      try {
-        const res = await fetch(url, config);
-        
-        addDebugLog(`API Response: ${res.status} ${res.statusText}`, {
-          url: url,
-          status: res.status,
-          statusText: res.statusText,
-          apiMethod: getApiMethod()
-        });
-        
-        if(res.status===401||res.status===403) throw new Error(`Authentication error (${res.status}). Please refresh.`);
-        if(!res.ok){ 
-          const t = await res.text().catch(()=> '');
-          throw new Error(`API Error: ${res.status} ${res.statusText}${t?` - ${t.slice(0,200)}`:''}`);
-        }
-        return res.json();
-      } catch (error) {
-        addDebugLog(`API Error: ${error.message}`, { path, error: error.toString(), apiMethod: getApiMethod() });
-        throw error;
-      }
-    }
-
-    // ===== Alternative Schedule Fetching Methods =====
-    async function fetchSchedulesAlternative(businessUnitId, managementUnitId, fromDate, toDate) {
-      const method = getApiMethod();
-      addDebugLog(`Using alternative schedule fetching method: ${method}`);
-      
-      if (method === 'analytics') {
-        return await fetchSchedulesFromAnalytics(businessUnitId, managementUnitId, fromDate, toDate);
-      } else {
-        return await fetchSchedulesDirect(businessUnitId, managementUnitId, fromDate, toDate);
-      }
-    }
-
-    async function fetchSchedulesDirect(businessUnitId, managementUnitId, fromDate, toDate) {
-      addDebugLog('Trying direct schedule fetch with GET requests');
-      
-      const scheduleData = {
-        userSchedules: {},
-        schedulePeriods: []
-      };
-
-      try {
-        // First, fetch activity codes
-        await fetchActivityCodes(businessUnitId);
-
-        // Get users from the management unit
-        const muUsersResponse = await api(`/api/v2/workforcemanagement/managementunits/${managementUnitId}/users`);
-        const muUsers = muUsersResponse.entities || [];
-        addDebugLog(`Found ${muUsers.length} users in management unit`);
-
-        if (muUsers.length === 0) {
-          return scheduleData;
-        }
-
-        // Try to get published schedules using GET endpoints
-        showProgress('Looking for published schedules...', 'Fetching Schedules');
-        
-        // Get business unit weeks to find schedule IDs
-        try {
-          const weeksResponse = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks`);
-          const weeks = weeksResponse.entities || [];
-          addDebugLog(`Found ${weeks.length} weeks in business unit`);
-          
-          // Look for schedules in relevant weeks
-          for (const week of weeks.slice(0, 5)) { // Check recent weeks
-            try {
-              const schedulesResponse = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${week.id}/schedules`);
-              const schedules = schedulesResponse.entities || [];
-              addDebugLog(`Found ${schedules.length} schedules in week ${week.id}`);
-              
-              for (const schedule of schedules) {
-                if (schedule.user && muUsers.some(u => u.id === schedule.user.id)) {
-                  const userId = schedule.user.id;
-                  if (!scheduleData.userSchedules[userId]) {
-                    scheduleData.userSchedules[userId] = { shifts: [] };
-                  }
-                  // Add schedule info (we'll need to process activities later)
-                  scheduleData.userSchedules[userId].shifts.push({
-                    scheduleId: schedule.id,
-                    weekId: week.id,
-                    user: schedule.user
-                  });
-                }
-              }
-            } catch (weekError) {
-              addDebugLog(`Error fetching schedules for week ${week.id}`, { error: weekError.message });
-            }
-          }
-        } catch (weeksError) {
-          addDebugLog('Error fetching weeks', { error: weeksError.message });
-        }
-
-        return scheduleData;
-
-      } catch (e) {
-        addDebugLog('Direct schedule fetch failed', { error: e.message });
-        throw e;
-      }
-    }
-
-    async function fetchSchedulesFromAnalytics(businessUnitId, managementUnitId, fromDate, toDate) {
-      addDebugLog('Trying to infer schedules from analytics data');
-      
-      const scheduleData = {
-        userSchedules: {},
-        schedulePeriods: []
-      };
-
-      try {
-        // Use analytics data to infer schedules
-        const body = {
-          interval: `${fromDate}T00:00:00/${toDate}T23:59:59`,
-          order: "asc",
-          orderBy: "conversationStart",
-          paging: { pageSize: 50, pageNumber: 1 }
-        };
-
-        addDebugLog('Fetching analytics data to infer schedules');
-        const analyticsResponse = await fetch(getApiUrl('/api/v2/analytics/users/details/query'), {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${state.token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body)
-        });
-
-        if (!analyticsResponse.ok) {
-          throw new Error(`Analytics error: ${analyticsResponse.status}`);
-        }
-
-        const analyticsData = await analyticsResponse.json();
-        addDebugLog(`Received analytics data with ${analyticsData.userDetails?.length || 0} user details`);
-
-        // Process analytics data to create inferred schedules
-        if (analyticsData.userDetails) {
-          analyticsData.userDetails.forEach(userDetail => {
-            const userId = userDetail.userId;
-            if (userId && userDetail.routingStatus) {
-              const activities = userDetail.routingStatus.filter(activity => 
-                activity.startTime && activity.status
-              );
-              
-              if (activities.length > 0) {
-                scheduleData.userSchedules[userId] = {
-                  shifts: activities.map(activity => ({
-                    startDate: activity.startTime,
-                    endDate: activity.endTime || new Date(new Date(activity.startTime).getTime() + 3600000).toISOString(), // Default 1 hour
-                    activityName: activity.status,
-                    lengthMinutes: 60, // Default duration
-                    paid: true,
-                    inferred: true // Mark as inferred from analytics
-                  }))
-                };
-              }
-            }
-          });
-        }
-
-        addDebugLog(`Inferred ${Object.keys(scheduleData.userSchedules).length} user schedules from analytics`);
-        return scheduleData;
-
-      } catch (e) {
-        addDebugLog('Analytics-based schedule inference failed', { error: e.message });
-        throw e;
-      }
-    }
 
     // ===== Utils =====
     const $ = id => document.getElementById(id);
-    const setStatus = (msg,err=false)=>{ 
-      $('statusMessage').textContent = err?'':(msg||''); 
-      $('errorMessage').textContent = err?(msg||''):''; 
-      if (msg) addDebugLog(msg, err ? {error: true} : null);
-    };
+    const setStatus = (msg,err=false)=>{ $('statusMessage').textContent = err?'':(msg||''); $('errorMessage').textContent = err?(msg||''):''; };
     const fmt = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleString()}catch{return 'N/A'} };
     const fmtTime = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}catch{return 'N/A'} };
     const fmtDMY = s => { if(!s||s.length<10) return s||''; const [y,m,d]=s.slice(0,10).split('-'); return `${d}-${m}-${y}`; };
@@ -506,6 +219,14 @@
     }
     function hideProgress(){ $('progressSection').style.display='none'; }
 
+    // Format hours from minutes
+    function formatHours(minutes) {
+      if (!minutes || minutes <= 0) return '0h';
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+
     // Format duration as HH:MM:SS
     function formatDuration(ms) {
       if (!ms || ms <= 0) return '00:00:00';
@@ -514,14 +235,6 @@
       const minutes = Math.floor((seconds % 3600) / 60);
       const secs = seconds % 60;
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    // Format hours from minutes
-    function formatHours(minutes) {
-      if (!minutes || minutes <= 0) return '0h';
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
     }
 
     // Add helper function to escape HTML
@@ -547,10 +260,10 @@
           
           // Show/hide appropriate buttons
           if (tabName === 'schedules') {
-            $('fetchSchedulesBtn').style.display = 'block';
+            $('fetchActivitiesBtn').style.display = 'block';
             $('fetchAttendanceBtn').style.display = 'none';
           } else {
-            $('fetchSchedulesBtn').style.display = 'none';
+            $('fetchActivitiesBtn').style.display = 'none';
             $('fetchAttendanceBtn').style.display = 'block';
           }
         });
@@ -591,10 +304,9 @@
         showMain();
         setupDateLimits();
         setupTabs();
-        fetchBusinessUnits();
+        fetchManagementUnits();
         fetchAllUsers();
         fetchAllTeamsAndMembers();
-        addDebugLog('Authentication successful');
         return;
       }
 
@@ -611,78 +323,251 @@
       $('authStatus').style.display = 'none';
     }
 
-    // ===== Business Units =====
-    async function fetchBusinessUnits(){
-      try{
-        const data = await api('/api/v2/workforcemanagement/businessunits');
-        state.businessUnits = data.entities || [];
-        const select = $('businessUnitSelect');
-        select.innerHTML = '<option value="">Select Business Unit</option>' +
-          state.businessUnits.map(bu => `<option value="${bu.id}">${bu.name}</option>`).join('');
-        addDebugLog(`Loaded ${state.businessUnits.length} business units`);
-      }catch(e){
-        console.error('Failed to fetch business units:', e);
-        $('businessUnitSelect').innerHTML = '<option value="">Failed to load business units</option>';
-        addDebugLog('Failed to fetch business units', { error: e.message });
+    // ===== API helper =====
+    async function api(path, options = {}){
+      if(!state.token) throw new Error('Not authenticated');
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${state.token}`,
+          ...options.headers
+        },
+        ...options
+      };
+      
+      const res = await fetch(`${CONFIG.apiHost}${path}`, config);
+      if(res.status===401||res.status===403) throw new Error(`Authentication error (${res.status}). Please refresh.`);
+      if(!res.ok){ 
+        const t = await res.text().catch(()=> '');
+        throw new Error(`API Error: ${res.status} ${res.statusText}${t?` - ${t.slice(0,200)}`:''}`);
       }
+      return res.json();
     }
 
     // ===== Management Units =====
-    async function fetchManagementUnits(businessUnitId){
+    async function fetchManagementUnits(){
       try{
-        const data = await api(`/api/v2/workforcemanagement/managementunits?businessUnitId=${businessUnitId}`);
+        const data = await api('/api/v2/workforcemanagement/managementunits');
         state.managementUnits = data.entities || [];
         const select = $('managementUnitSelect');
         select.innerHTML = '<option value="">Select Management Unit</option>' +
           state.managementUnits.map(mu => `<option value="${mu.id}">${mu.name}</option>`).join('');
-        addDebugLog(`Loaded ${state.managementUnits.length} management units for business unit ${businessUnitId}`);
       }catch(e){
         console.error('Failed to fetch management units:', e);
         $('managementUnitSelect').innerHTML = '<option value="">Failed to load management units</option>';
-        addDebugLog('Failed to fetch management units', { businessUnitId, error: e.message });
       }
     }
 
-    // ===== Activity Codes =====
-    async function fetchActivityCodes(businessUnitId) {
+    // ===== Users =====
+    async function fetchAllUsers(){
+      try{
+        setStatus('Loading users…'); setLoading(true);
+        let all=[], page=1, size=100;
+        while(true){
+          const data = await api(`/api/v2/users?pageSize=${size}&pageNumber=${page}`);
+          const ents = data?.entities||[];
+          all = all.concat(ents);
+          if(!data?.nextUri || ents.length<size) break;
+          page++;
+        }
+        state.users = all.map(u=>({id:u.id,name:u.name||'',email:u.email||''})).sort((a,b)=>a.name.localeCompare(b.name));
+        state.usersById = {};
+        state.users.forEach(u=>{ state.usersById[u.id]=u; });
+        populateUserSelect(state.users);
+        setStatus(`Loaded ${state.users.length} users`);
+      }catch(e){
+        setStatus(`Failed to load users: ${e.message}`, true);
+        $('userSelect').innerHTML='<option value="all">Failed to load users</option>';
+      }finally{ setLoading(false); }
+    }
+
+    function populateUserSelect(users){
+      const sel=$('userSelect');
+      sel.innerHTML = '<option value="all">All users</option>' +
+        users.map(u=>`<option value="${u.id}">${u.name||'(Unnamed)'}</option>`).join('');
+    }
+
+    // ===== Teams & members =====
+    function populateTeamSelect(teams){
+      const sel=$('teamSelect');
+      sel.innerHTML = '<option value="all">All teams</option>' +
+        teams.map(t=>`<option value="${t.id}">${t.name||'(Unnamed team)'}</option>`).join('');
+    }
+
+    async function fetchTeamMembers(teamId){
+      let members = [];
+      let page=1, size=100;
+      while(true){
+        const data = await api(`/api/v2/teams/${teamId}/members?pageSize=${size}&pageNumber=${page}`);
+        const ents = data?.entities || data?.members || [];
+        members = members.concat(ents);
+        if(!data?.nextUri || ents.length<size) break;
+        page++;
+      }
+      return members.map(m => ({
+        id: m.id || m.user?.id,
+        name: m.name || m.user?.name || ''
+      })).filter(m=>m.id);
+    }
+
+    async function fetchAllTeamsAndMembers(){
+      try{
+        setLoading(true);
+        setStatus('Loading teams…');
+
+        let all=[], page=1, size=100;
+        while(true){
+          const data = await api(`/api/v2/teams?pageSize=${size}&pageNumber=${page}`);
+          const ents = data?.entities||[];
+          all = all.concat(ents);
+          if(!data?.nextUri || ents.length<size) break;
+          page++;
+        }
+        state.teams = all.map(t=>({id:t.id,name:t.name||'(Unnamed team)'})).sort((a,b)=>a.name.localeCompare(b.name));
+        populateTeamSelect(state.teams);
+
+        state.teamMembersByTeamId = {};
+        state.teamsByUserId = {};
+        if(!state.teams.length){ setStatus('No teams found'); return; }
+
+        showProgress('Loading team members…');
+        let step = 0;
+        for(const team of state.teams){
+          step++;
+          updateProgress( (step/state.teams.length)*100, step, state.teams.length );
+          try{
+            const members = await fetchTeamMembers(team.id);
+            state.teamMembersByTeamId[team.id] = members;
+            for(const m of members){
+              if(!state.teamsByUserId[m.id]) state.teamsByUserId[m.id] = [];
+              state.teamsByUserId[m.id].push({id:team.id,name:team.name});
+            }
+          }catch(e){
+            console.warn('Failed to fetch members for team', team.id, e);
+          }
+        }
+        hideProgress();
+        setStatus('Users & teams loaded');
+      }catch(e){
+        hideProgress();
+        console.error(e);
+        setStatus('Failed to load teams: ' + e.message, true);
+      }finally{
+        setLoading(false);
+      }
+    }
+
+    // ===== ANALYTICS-BASED ACTIVITY FETCHING =====
+    async function fetchUserActivities(managementUnitId, fromDate, toDate) {
+      console.log('Fetching user activities from Analytics API...');
+      
+      const activities = {
+        userActivities: {},
+        activityPeriods: []
+      };
+
       try {
-        addDebugLog(`Fetching activity codes for business unit: ${businessUnitId}`);
-        const data = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/activitycodes`);
-        state.activityCodes = {};
+        showProgress('Fetching user activity data from Analytics API...', 'Fetching Activities');
+
+        // Use the Analytics Users Details API (same as your working app)
+        const body = {
+          interval: `${fromDate}T00:00:00/${toDate}T23:59:59`,
+          order: "asc",
+          orderBy: "conversationStart",
+          paging: { pageSize: 100, pageNumber: 1 }
+        };
+
+        console.log('Fetching user activities from Analytics API...');
+        const response = await fetch(
+          `${CONFIG.apiHost}/api/v2/analytics/users/details/query`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn('Analytics API query failed:', errorText);
+          throw new Error(`Analytics query failed: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('Analytics API query successful:', data);
         
-        (data.entities || []).forEach(activity => {
-          state.activityCodes[activity.id] = {
-            name: activity.name,
-            category: activity.category
-          };
-        });
-        
-        addDebugLog(`Loaded ${Object.keys(state.activityCodes).length} activity codes`, state.activityCodes);
-        return state.activityCodes;
+        // Process the user activities
+        if (data.userDetails) {
+          data.userDetails.forEach(userDetail => {
+            const userId = userDetail.userId || userDetail.user?.id;
+            if (!userId) return;
+            
+            const userName = state.usersById[userId]?.name || userDetail.user?.name || `User ${userId}`;
+            const userActivities = [];
+            
+            // Get user's routing status/activities
+            const routingStatus = userDetail.routingStatus || userDetail.activities || [];
+            
+            routingStatus.forEach(activity => {
+              if (!activity.startTime && !activity.dateStart && !activity.conversationStart) return;
+              
+              const startTime = activity.startTime || activity.dateStart || activity.conversationStart;
+              const status = activity.status || activity.presence || activity.systemPresence || 'Unknown';
+              const endTime = activity.endTime || activity.dateEnd || activity.conversationEnd;
+              
+              // Calculate duration
+              let durationMs = 0;
+              if (endTime) {
+                durationMs = new Date(endTime) - new Date(startTime);
+              }
+              
+              userActivities.push({
+                startDate: startTime,
+                endDate: endTime,
+                activityName: status,
+                durationMs: durationMs,
+                inferred: false
+              });
+            });
+
+            if (userActivities.length > 0) {
+              activities.userActivities[userId] = {
+                activities: userActivities,
+                userName: userName
+              };
+              console.log(`Found ${userActivities.length} activities for user ${userName}`);
+            }
+          });
+        }
+
+        console.log('Final activities data collected:', activities);
+        return activities;
+
       } catch (e) {
-        console.error('Failed to fetch activity codes:', e);
-        addDebugLog('Failed to fetch activity codes', { businessUnitId, error: e.message });
-        return {};
+        console.error('Analytics-based activity fetching failed:', e);
+        throw e;
       }
     }
 
-    // ===== Process Schedule Data for Display =====
-    function processScheduleData(scheduleData) {
+    // ===== Process Activity Data for Display =====
+    function processActivityData(activityData) {
       const rows = [];
-      const uniqueActivities = new Set();
-      let totalShiftLength = 0;
-      let shiftCount = 0;
+      const uniqueStatuses = new Set();
+      let totalActivityLength = 0;
+      let activityCount = 0;
 
-      addDebugLog('Processing schedule data for display', scheduleData);
+      console.log('Processing activity data for display:', activityData);
 
-      Object.keys(scheduleData.userSchedules).forEach(userId => {
-        const userSchedule = scheduleData.userSchedules[userId];
-        const userName = state.usersById[userId]?.name || `User ${userId}`;
+      Object.keys(activityData.userActivities).forEach(userId => {
+        const userActivity = activityData.userActivities[userId];
+        const userName = userActivity.userName;
         
-        userSchedule.shifts.forEach(shift => {
-          uniqueActivities.add(shift.activityName);
-          totalShiftLength += shift.lengthMinutes || 60; // Default to 60 minutes if not specified
-          shiftCount++;
+        userActivity.activities.forEach(activity => {
+          uniqueStatuses.add(activity.activityName);
+          totalActivityLength += activity.durationMs;
+          activityCount++;
 
           const userTeams = state.teamsByUserId[userId] || [];
           const teamNames = userTeams.map(t => t.name).join(', ');
@@ -693,69 +578,62 @@
             userName,
             teamNames,
             teamIds,
-            date: shift.startDate ? shift.startDate.slice(0, 10) : 'Unknown',
-            scheduledActivity: shift.activityName || 'Unknown Activity',
-            scheduledStart: shift.startDate,
-            scheduledEnd: shift.endDate,
-            lengthMinutes: shift.lengthMinutes || 60,
-            paid: shift.paid !== undefined ? shift.paid : true,
-            inferred: shift.inferred || false
+            date: activity.startDate.slice(0, 10),
+            activityName: activity.activityName,
+            startTime: activity.startDate,
+            endTime: activity.endDate,
+            durationMs: activity.durationMs,
+            inferred: activity.inferred || false
           };
 
           rows.push(row);
         });
       });
 
-      addDebugLog(`Processed ${rows.length} schedule rows`, {
-        uniqueActivities: uniqueActivities.size,
-        totalShifts: shiftCount,
-        avgShiftLength: shiftCount > 0 ? Math.round(totalShiftLength / shiftCount) : 0
-      });
-
       return {
         rows,
-        uniqueActivities: uniqueActivities.size,
-        totalShifts: shiftCount,
-        avgShiftLength: shiftCount > 0 ? Math.round(totalShiftLength / shiftCount) : 0
+        uniqueStatuses: uniqueStatuses.size,
+        totalActivities: activityCount,
+        avgActivityLength: activityCount > 0 ? Math.round(totalActivityLength / activityCount / 60000) : 0 // in minutes
       };
     }
 
-    // ===== Render Schedule Data =====
-    function renderSchedules() {
-      const resultsDiv = $('schedulesResults');
+    // ===== Render Activity Data =====
+    function renderActivities() {
+      const resultsDiv = $('activitiesResults');
       
-      addDebugLog(`Rendering schedules, total rows: ${state.scheduleRows.length}`);
+      console.log('Rendering activities, total rows:', state.activityRows.length);
       
-      if (!state.scheduleRows.length) {
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No schedule data available for the selected period.</div><div class="muted" style="margin-top:8px;">Try different API methods or date ranges.</div></div>';
+      if (!state.activityRows.length) {
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No activity data available for the selected period.</div><div class="muted" style="margin-top:8px;">Try a different date range or management unit.</div></div>';
         return;
       }
 
-      const rows = getFilteredScheduleRows();
-      addDebugLog(`Filtered schedule rows: ${rows.length}`);
+      const rows = getFilteredActivityRows();
+      console.log('Filtered activity rows:', rows.length);
 
       if (!rows.length) {
-        $('totalScheduledShifts').textContent = '0';
-        $('scheduledUsers').textContent = '0';
-        $('uniqueActivities').textContent = '0';
-        $('avgShiftLength').textContent = '0h';
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">🔍</div><div>No schedule data found for the selected filters.</div></div>';
+        $('totalActivities').textContent = '0';
+        $('activeUsers').textContent = '0';
+        $('uniqueStatuses').textContent = '0';
+        $('avgActivityLength').textContent = '0h';
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">🔍</div><div>No activity data found for the selected filters.</div></div>';
         return;
       }
 
       // Calculate stats
-      const totalShifts = rows.length;
-      const scheduledUsers = new Set(rows.map(r => r.userId)).size;
-      const uniqueActivities = new Set(rows.map(r => r.scheduledActivity)).size;
-      const totalMinutes = rows.reduce((sum, r) => sum + r.lengthMinutes, 0);
-      const avgShiftLength = totalShifts > 0 ? Math.round(totalMinutes / totalShifts) : 0;
+      const totalActivities = rows.length;
+      const activeUsers = new Set(rows.map(r => r.userId)).size;
+      const uniqueStatuses = new Set(rows.map(r => r.activityName)).size;
+      const totalMinutes = rows.reduce((sum, r) => sum + (r.durationMs / 60000), 0);
+      const avgActivityLength = totalActivities > 0 ? Math.round(totalMinutes / totalActivities) : 0;
 
-      $('totalScheduledShifts').textContent = totalShifts;
-      $('scheduledUsers').textContent = scheduledUsers;
-      $('uniqueActivities').textContent = uniqueActivities;
-      $('avgShiftLength').textContent = formatHours(avgShiftLength);
+      $('totalActivities').textContent = totalActivities;
+      $('activeUsers').textContent = activeUsers;
+      $('uniqueStatuses').textContent = uniqueStatuses;
+      $('avgActivityLength').textContent = formatHours(avgActivityLength);
 
-      // Create table with schedule data
+      // Create table with activity data
       let tableHtml = '';
       try {
         tableHtml = `
@@ -766,35 +644,31 @@
                   <th>Name</th>
                   <th>Team</th>
                   <th>Date</th>
-                  <th>Scheduled Activity</th>
+                  <th>Activity</th>
                   <th>Start Time</th>
                   <th>End Time</th>
                   <th>Duration</th>
-                  <th>Type</th>
                 </tr>
               </thead>
               <tbody>
                 ${rows.map(r => {
                   try {
-                    const duration = formatHours(r.lengthMinutes);
-                    const type = r.inferred ? 'Inferred' : 'Scheduled';
-                    const typeClass = r.inferred ? 'muted' : 'on-time';
+                    const duration = formatDuration(r.durationMs);
                     
                     return `
                       <tr>
                         <td>${escapeHtml(r.userName)}</td>
                         <td>${escapeHtml(r.teamNames || 'No Team')}</td>
                         <td>${fmtDMY(r.date)}</td>
-                        <td>${escapeHtml(r.scheduledActivity)}</td>
-                        <td>${r.scheduledStart ? fmtTime(r.scheduledStart) : 'N/A'}</td>
-                        <td>${r.scheduledEnd ? fmtTime(r.scheduledEnd) : 'N/A'}</td>
+                        <td>${escapeHtml(r.activityName)}</td>
+                        <td>${r.startTime ? fmtTime(r.startTime) : 'N/A'}</td>
+                        <td>${r.endTime ? fmtTime(r.endTime) : 'N/A'}</td>
                         <td>${duration}</td>
-                        <td><span class="${typeClass}">${type}</span></td>
                       </tr>
                     `;
                   } catch (e) {
-                    console.warn('Error rendering schedule row:', r, e);
-                    return '<tr><td colspan="8" style="color: red;">Error rendering row</td></tr>';
+                    console.warn('Error rendering activity row:', r, e);
+                    return '<tr><td colspan="7" style="color: red;">Error rendering row</td></tr>';
                   }
                 }).join('')}
               </tbody>
@@ -802,74 +676,71 @@
           </div>
         `;
       } catch (e) {
-        console.error('Error generating schedule table HTML:', e);
-        tableHtml = '<div style="color: red; padding: 20px; text-align: center;">Error generating schedule table</div>';
+        console.error('Error generating activity table HTML:', e);
+        tableHtml = '<div style="color: red; padding: 20px; text-align: center;">Error generating activity table</div>';
       }
       
       resultsDiv.innerHTML = tableHtml;
-      addDebugLog('Schedule table rendered successfully');
     }
 
-    function getFilteredScheduleRows() {
+    function getFilteredActivityRows() {
       const teamId = $('teamSelect').value;
       const userId = $('userSelect').value;
       const search = $('userSearch').value.trim().toLowerCase();
 
-      return state.scheduleRows.filter(r => {
+      return state.activityRows.filter(r => {
         if (teamId !== 'all' && !(r.teamIds || []).includes(teamId)) return false;
         if (userId !== 'all' && r.userId !== userId) return false;
         if (search) {
-          const hay = (r.userName + ' ' + (r.teamNames || '') + ' ' + r.date + ' ' + r.scheduledActivity).toLowerCase();
+          const hay = (r.userName + ' ' + (r.teamNames || '') + ' ' + r.date + ' ' + r.activityName).toLowerCase();
           if (!hay.includes(search)) return false;
         }
         return true;
       });
     }
 
-    // ===== Fetch Schedules Only =====
-    async function fetchSchedules() {
+    // ===== Fetch Activities =====
+    async function fetchActivities() {
       try {
         const from = $('fromDate').value;
         const to = $('toDate').value || from;
-        const businessUnitId = $('businessUnitSelect').value;
         const managementUnitId = $('managementUnitSelect').value;
         
         if (!from) { setStatus('Please select a start date', true); return; }
-        if (!businessUnitId) { setStatus('Please select a business unit', true); return; }
         if (!managementUnitId) { setStatus('Please select a management unit', true); return; }
         
         const today = new Date().toISOString().split('T')[0];
         if (from > today || to > today) { setStatus('Date range cannot be in the future', true); return; }
         if (new Date(to) < new Date(from)) { setStatus('End date must be on or after start date', true); return; }
 
-        setStatus('Fetching schedules…'); 
+        setStatus('Fetching activities…'); 
         setLoading(true);
         
-        showProgress('Fetching schedule data…', 'Fetching Schedules');
+        showProgress('Fetching activity data…', 'Fetching Activities');
         updateProgress(50, 1, 2);
 
-        // Fetch schedule data using alternative methods
-        const scheduleData = await fetchSchedulesAlternative(businessUnitId, managementUnitId, from, to);
+        // Fetch activity data using Analytics API
+        const activityData = await fetchUserActivities(managementUnitId, from, to);
         
         updateProgress(100, 2, 2);
-        showProgress('Processing schedule data…', 'Fetching Schedules');
+        showProgress('Processing activity data…', 'Fetching Activities');
 
-        // Process schedule data for display
-        const processedData = processScheduleData(scheduleData);
-        state.scheduleRows = processedData.rows;
+        // Process activity data for display
+        const processedData = processActivityData(activityData);
+        state.activityRows = processedData.rows;
         
         hideProgress();
-        renderSchedules();
+        renderActivities();
         
-        if (state.scheduleRows.length) {
-          setStatus(`Schedules loaded - ${state.scheduleRows.length} shifts found`);
+        if (state.activityRows.length) {
+          setStatus(`Activities loaded - ${state.activityRows.length} activities found`);
         } else {
-          setStatus('No schedule data found for the selected period. Try a different API method.');
+          setStatus('No activity data found for the selected period.');
         }
       } catch (e) {
-        console.error('Error in fetchSchedules:', e);
+        console.error('Error in fetchActivities:', e);
         hideProgress();
-        setStatus('Error fetching schedules: ' + e.message, true);
+        setStatus('Error fetching activities: ' + e.message, true);
       } finally {
         setLoading(false);
       }
@@ -877,32 +748,27 @@
 
     // ===== Existing Attendance Functions (simplified) =====
     async function fetchAttendance() {
-      // Your existing attendance function here
+      // This would combine schedule data with actual activities
       console.log('Fetching attendance data...');
-      setStatus('Attendance feature coming soon...');
+      setStatus('Attendance comparison feature coming soon...');
     }
 
     // ===== Events & Init =====
-    $('fetchSchedulesBtn').addEventListener('click', fetchSchedules);
+    $('fetchActivitiesBtn').addEventListener('click', fetchActivities);
     $('fetchAttendanceBtn').addEventListener('click', fetchAttendance);
-    $('businessUnitSelect').addEventListener('change', function() {
-      if (this.value) {
-        fetchManagementUnits(this.value);
-      }
-    });
     $('teamSelect').addEventListener('change', function() {
       if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
-        renderSchedules();
+        renderActivities();
       }
     });
     $('userSelect').addEventListener('change', function() {
       if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
-        renderSchedules();
+        renderActivities();
       }
     });
     $('userSearch').addEventListener('input', function() {
       if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
-        renderSchedules();
+        renderActivities();
       }
     });
 
