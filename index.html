@@ -264,9 +264,17 @@
     }
 
     // ===== API helper =====
-    async function api(path){
+    async function api(path, options = {}){
       if(!state.token) throw new Error('Not authenticated');
-      const res = await fetch(`${CONFIG.apiHost}${path}`, { headers:{Authorization:`Bearer ${state.token}`} });
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${state.token}`,
+          ...options.headers
+        },
+        ...options
+      };
+      
+      const res = await fetch(`${CONFIG.apiHost}${path}`, config);
       if(res.status===401||res.status===403) throw new Error(`Authentication error (${res.status}). Please refresh.`);
       if(!res.ok){ const t = await res.text().catch(()=> ''); throw new Error(`API Error: ${res.status} ${res.statusText}${t?` - ${t.slice(0,200)}`:''}`); }
       return res.json();
@@ -427,7 +435,7 @@
           try {
             console.log(`Fetching schedules for week: ${weekId}`);
             
-            // Get schedules for this week with correct parameters
+            // GET: Get schedules for this week
             const schedulesResponse = await api(
               `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules?includeOnlyPublished=true`
             );
@@ -440,23 +448,51 @@
                 console.log(`Fetching agent schedules for schedule: ${schedule.id}, week: ${weekId}`);
                 
                 try {
-                  // Get agent schedules with correct parameters
-                  const agentSchedulesResponse = await api(
-                    `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${schedule.id}/agentschedules/query`
+                  // POST: Get agent schedules with management unit ID
+                  const agentSchedulesResponse = await fetch(
+                    `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${schedule.id}/agentschedules/query`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${state.token}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        managementUnitId: managementUnitId
+                      })
+                    }
                   );
-                  
-                  console.log(`Agent schedules response for ${schedule.id}:`, agentSchedulesResponse);
 
-                  if (agentSchedulesResponse && agentSchedulesResponse.userSchedules) {
-                    // Merge the user schedules
-                    Object.keys(agentSchedulesResponse.userSchedules).forEach(userId => {
+                  if (!agentSchedulesResponse.ok) {
+                    const errorText = await agentSchedulesResponse.text();
+                    console.warn(`Agent schedules API error: ${agentSchedulesResponse.status}`, errorText);
+                    continue;
+                  }
+
+                  const agentSchedulesData = await agentSchedulesResponse.json();
+                  console.log(`Agent schedules response for ${schedule.id}:`, agentSchedulesData);
+
+                  // Handle async operation if needed
+                  if (agentSchedulesData.status === 'Processing' || agentSchedulesData.status === 'Pending') {
+                    console.log(`Schedule query is processing, operationId: ${agentSchedulesData.operationId}`);
+                    // For now, skip processing async operations
+                    continue;
+                  }
+
+                  // Process the agent schedules data
+                  if (agentSchedulesData.result && agentSchedulesData.result.agentSchedules) {
+                    agentSchedulesData.result.agentSchedules.forEach(agentSchedule => {
+                      const userId = agentSchedule.user.id;
                       if (!scheduleData.userSchedules[userId]) {
-                        scheduleData.userSchedules[userId] = agentSchedulesResponse.userSchedules[userId];
+                        scheduleData.userSchedules[userId] = {
+                          shifts: agentSchedule.shifts || []
+                        };
                       } else {
                         // Merge shifts if user already exists
-                        const existingShifts = scheduleData.userSchedules[userId].shifts || [];
-                        const newShifts = agentSchedulesResponse.userSchedules[userId].shifts || [];
-                        scheduleData.userSchedules[userId].shifts = [...existingShifts, ...newShifts];
+                        scheduleData.userSchedules[userId].shifts = [
+                          ...scheduleData.userSchedules[userId].shifts,
+                          ...(agentSchedule.shifts || [])
+                        ];
                       }
                     });
                   }
