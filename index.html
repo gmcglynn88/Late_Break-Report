@@ -433,9 +433,9 @@
       }
     }
 
-    // ===== CORRECTED Schedule Data Approach =====
+    // ===== ROBUST Schedule Data Approach =====
     async function fetchScheduleData(businessUnitId, managementUnitId, fromDate, toDate) {
-      console.log('Using CORRECTED schedule data approach...');
+      console.log('Using ROBUST schedule data approach...');
       
       const scheduleData = {
         userSchedules: {},
@@ -446,76 +446,37 @@
         // First, fetch activity codes
         await fetchActivityCodes(businessUnitId);
 
-        // Get unique week start dates in the range
-        const weekStarts = new Set();
-        const currentDate = new Date(fromDate);
-        const endDate = new Date(toDate);
+        // Try the Management Unit schedules query first - this is the most reliable
+        console.log('Trying Management Unit schedules query...');
         
-        while (currentDate <= endDate) {
-          const weekStart = getWeekStart(currentDate);
-          weekStarts.add(weekStart);
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
+        const muBody = {
+          startDate: `${fromDate}T00:00:00.000Z`,
+          endDate: `${toDate}T23:59:59.999Z`
+        };
 
-        console.log('Week starts to fetch:', Array.from(weekStarts));
+        const muResponse = await fetch(
+          `${CONFIG.apiHost}/api/v2/workforcemanagement/managementunits/${managementUnitId}/schedules/query`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(muBody)
+          }
+        );
 
-        // Fetch schedules for each week
-        for (const weekId of weekStarts) {
-          try {
-            console.log(`Fetching schedules for week: ${weekId}`);
-            
-            // GET: Get schedules for this week
-            const schedulesResponse = await api(
-              `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules?includeOnlyPublished=true`
-            );
-            
-            const schedules = schedulesResponse.entities || [];
-            console.log(`Found ${schedules.length} schedules for week ${weekId}`, schedules);
-
-            if (schedules.length === 0) {
-              console.log(`No published schedules found for week ${weekId}`);
-              continue;
-            }
-
-            // Use the first schedule (usually the published one)
-            const schedule = schedules[0];
-            const scheduleId = schedule.id;
-            console.log(`Using schedule: ${scheduleId} for week ${weekId}`);
-
-            // POST: Get agent schedules with management unit ID
-            console.log(`Fetching agent schedules for schedule ${scheduleId}...`);
-            
-            const agentSchedulesResponse = await fetch(
-              `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${scheduleId}/agentschedules/query`,
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${state.token}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  managementUnitId: managementUnitId
-                })
-              }
-            );
-
-            if (!agentSchedulesResponse.ok) {
-              const errorText = await agentSchedulesResponse.text();
-              console.warn(`Agent schedules API error: ${agentSchedulesResponse.status}`, errorText);
-              continue;
-            }
-
-            const agentSchedulesData = await agentSchedulesResponse.json();
-            console.log(`Agent schedules response for ${scheduleId}:`, agentSchedulesData);
-
-            // Process the agent schedules data
-            if (agentSchedulesData.result && agentSchedulesData.result.agentSchedules) {
-              agentSchedulesData.result.agentSchedules.forEach(agentSchedule => {
-                const userId = agentSchedule.user.id;
-                const shifts = agentSchedule.shifts || [];
-                
-                if (shifts.length > 0) {
-                  const processedShifts = shifts.map(shift => {
+        if (muResponse.ok) {
+          const muData = await muResponse.json();
+          console.log('Management Unit schedule query successful:', muData);
+          
+          // Process the user schedules from Management Unit API
+          if (muData.userSchedules) {
+            Object.keys(muData.userSchedules).forEach(userId => {
+              const userSchedule = muData.userSchedules[userId];
+              if (userSchedule.shifts && userSchedule.shifts.length > 0) {
+                scheduleData.userSchedules[userId] = {
+                  shifts: userSchedule.shifts.map(shift => {
                     // Process each activity in the shift
                     const activities = (shift.activities || []).map(activity => {
                       const activityCodeId = activity.activityCodeId;
@@ -535,34 +496,212 @@
                       endDate: shift.endDate,
                       activities: activities
                     };
-                  });
+                  })
+                };
+              }
+            });
+          }
+          
+          console.log('Processed schedule data from Management Unit:', scheduleData);
+          return scheduleData;
+        }
 
-                  if (!scheduleData.userSchedules[userId]) {
-                    scheduleData.userSchedules[userId] = {
-                      shifts: processedShifts
+        // If Management Unit API fails, try Business Unit schedules query
+        console.log('Management Unit API failed, trying Business Unit schedules query...');
+        
+        const buBody = {
+          managementUnitIds: [managementUnitId],
+          startDate: `${fromDate}T00:00:00.000Z`,
+          endDate: `${toDate}T23:59:59.999Z`
+        };
+
+        const buResponse = await fetch(
+          `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/schedules/query`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(buBody)
+          }
+        );
+
+        if (buResponse.ok) {
+          const buData = await buResponse.json();
+          console.log('Business Unit schedule query successful:', buData);
+          
+          // Process the user schedules from Business Unit API
+          if (buData.userSchedules) {
+            Object.keys(buData.userSchedules).forEach(userId => {
+              const userSchedule = buData.userSchedules[userId];
+              if (userSchedule.shifts && userSchedule.shifts.length > 0) {
+                scheduleData.userSchedules[userId] = {
+                  shifts: userSchedule.shifts.map(shift => {
+                    // Process each activity in the shift
+                    const activities = (shift.activities || []).map(activity => {
+                      const activityCodeId = activity.activityCodeId;
+                      const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
+                      
+                      return {
+                        startDate: activity.startDate,
+                        endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
+                        activityName: activityName,
+                        activityCodeId: activityCodeId,
+                        lengthMinutes: activity.lengthMinutes
+                      };
+                    });
+
+                    return {
+                      startDate: shift.startDate,
+                      endDate: shift.endDate,
+                      activities: activities
                     };
-                  } else {
-                    scheduleData.userSchedules[userId].shifts = [
-                      ...scheduleData.userSchedules[userId].shifts,
-                      ...processedShifts
-                    ];
+                  })
+                };
+              }
+            });
+          }
+          
+          console.log('Processed schedule data from Business Unit:', scheduleData);
+          return scheduleData;
+        }
+
+        // If both APIs fail, try the weekly approach as fallback
+        console.log('Both APIs failed, trying weekly approach as fallback...');
+        return await fetchScheduleDataWeekly(businessUnitId, managementUnitId, fromDate, toDate);
+
+      } catch (e) {
+        console.error('All schedule data approaches failed:', e);
+        return scheduleData;
+      }
+    }
+
+    // Fallback weekly approach
+    async function fetchScheduleDataWeekly(businessUnitId, managementUnitId, fromDate, toDate) {
+      const scheduleData = {
+        userSchedules: {},
+        schedulePeriods: []
+      };
+
+      try {
+        // Get unique week start dates in the range
+        const weekStarts = new Set();
+        const currentDate = new Date(fromDate);
+        const endDate = new Date(toDate);
+        
+        while (currentDate <= endDate) {
+          const weekStart = getWeekStart(currentDate);
+          weekStarts.add(weekStart);
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        console.log('Week starts to fetch:', Array.from(weekStarts));
+
+        // Try to find valid schedules for each week
+        for (const weekId of weekStarts) {
+          try {
+            console.log(`Looking for schedules for week: ${weekId}`);
+            
+            // Get schedules for this week
+            const schedulesResponse = await api(
+              `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules?includeOnlyPublished=true`
+            );
+            
+            const schedules = schedulesResponse.entities || [];
+            console.log(`Found ${schedules.length} schedules for week ${weekId}`, schedules);
+
+            if (schedules.length === 0) {
+              console.log(`No published schedules found for week ${weekId}`);
+              continue;
+            }
+
+            // Try each schedule until we find one that works
+            for (const schedule of schedules) {
+              const scheduleId = schedule.id;
+              console.log(`Trying schedule: ${scheduleId} for week ${weekId}`);
+
+              try {
+                // POST: Get agent schedules with management unit ID
+                const agentSchedulesResponse = await fetch(
+                  `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${scheduleId}/agentschedules/query`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${state.token}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      managementUnitId: managementUnitId
+                    })
                   }
+                );
+
+                if (agentSchedulesResponse.ok) {
+                  const agentSchedulesData = await agentSchedulesResponse.json();
+                  console.log(`Agent schedules response for ${scheduleId}:`, agentSchedulesData);
+
+                  // Process the agent schedules data
+                  if (agentSchedulesData.result && agentSchedulesData.result.agentSchedules) {
+                    agentSchedulesData.result.agentSchedules.forEach(agentSchedule => {
+                      const userId = agentSchedule.user.id;
+                      const shifts = agentSchedule.shifts || [];
+                      
+                      if (shifts.length > 0) {
+                        const processedShifts = shifts.map(shift => {
+                          // Process each activity in the shift
+                          const activities = (shift.activities || []).map(activity => {
+                            const activityCodeId = activity.activityCodeId;
+                            const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
+                            
+                            return {
+                              startDate: activity.startDate,
+                              endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
+                              activityName: activityName,
+                              activityCodeId: activityCodeId,
+                              lengthMinutes: activity.lengthMinutes
+                            };
+                          });
+
+                          return {
+                            startDate: shift.startDate,
+                            endDate: shift.endDate,
+                            activities: activities
+                          };
+                        });
+
+                        if (!scheduleData.userSchedules[userId]) {
+                          scheduleData.userSchedules[userId] = {
+                            shifts: processedShifts
+                          };
+                        } else {
+                          scheduleData.userSchedules[userId].shifts = [
+                            ...scheduleData.userSchedules[userId].shifts,
+                            ...processedShifts
+                          ];
+                        }
+                      }
+                    });
+                  }
+                  break; // Found a working schedule, move to next week
+                } else {
+                  console.log(`Schedule ${scheduleId} failed for week ${weekId}`);
                 }
-              });
+              } catch (e) {
+                console.warn(`Failed to fetch agent schedules for schedule ${scheduleId}:`, e);
+              }
             }
 
           } catch (e) {
-            console.warn(`Failed to fetch schedules for week ${weekId}:`, e);
+            console.warn(`Failed to process week ${weekId}:`, e);
           }
         }
 
-        console.log('Final schedule data collected:', scheduleData);
+        console.log('Final schedule data from weekly approach:', scheduleData);
         return scheduleData;
 
       } catch (e) {
-        console.error('Schedule data approach failed:', e);
-        
-        // Return empty schedule data but the process function will handle it gracefully
+        console.error('Weekly schedule approach failed:', e);
         return scheduleData;
       }
     }
