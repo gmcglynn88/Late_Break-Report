@@ -37,11 +37,15 @@
     .attendance-table th{background:var(--primary-color);color:#fff;text-align:left}
     .late-yes{color:#dc2626;font-weight:700}
     .late-no{color:#16a34a;font-weight:700}
+    .on-time{color:#16a34a;font-weight:600}
+    .late{color:#dc2626;font-weight:600}
     .activity-timeline {background: #f8f9fa; border-radius: 8px; padding: 12px; margin-top: 8px;}
     .activity-item {display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #e9ecef;}
     .activity-item:last-child {border-bottom: none;}
     .activity-time {font-family: ui-monospace, Consolas, Menlo, monospace; color: #495057;}
     .activity-status {font-weight: 600; color: #2c3e50;}
+    .schedule-match {background-color: #f0f9ff; border-left: 4px solid #3b82f6;}
+    .schedule-mismatch {background-color: #fef2f2; border-left: 4px solid #ef4444;}
   </style>
 </head>
 <body>
@@ -74,7 +78,16 @@
           </div>
         </div>
         <div>
-          <label>Team & User Filters</label>
+          <label>Business Unit & Management Unit</label>
+          <div class="filter-controls">
+            <select id="businessUnitSelect">
+              <option value="">Loading business units...</option>
+            </select>
+            <select id="managementUnitSelect">
+              <option value="">Select business unit first</option>
+            </select>
+          </div>
+          <label style="margin-top:12px;">Team & User Filters</label>
           <div class="filter-controls">
             <select id="teamSelect">
               <option value="all">All teams</option>
@@ -105,15 +118,15 @@
 
     <div id="resultsSection" style="display:none;">
       <div class="card">
-        <h2 style="margin:0 0 12px;">Attendance Results</h2>
+        <h2 style="margin:0 0 12px;">Schedule vs Actual Activities</h2>
         <div class="stats">
           <div class="stat-card">
-            <div class="stat-number" id="totalDays">0</div>
-            <div class="stat-label">User-Days in Range</div>
+            <div class="stat-number" id="totalShifts">0</div>
+            <div class="stat-label">Total Shifts</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number" id="lateDays">0</div>
-            <div class="stat-label">Late User-Days</div>
+            <div class="stat-number" id="lateShifts">0</div>
+            <div class="stat-label">Late Shifts</div>
           </div>
           <div class="stat-card">
             <div class="stat-number" id="uniqueUsers">0</div>
@@ -121,7 +134,7 @@
           </div>
           <div class="stat-card">
             <div class="stat-number" id="avgLateMinutes">0</div>
-            <div class="stat-label">Avg Late Minutes (late days only)</div>
+            <div class="stat-label">Avg Late Minutes</div>
           </div>
         </div>
         <div id="attendanceResults"></div>
@@ -130,7 +143,7 @@
   </div>
 
   <script>
-    // ===== Config (match this redirect URI to your OAuth client) =====
+    // ===== Config =====
     const CONFIG = {
       clientId: 'fe305808-b368-4547-8af9-325d28d552bb',
       redirectUri: 'https://gmcglynn88.github.io/Late_Break-Report/',
@@ -138,12 +151,9 @@
       apiHost: 'https://api.mypurecloud.ie'
     };
 
-    // Definition of "late" and "break"
+    // Definition of "late"
     const ATTENDANCE_CONFIG = {
-      workdayStartHour: 9,          // 9am
-      lateThresholdMinutes: 5,      // >= 5 mins after start
-      longBreakMinutes: 20,         // >= 20 mins gap between activities = break
-      workStartPresence: ['Available', 'Busy', 'On Queue', 'On Task'] // Statuses that count as "working"
+      lateThresholdMinutes: 5,      // >= 5 mins after scheduled start
     };
 
     // ===== State =====
@@ -153,7 +163,10 @@
       usersById: {},
       teams: [],
       teamMembersByTeamId: {},
-      teamsByUserId: {}, // userId -> [{id,name}]
+      teamsByUserId: {},
+      businessUnits: [],
+      managementUnits: [],
+      scheduleData: {},
       attendanceRows: []
     };
 
@@ -161,12 +174,27 @@
     const $ = id => document.getElementById(id);
     const setStatus = (msg,err=false)=>{ $('statusMessage').textContent = err?'':(msg||''); $('errorMessage').textContent = err?(msg||''):''; };
     const fmt = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleString()}catch{return 'N/A'} };
-    const fmtTime = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleTimeString()}catch{return 'N/A'} };
+    const fmtTime = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}catch{return 'N/A'} };
     const fmtDMY = s => { if(!s||s.length<10) return s||''; const [y,m,d]=s.slice(0,10).split('-'); return `${d}-${m}-${y}`; };
     function setLoading(v){ $('mainContent').classList.toggle('loading', !!v); }
     function updateProgress(p,cur,total){ $('progressFill').style.width = `${p}%`; $('progressText').textContent = `${Math.round(p)}%`; $('chunkText').textContent = `Step ${cur}/${total}`; }
     function showProgress(info){ $('progressSection').style.display='block'; $('resultsSection').style.display='none'; $('progressInfo').textContent = info || ''; }
     function hideProgress(){ $('progressSection').style.display='none'; }
+
+    // Format duration as HH:MM:SS
+    function formatDuration(ms) {
+      if (!ms || ms <= 0) return '00:00:00';
+      const seconds = Math.floor(ms / 1000);
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = seconds % 60;
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // Calculate minutes difference
+    function getMinutesDifference(startTime, endTime) {
+      return Math.round((new Date(endTime) - new Date(startTime)) / 60000);
+    }
 
     // Add helper function to escape HTML
     function escapeHtml(text) {
@@ -189,7 +217,7 @@
       });
     }
 
-    // ===== Auth (same pattern as convo app) =====
+    // ===== Auth =====
     function parseTokenFromHash(){
       const params = new URLSearchParams(location.hash.replace(/^#/, ''));
       return { token: params.get('access_token'), error: params.get('error'), errorDescription: params.get('error_description') };
@@ -208,6 +236,7 @@
         state.token = token;
         showMain();
         setupDateLimits();
+        fetchBusinessUnits();
         fetchAllUsers();
         fetchAllTeamsAndMembers();
         return;
@@ -235,6 +264,34 @@
       return res.json();
     }
 
+    // ===== Business Units =====
+    async function fetchBusinessUnits(){
+      try{
+        const data = await api('/api/v2/workforcemanagement/businessunits');
+        state.businessUnits = data.entities || [];
+        const select = $('businessUnitSelect');
+        select.innerHTML = '<option value="">Select Business Unit</option>' +
+          state.businessUnits.map(bu => `<option value="${bu.id}">${bu.name}</option>`).join('');
+      }catch(e){
+        console.error('Failed to fetch business units:', e);
+        $('businessUnitSelect').innerHTML = '<option value="">Failed to load business units</option>';
+      }
+    }
+
+    // ===== Management Units =====
+    async function fetchManagementUnits(businessUnitId){
+      try{
+        const data = await api(`/api/v2/workforcemanagement/managementunits?businessUnitId=${businessUnitId}`);
+        state.managementUnits = data.entities || [];
+        const select = $('managementUnitSelect');
+        select.innerHTML = '<option value="">Select Management Unit</option>' +
+          state.managementUnits.map(mu => `<option value="${mu.id}">${mu.name}</option>`).join('');
+      }catch(e){
+        console.error('Failed to fetch management units:', e);
+        $('managementUnitSelect').innerHTML = '<option value="">Failed to load management units</option>';
+      }
+    }
+
     // ===== Users =====
     async function fetchAllUsers(){
       try{
@@ -257,6 +314,7 @@
         $('userSelect').innerHTML='<option value="all">Failed to load users</option>';
       }finally{ setLoading(false); }
     }
+
     function populateUserSelect(users){
       const sel=$('userSelect');
       sel.innerHTML = '<option value="all">All users</option>' +
@@ -333,146 +391,153 @@
       }
     }
 
-    function onTeamChange(){
-      const teamId = $('teamSelect').value;
-      if(teamId === 'all'){
-        populateUserSelect(state.users);
-      }else{
-        const members = state.teamMembersByTeamId[teamId] || [];
-        const memberIds = new Set(members.map(m=>m.id));
-        populateUserSelect(state.users.filter(u=>memberIds.has(u.id)));
-      }
-      renderAttendance();
-    }
+    // ===== Schedule Data =====
+    async function fetchScheduleData(businessUnitId, managementUnitId, fromDate, toDate) {
+      const scheduleData = {
+        userSchedules: {},
+        schedulePeriods: []
+      };
 
-    // ===== Attendance processing =====
-    function buildAttendanceRows(analyticsData){
-      const rows = [];
-      
-      // Try different possible response structures
-      const details = analyticsData?.userDetails || analyticsData?.results || analyticsData?.conversations || [];
-      
-      console.log(`Processing ${details.length} user details entries`);
-      
-      if(!Array.isArray(details)) {
-        console.log('Details is not an array:', details);
-        return rows;
-      }
-
-      const longBreakMs = ATTENDANCE_CONFIG.longBreakMinutes * 60 * 1000;
-      const lateThresholdMs = ATTENDANCE_CONFIG.lateThresholdMinutes * 60 * 1000;
-
-      for(const userDetail of details){
-        try {
-          const userId = userDetail.userId || userDetail.user?.id;
-          if(!userId) {
-            console.log('Skipping entry with no userId:', userDetail);
-            continue;
-          }
+      try {
+        // Get users in management unit
+        const usersData = await api(`/api/v2/workforcemanagement/managementunits/${managementUnitId}/users`);
+        const muUsers = usersData.entities || [];
+        
+        // Get schedules for each week in the date range
+        const startDate = new Date(fromDate);
+        const endDate = new Date(toDate);
+        
+        let currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+          // Get Monday of the week
+          const weekStart = new Date(currentDate);
+          weekStart.setDate(currentDate.getDate() - currentDate.getDay() + 1); // Monday
+          const weekId = weekStart.toISOString().split('T')[0];
           
-          const userName = state.usersById[userId]?.name || userDetail.user?.name || `User ${userId}`;
-          
-          // Get ALL activities - not just conversations
-          const activities = userDetail.presence || userDetail.routingStatus || userDetail.activities || [];
-          
-          console.log(`User ${userName}: ${activities.length} activities found`);
-          
-          if(!activities.length) continue;
-
-          // Group activities by date
-          const byDate = {};
-          for(const activity of activities){
-            try {
-              // Use startTime for presence/routing status activities
-              const startTime = activity.startTime || activity.dateStart || activity.conversationStart;
-              if(!startTime) continue;
-              
-              const day = startTime.slice(0,10);
-              if(!byDate[day]) byDate[day] = [];
-              
-              byDate[day].push({
-                startTime: startTime,
-                endTime: activity.endTime || activity.dateEnd || activity.conversationEnd || startTime,
-                status: activity.status || activity.presence || activity.systemPresence || 'Unknown',
-                type: activity.type || 'Activity'
-              });
-            } catch (e) {
-              console.warn('Error processing activity:', activity, e);
-            }
-          }
-
-          const userTeams = state.teamsByUserId[userId] || [];
-          const teamNames = userTeams.map(t=>t.name).join(', ');
-          const teamIds = userTeams.map(t=>t.id);
-
-          // Process each day
-          for(const [day, dayActivities] of Object.entries(byDate)){
-            try {
-              if (dayActivities.length === 0) continue;
-              
-              // Sort activities by start time
-              dayActivities.sort((a,b) => new Date(a.startTime) - new Date(b.startTime));
-              
-              const firstActivity = dayActivities[0];
-              const lastActivity = dayActivities[dayActivities.length - 1];
-              
-              // Calculate breaks between activities
-              let breakCount = 0;
-              let longestBreakMs = 0;
-              let totalBreakTimeMs = 0;
-              
-              for(let i = 0; i < dayActivities.length - 1; i++){
-                const currentEnd = new Date(dayActivities[i].endTime);
-                const nextStart = new Date(dayActivities[i + 1].startTime);
-                const gap = nextStart - currentEnd;
+          try {
+            // Get schedule for this week
+            const schedulesResponse = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules`);
+            const schedules = schedulesResponse.entities || [];
+            
+            for (const schedule of schedules) {
+              if (schedule.id) {
+                // Get agent schedules for this schedule
+                const agentSchedulesResponse = await api(
+                  `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${schedule.id}/agentschedules/query`
+                );
                 
-                if(gap > longBreakMs){
-                  breakCount++;
-                  totalBreakTimeMs += gap;
-                  if(gap > longestBreakMs) longestBreakMs = gap;
+                if (agentSchedulesResponse.result && agentSchedulesResponse.result.userSchedules) {
+                  Object.assign(scheduleData.userSchedules, agentSchedulesResponse.result.userSchedules);
                 }
               }
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch schedule for week ${weekId}:`, e);
+          }
+          
+          // Move to next week
+          currentDate.setDate(currentDate.getDate() + 7);
+        }
+        
+        return scheduleData;
+      } catch (e) {
+        console.error('Failed to fetch schedule data:', e);
+        return scheduleData;
+      }
+    }
 
-              // Calculate late arrival
-              const workdayStart = new Date(day + 'T' + String(ATTENDANCE_CONFIG.workdayStartHour).padStart(2,'0') + ':00:00');
-              let lateMs = new Date(firstActivity.startTime) - workdayStart;
-              if(lateMs < lateThresholdMs) lateMs = 0;
-              const isLate = lateMs > 0;
+    // ===== Process Schedule vs Actual =====
+    function processScheduleVsActual(scheduleData, analyticsData) {
+      const rows = [];
+      const details = analyticsData?.userDetails || analyticsData?.results || [];
+      
+      console.log(`Processing ${details.length} user details with schedule data`);
 
-              // Build timeline of activities
-              const timeline = dayActivities.map(activity => ({
-                time: fmtTime(activity.startTime),
-                status: activity.status,
-                duration: activity.endTime ? Math.round((new Date(activity.endTime) - new Date(activity.startTime)) / 60000) : 0
-              }));
+      for (const userDetail of details) {
+        try {
+          const userId = userDetail.userId || userDetail.user?.id;
+          if (!userId) continue;
+          
+          const userName = state.usersById[userId]?.name || userDetail.user?.name || `User ${userId}`;
+          const userSchedules = scheduleData.userSchedules[userId];
+          
+          if (!userSchedules) {
+            console.log(`No schedule found for user ${userName}`);
+            continue;
+          }
+
+          // Get user's activities
+          const activities = userDetail.presence || userDetail.routingStatus || userDetail.activities || [];
+          if (!activities.length) continue;
+
+          // Process each scheduled shift
+          const shifts = userSchedules.shifts || [];
+          for (const shift of shifts) {
+            try {
+              const scheduledStart = shift.startDate;
+              const scheduledEnd = shift.endDate;
+              const scheduledActivity = shift.activityCategory || 'Scheduled Activity';
+              
+              if (!scheduledStart) continue;
+
+              // Find actual activities during this scheduled shift
+              const shiftStart = new Date(scheduledStart);
+              const shiftEnd = new Date(scheduledEnd);
+              
+              const actualActivities = activities.filter(activity => {
+                const activityTime = new Date(activity.startTime || activity.dateStart || activity.conversationStart);
+                return activityTime >= shiftStart && activityTime <= shiftEnd;
+              });
+
+              if (actualActivities.length === 0) continue;
+
+              // Sort activities by time
+              actualActivities.sort((a, b) => 
+                new Date(a.startTime || a.dateStart || a.conversationStart) - 
+                new Date(b.startTime || b.dateStart || b.conversationStart)
+              );
+
+              const firstActualActivity = actualActivities[0];
+              const actualStart = firstActualActivity.startTime || firstActualActivity.dateStart || firstActualActivity.conversationStart;
+              const actualStatus = firstActualActivity.status || firstActualActivity.presence || firstActualActivity.systemPresence || 'Unknown';
+              
+              // Calculate lateness
+              const lateMs = new Date(actualStart) - new Date(scheduledStart);
+              const isLate = lateMs > (ATTENDANCE_CONFIG.lateThresholdMinutes * 60 * 1000);
+              const durationMs = new Date(scheduledEnd) - new Date(scheduledStart);
+
+              const userTeams = state.teamsByUserId[userId] || [];
+              const teamNames = userTeams.map(t => t.name).join(', ');
+              const teamIds = userTeams.map(t => t.id);
 
               rows.push({
                 userId,
                 userName,
                 teamNames,
                 teamIds,
-                date: day,
-                firstActivity: firstActivity.startTime,
-                lastActivity: lastActivity.endTime,
-                activityCount: dayActivities.length,
+                date: scheduledStart.slice(0, 10),
+                scheduledActivity,
+                scheduledStart,
+                scheduledEnd,
+                actualStart,
+                actualActivity: actualStatus,
+                durationMs,
                 isLate,
                 lateMs,
-                breakCount,
-                longestBreakMs,
-                totalBreakTimeMs,
-                spanMs: new Date(lastActivity.endTime) - new Date(firstActivity.startTime),
-                timeline: timeline
+                statusMatch: scheduledActivity.toLowerCase().includes(actualStatus.toLowerCase()) ? 'match' : 'mismatch'
               });
+
             } catch (e) {
-              console.warn('Error processing day', day, 'for user', userName, e);
+              console.warn('Error processing shift:', shift, e);
             }
           }
+
         } catch (e) {
           console.warn('Error processing user detail:', userDetail, e);
         }
       }
       
-      console.log(`Built ${rows.length} total attendance rows`);
+      console.log(`Processed ${rows.length} schedule vs actual rows`);
       return rows;
     }
 
@@ -499,7 +564,7 @@
       
       if(!state.attendanceRows.length){
         $('resultsSection').style.display='none';
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No activity data available.</div></div>';
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No schedule vs actual data available.</div></div>';
         return;
       }
       
@@ -509,28 +574,26 @@
       $('resultsSection').style.display='block';
 
       if(!rows.length){
-        $('totalDays').textContent = '0';
-        $('lateDays').textContent = '0';
+        $('totalShifts').textContent = '0';
+        $('lateShifts').textContent = '0';
         $('uniqueUsers').textContent = '0';
         $('avgLateMinutes').textContent = '0';
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">🔍</div><div>No activity found for the selected filters.</div></div>';
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">🔍</div><div>No data found for the selected filters.</div></div>';
         return;
       }
 
-      const totalDays = rows.length;
-      const lateDays = rows.filter(r=>r.isLate).length;
-      const uniqueUsers = new Set(rows.map(r=>r.userId)).size;
-      const totalLateMs = rows.filter(r=>r.isLate).reduce((sum,r)=>sum+r.lateMs,0);
-      const avgLateMinutes = lateDays ? (totalLateMs/lateDays/60000).toFixed(1) : '0';
+      const totalShifts = rows.length;
+      const lateShifts = rows.filter(r => r.isLate).length;
+      const uniqueUsers = new Set(rows.map(r => r.userId)).size;
+      const totalLateMs = rows.filter(r => r.isLate).reduce((sum, r) => sum + r.lateMs, 0);
+      const avgLateMinutes = lateShifts ? (totalLateMs / lateShifts / 60000).toFixed(1) : '0';
 
-      $('totalDays').textContent = totalDays;
-      $('lateDays').textContent = lateDays;
+      $('totalShifts').textContent = totalShifts;
+      $('lateShifts').textContent = lateShifts;
       $('uniqueUsers').textContent = uniqueUsers;
       $('avgLateMinutes').textContent = avgLateMinutes;
 
-      const breakThreshold = ATTENDANCE_CONFIG.longBreakMinutes;
-
-      // Create table with activity timeline
+      // Create table with schedule vs actual data
       let tableHtml = '';
       try {
         tableHtml = `
@@ -538,57 +601,36 @@
             <table class="attendance-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>User</th>
-                  <th>Team(s)</th>
-                  <th>First Activity</th>
-                  <th>Last Activity</th>
-                  <th>Activities</th>
-                  <th>Late?</th>
-                  <th>Late (mins)</th>
-                  <th>Breaks ≥ ${breakThreshold}m</th>
-                  <th>Longest Break</th>
-                  <th>Activity Timeline</th>
+                  <th>Name</th>
+                  <th>Scheduled Activity</th>
+                  <th>Schedule Start</th>
+                  <th>Actual Start</th>
+                  <th>Actual Activity</th>
+                  <th>Duration</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                ${rows.map(r=>{
+                ${rows.map(r => {
                   try {
-                    const lateClass = r.isLate ? 'late-yes' : 'late-no';
-                    const lateMins = r.isLate ? (r.lateMs/60000).toFixed(1) : '0';
-                    const longBreakMins = r.longestBreakMs>0 ? (r.longestBreakMs/60000).toFixed(1) : '0';
-                    
-                    const timelineHtml = r.timeline && r.timeline.length > 0 ? 
-                      `<div class="activity-timeline">
-                        ${r.timeline.slice(0, 5).map(activity => 
-                          `<div class="activity-item">
-                            <span class="activity-time">${activity.time}</span>
-                            <span class="activity-status">${escapeHtml(activity.status)}</span>
-                            ${activity.duration > 0 ? `<span class="muted">(${activity.duration}m)</span>` : ''}
-                          </div>`
-                        ).join('')}
-                        ${r.timeline.length > 5 ? `<div class="muted" style="text-align:center;padding:4px;">+${r.timeline.length - 5} more activities</div>` : ''}
-                      </div>` : 
-                      '<div class="muted">No timeline</div>';
+                    const statusClass = r.isLate ? 'late' : 'on-time';
+                    const statusText = r.isLate ? 'Late' : 'On Time';
+                    const rowClass = r.statusMatch === 'match' ? 'schedule-match' : 'schedule-mismatch';
                     
                     return `
-                      <tr>
-                        <td>${fmtDMY(r.date)}</td>
+                      <tr class="${rowClass}">
                         <td>${escapeHtml(r.userName)}</td>
-                        <td>${escapeHtml(r.teamNames || '-')}</td>
-                        <td>${fmtTime(r.firstActivity)}</td>
-                        <td>${fmtTime(r.lastActivity)}</td>
-                        <td>${r.activityCount}</td>
-                        <td><span class="${lateClass}">${r.isLate ? 'Yes' : 'No'}</span></td>
-                        <td>${lateMins}</td>
-                        <td>${r.breakCount}</td>
-                        <td>${longBreakMins}m</td>
-                        <td style="min-width: 200px;">${timelineHtml}</td>
+                        <td>${escapeHtml(r.scheduledActivity)}</td>
+                        <td>${fmtTime(r.scheduledStart)}</td>
+                        <td>${fmtTime(r.actualStart)}</td>
+                        <td>${escapeHtml(r.actualActivity)}</td>
+                        <td>${formatDuration(r.durationMs)}</td>
+                        <td><span class="${statusClass}">${statusText}</span></td>
                       </tr>
                     `;
                   } catch (e) {
                     console.warn('Error rendering row:', r, e);
-                    return '<tr><td colspan="11" style="color: red;">Error rendering row</td></tr>';
+                    return '<tr><td colspan="7" style="color: red;">Error rendering row</td></tr>';
                   }
                 }).join('')}
               </tbody>
@@ -603,35 +645,46 @@
       resultsDiv.innerHTML = tableHtml;
     }
 
-    // ===== Fetch attendance (analytics users details) =====
+    // ===== Main Attendance Fetch =====
     async function fetchAttendance(){
       try{
-        const from=$('fromDate').value, to=$('toDate').value||from;
+        const from = $('fromDate').value;
+        const to = $('toDate').value || from;
+        const businessUnitId = $('businessUnitSelect').value;
+        const managementUnitId = $('managementUnitSelect').value;
+        
         if(!from){ setStatus('Please select a start date', true); return; }
+        if(!businessUnitId){ setStatus('Please select a business unit', true); return; }
+        if(!managementUnitId){ setStatus('Please select a management unit', true); return; }
+        
         const today = new Date().toISOString().split('T')[0];
         if(from > today || to > today) { setStatus('Date range cannot be in the future', true); return; }
         if(new Date(to) < new Date(from)){ setStatus('End date must be on or after start date', true); return; }
 
-        setStatus('Running attendance report…'); setLoading(true);
-        showProgress('Requesting user analytics…');
-        updateProgress(10,1,3);
+        setStatus('Running attendance report…'); 
+        setLoading(true);
+        
+        showProgress('Fetching schedule data…');
+        updateProgress(25, 1, 4);
 
+        // Fetch schedule data
+        const scheduleData = await fetchScheduleData(businessUnitId, managementUnitId, from, to);
+        
+        updateProgress(50, 2, 4);
+        showProgress('Fetching actual activity data…');
+
+        // Fetch analytics data
         const body = {
           interval: `${from}T00:00:00/${to}T23:59:59`,
           order: "asc",
           orderBy: "conversationStart",
-          paging: {
-            pageSize: 100,
-            pageNumber: 1
-          }
+          paging: { pageSize: 100, pageNumber: 1 }
         };
 
-        console.log('Sending analytics request with body:', body);
-
         const res = await fetch(CONFIG.apiHost + '/api/v2/analytics/users/details/query', {
-          method:'POST',
-          headers:{Authorization:'Bearer ' + state.token,'Content-Type':'application/json'},
-          body:JSON.stringify(body)
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + state.token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
         });
         
         if(!res.ok){
@@ -639,38 +692,22 @@
           throw new Error('Analytics error: ' + res.status + ' ' + res.statusText + (t?' - ' + t.slice(0,200):''));
         }
         
-        updateProgress(60,2,3);
-        const data = await res.json();
+        updateProgress(75, 3, 4);
+        const analyticsData = await res.json();
         
-        console.log('Analytics API response structure:', Object.keys(data));
-        console.log('Full analytics response:', data);
+        showProgress('Processing schedule vs actual data…');
         
-        // Debug: Check what we received
-        if (data && data.userDetails) {
-          console.log(`Received ${data.userDetails.length} user details`);
-          data.userDetails.forEach((userDetail, index) => {
-            const activities = userDetail.presence || userDetail.routingStatus || userDetail.activities || [];
-            console.log(`User ${index}: ${userDetail.userId}, ${activities.length} activities`);
-          });
-        } else {
-          console.log('No userDetails in response, checking for results:', data.results ? data.results.length : 'none');
-        }
-
-        state.attendanceRows = buildAttendanceRows(data);
+        // Process schedule vs actual
+        state.attendanceRows = processScheduleVsActual(scheduleData, analyticsData);
         
-        console.log(`Built ${state.attendanceRows.length} attendance rows`);
-        if (state.attendanceRows.length > 0) {
-          console.log('Sample row:', state.attendanceRows[0]);
-        }
-        
-        updateProgress(100,3,3);
+        updateProgress(100, 4, 4);
         hideProgress();
         renderAttendance();
         
         if(state.attendanceRows.length){
-          setStatus(`Attendance report completed - found ${state.attendanceRows.length} activity records`);
+          setStatus(`Report completed - ${state.attendanceRows.length} shifts analyzed`);
         }else{
-          setStatus('No activity found for the selected period. Check console for API response details.');
+          setStatus('No schedule vs actual data found for the selected period.');
         }
       }catch(e){
         console.error('Error in fetchAttendance:', e);
@@ -683,12 +720,19 @@
 
     // ===== Events & Init =====
     $('fetchBtn').addEventListener('click', fetchAttendance);
-    $('teamSelect').addEventListener('change', onTeamChange);
+    $('businessUnitSelect').addEventListener('change', function() {
+      if (this.value) {
+        fetchManagementUnits(this.value);
+      }
+    });
+    $('teamSelect').addEventListener('change', renderAttendance);
     $('userSelect').addEventListener('change', renderAttendance);
     $('userSearch').addEventListener('input', renderAttendance);
 
     (function init(){
-      const today=new Date(); const weekAgo=new Date(); weekAgo.setDate(today.getDate()-7);
+      const today = new Date(); 
+      const weekAgo = new Date(); 
+      weekAgo.setDate(today.getDate() - 7);
       $('fromDate').value = weekAgo.toISOString().slice(0,10);
       $('toDate').value = today.toISOString().slice(0,10);
       initAuth();
