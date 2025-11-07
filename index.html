@@ -433,7 +433,7 @@
       }
     }
 
-    // ===== Schedule Data - CORRECTED APPROACH =====
+    // ===== Schedule Data - NEW APPROACH USING MANAGEMENT UNIT =====
     async function fetchScheduleData(businessUnitId, managementUnitId, fromDate, toDate) {
       const scheduleData = {
         userSchedules: {},
@@ -441,115 +441,163 @@
       };
 
       try {
-        console.log('Fetching schedule data for:', { businessUnitId, managementUnitId, fromDate, toDate });
+        console.log('Fetching schedule data using Management Unit API...', {
+          businessUnitId,
+          managementUnitId,
+          fromDate,
+          toDate
+        });
 
         // First, fetch activity codes
         await fetchActivityCodes(businessUnitId);
 
-        // Get unique week start dates in the range
-        const weekStarts = new Set();
-        const currentDate = new Date(fromDate);
-        const endDate = new Date(toDate);
-        
-        while (currentDate <= endDate) {
-          const weekStart = getWeekStart(currentDate);
-          weekStarts.add(weekStart);
-          currentDate.setDate(currentDate.getDate() + 1);
+        // Use the Management Unit schedules query API
+        const body = {
+          startDate: `${fromDate}T00:00:00.000Z`,
+          endDate: `${toDate}T23:59:59.999Z`
+        };
+
+        console.log('Management Unit schedule query body:', body);
+
+        const response = await fetch(
+          `${CONFIG.apiHost}/api/v2/workforcemanagement/managementunits/${managementUnitId}/schedules/query`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn('Management Unit schedule query failed:', errorText);
+          // Try alternative approach
+          return await fetchScheduleDataAlternative(businessUnitId, managementUnitId, fromDate, toDate);
         }
 
-        console.log('Week starts to fetch:', Array.from(weekStarts));
+        const data = await response.json();
+        console.log('Management Unit schedule query result:', data);
 
-        // Fetch schedules for each week
-        for (const weekId of weekStarts) {
-          try {
-            console.log(`Fetching schedules for week: ${weekId}`);
-            
-            // GET: Get schedules for this week
-            const schedulesResponse = await api(
-              `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules?includeOnlyPublished=true`
-            );
-            
-            const schedules = schedulesResponse.entities || [];
-            console.log(`Found ${schedules.length} schedules for week ${weekId}`, schedules);
-
-            if (schedules.length === 0) {
-              console.log(`No published schedules found for week ${weekId}`);
-              continue;
-            }
-
-            // Use the first schedule (usually the published one)
-            const schedule = schedules[0];
-            const scheduleId = schedule.id;
-            console.log(`Using schedule: ${scheduleId} for week ${weekId}`);
-
-            // For each user in our state, fetch their individual schedule
-            showProgress(`Fetching schedules for ${state.users.length} users...`);
-            let userIndex = 0;
-            
-            for (const user of state.users) {
-              userIndex++;
-              updateProgress((userIndex / state.users.length) * 50, userIndex, state.users.length);
-              
-              try {
-                // GET: Get individual agent schedule
-                const agentScheduleResponse = await api(
-                  `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${scheduleId}/history/agents/${user.id}`
-                );
-                
-                console.log(`Agent schedule for ${user.name}:`, agentScheduleResponse);
-
-                if (agentScheduleResponse && agentScheduleResponse.shifts) {
-                  // Process the agent's shifts
-                  const userShifts = [];
-                  
-                  agentScheduleResponse.shifts.forEach(shift => {
-                    if (shift.activities) {
-                      shift.activities.forEach(activity => {
-                        // Map activity code to name
-                        const activityCodeId = activity.activityCodeId;
-                        const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
-                        
-                        userShifts.push({
-                          startDate: activity.startDate,
-                          endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
-                          activityName: activityName,
-                          activityCodeId: activityCodeId,
-                          lengthMinutes: activity.lengthMinutes,
-                          paid: activity.paid
-                        });
-                      });
-                    }
+        // Process the schedule data
+        if (data.userSchedules) {
+          Object.keys(data.userSchedules).forEach(userId => {
+            const userSchedule = data.userSchedules[userId];
+            if (userSchedule.shifts) {
+              scheduleData.userSchedules[userId] = {
+                shifts: userSchedule.shifts.map(shift => {
+                  // Process activities within each shift
+                  const activities = (shift.activities || []).map(activity => {
+                    const activityCodeId = activity.activityCodeId;
+                    const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
+                    
+                    return {
+                      startDate: activity.startDate,
+                      endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
+                      activityName: activityName,
+                      activityCodeId: activityCodeId,
+                      lengthMinutes: activity.lengthMinutes
+                    };
                   });
 
-                  if (userShifts.length > 0) {
-                    if (!scheduleData.userSchedules[user.id]) {
-                      scheduleData.userSchedules[user.id] = {
-                        shifts: userShifts
-                      };
-                    } else {
-                      scheduleData.userSchedules[user.id].shifts = [
-                        ...scheduleData.userSchedules[user.id].shifts,
-                        ...userShifts
-                      ];
-                    }
-                  }
-                }
-              } catch (e) {
-                console.warn(`Failed to fetch schedule for user ${user.name}:`, e);
-                // Continue with other users even if one fails
-              }
+                  return {
+                    startDate: shift.startDate,
+                    endDate: shift.endDate,
+                    activities: activities
+                  };
+                })
+              };
             }
-
-          } catch (e) {
-            console.warn(`Failed to fetch schedules for week ${weekId}:`, e);
-          }
+          });
         }
 
-        console.log('Final schedule data collected:', scheduleData);
+        console.log('Processed schedule data:', scheduleData);
         return scheduleData;
+
       } catch (e) {
-        console.error('Failed to fetch schedule data:', e);
+        console.error('Failed to fetch schedule data via Management Unit:', e);
+        // Try alternative approach
+        return await fetchScheduleDataAlternative(businessUnitId, managementUnitId, fromDate, toDate);
+      }
+    }
+
+    // Alternative approach using Business Unit schedules query
+    async function fetchScheduleDataAlternative(businessUnitId, managementUnitId, fromDate, toDate) {
+      const scheduleData = {
+        userSchedules: {},
+        schedulePeriods: []
+      };
+
+      try {
+        console.log('Trying alternative schedule data approach...');
+
+        const body = {
+          managementUnitIds: [managementUnitId],
+          startDate: `${fromDate}T00:00:00.000Z`,
+          endDate: `${toDate}T23:59:59.999Z`
+        };
+
+        console.log('Alternative schedule query body:', body);
+
+        const response = await fetch(
+          `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/schedules/query`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Alternative schedule query failed: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('Alternative schedule query result:', data);
+
+        // Process the schedule data
+        if (data.userSchedules) {
+          Object.keys(data.userSchedules).forEach(userId => {
+            const userSchedule = data.userSchedules[userId];
+            if (userSchedule.shifts) {
+              scheduleData.userSchedules[userId] = {
+                shifts: userSchedule.shifts.map(shift => {
+                  // Process activities within each shift
+                  const activities = (shift.activities || []).map(activity => {
+                    const activityCodeId = activity.activityCodeId;
+                    const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
+                    
+                    return {
+                      startDate: activity.startDate,
+                      endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
+                      activityName: activityName,
+                      activityCodeId: activityCodeId,
+                      lengthMinutes: activity.lengthMinutes
+                    };
+                  });
+
+                  return {
+                    startDate: shift.startDate,
+                    endDate: shift.endDate,
+                    activities: activities
+                  };
+                })
+              };
+            }
+          });
+        }
+
         return scheduleData;
+
+      } catch (e) {
+        console.error('Alternative schedule data approach also failed:', e);
+        return scheduleData; // Return empty structure
       }
     }
 
@@ -584,74 +632,79 @@
             continue;
           }
 
-          // Process each scheduled activity
+          // Process each scheduled shift and its activities
           const shifts = userSchedule.shifts || [];
-          console.log(`User ${userName} has ${shifts.length} scheduled activities`);
+          console.log(`User ${userName} has ${shifts.length} scheduled shifts`);
 
           for (const shift of shifts) {
             try {
-              if (!shift.startDate || !shift.endDate) {
-                console.log('Shift missing start/end date:', shift);
-                continue;
+              // Process each activity within the shift
+              const shiftActivities = shift.activities || [];
+              
+              for (const scheduledActivity of shiftActivities) {
+                if (!scheduledActivity.startDate || !scheduledActivity.endDate) {
+                  console.log('Scheduled activity missing start/end date:', scheduledActivity);
+                  continue;
+                }
+
+                const scheduledStart = scheduledActivity.startDate;
+                const scheduledEnd = scheduledActivity.endDate;
+                const scheduledActivityName = scheduledActivity.activityName;
+                
+                // Find actual activities during this scheduled activity
+                const activityStart = new Date(scheduledStart);
+                const activityEnd = new Date(scheduledEnd);
+                
+                const actualActivities = activities.filter(activity => {
+                  if (!activity.startTime && !activity.dateStart && !activity.conversationStart) return false;
+                  const activityTime = new Date(activity.startTime || activity.dateStart || activity.conversationStart);
+                  return activityTime >= activityStart && activityTime <= activityEnd;
+                });
+
+                if (actualActivities.length === 0) {
+                  console.log(`No actual activities found during scheduled activity for ${userName} at ${scheduledStart}`);
+                  continue;
+                }
+
+                // Sort activities by time and get the first one
+                actualActivities.sort((a, b) => 
+                  new Date(a.startTime || a.dateStart || a.conversationStart) - 
+                  new Date(b.startTime || b.dateStart || b.conversationStart)
+                );
+
+                const firstActualActivity = actualActivities[0];
+                const actualStart = firstActualActivity.startTime || firstActualActivity.dateStart || firstActualActivity.conversationStart;
+                const actualStatus = firstActualActivity.status || firstActualActivity.presence || firstActualActivity.systemPresence || 'Unknown';
+                
+                // Calculate lateness
+                const lateMs = new Date(actualStart) - new Date(scheduledStart);
+                const isLate = lateMs > (ATTENDANCE_CONFIG.lateThresholdMinutes * 60 * 1000);
+                const durationMs = new Date(scheduledEnd) - new Date(scheduledStart);
+
+                const userTeams = state.teamsByUserId[userId] || [];
+                const teamNames = userTeams.map(t => t.name).join(', ');
+                const teamIds = userTeams.map(t => t.id);
+
+                const row = {
+                  userId,
+                  userName,
+                  teamNames,
+                  teamIds,
+                  date: scheduledStart.slice(0, 10),
+                  scheduledActivity: scheduledActivityName,
+                  scheduledStart,
+                  scheduledEnd,
+                  actualStart,
+                  actualActivity: actualStatus,
+                  durationMs,
+                  isLate,
+                  lateMs,
+                  statusMatch: scheduledActivityName.toLowerCase().includes(actualStatus.toLowerCase()) ? 'match' : 'mismatch'
+                };
+
+                console.log('Created row:', row);
+                rows.push(row);
               }
-
-              const scheduledStart = shift.startDate;
-              const scheduledEnd = shift.endDate;
-              const scheduledActivity = shift.activityName;
-              
-              // Find actual activities during this scheduled activity
-              const shiftStart = new Date(scheduledStart);
-              const shiftEnd = new Date(scheduledEnd);
-              
-              const actualActivities = activities.filter(activity => {
-                if (!activity.startTime && !activity.dateStart && !activity.conversationStart) return false;
-                const activityTime = new Date(activity.startTime || activity.dateStart || activity.conversationStart);
-                return activityTime >= shiftStart && activityTime <= shiftEnd;
-              });
-
-              if (actualActivities.length === 0) {
-                console.log(`No actual activities found during scheduled activity for ${userName} at ${scheduledStart}`);
-                continue;
-              }
-
-              // Sort activities by time and get the first one
-              actualActivities.sort((a, b) => 
-                new Date(a.startTime || a.dateStart || a.conversationStart) - 
-                new Date(b.startTime || b.dateStart || b.conversationStart)
-              );
-
-              const firstActualActivity = actualActivities[0];
-              const actualStart = firstActualActivity.startTime || firstActualActivity.dateStart || firstActualActivity.conversationStart;
-              const actualStatus = firstActualActivity.status || firstActualActivity.presence || firstActualActivity.systemPresence || 'Unknown';
-              
-              // Calculate lateness
-              const lateMs = new Date(actualStart) - new Date(scheduledStart);
-              const isLate = lateMs > (ATTENDANCE_CONFIG.lateThresholdMinutes * 60 * 1000);
-              const durationMs = new Date(scheduledEnd) - new Date(scheduledStart);
-
-              const userTeams = state.teamsByUserId[userId] || [];
-              const teamNames = userTeams.map(t => t.name).join(', ');
-              const teamIds = userTeams.map(t => t.id);
-
-              const row = {
-                userId,
-                userName,
-                teamNames,
-                teamIds,
-                date: scheduledStart.slice(0, 10),
-                scheduledActivity,
-                scheduledStart,
-                scheduledEnd,
-                actualStart,
-                actualActivity: actualStatus,
-                durationMs,
-                isLate,
-                lateMs,
-                statusMatch: scheduledActivity.toLowerCase().includes(actualStatus.toLowerCase()) ? 'match' : 'mismatch'
-              };
-
-              console.log('Created row:', row);
-              rows.push(row);
 
             } catch (e) {
               console.warn('Error processing shift:', shift, e);
@@ -798,7 +851,7 @@
         showProgress('Fetching schedule data…');
         updateProgress(25, 1, 4);
 
-        // Fetch schedule data using the corrected approach
+        // Fetch schedule data using the new approach
         const scheduleData = await fetchScheduleData(businessUnitId, managementUnitId, from, to);
         
         updateProgress(50, 2, 4);
