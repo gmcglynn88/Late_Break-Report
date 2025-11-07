@@ -37,6 +37,11 @@
     .attendance-table th{background:var(--primary-color);color:#fff;text-align:left}
     .late-yes{color:#dc2626;font-weight:700}
     .late-no{color:#16a34a;font-weight:700}
+    .activity-timeline {background: #f8f9fa; border-radius: 8px; padding: 12px; margin-top: 8px;}
+    .activity-item {display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #e9ecef;}
+    .activity-item:last-child {border-bottom: none;}
+    .activity-time {font-family: ui-monospace, Consolas, Menlo, monospace; color: #495057;}
+    .activity-status {font-weight: 600; color: #2c3e50;}
   </style>
 </head>
 <body>
@@ -128,16 +133,17 @@
     // ===== Config (match this redirect URI to your OAuth client) =====
     const CONFIG = {
       clientId: 'fe305808-b368-4547-8af9-325d28d552bb',
-      redirectUri: 'https://gmcglynn88.github.io/Late_Break-Report/', // <— make sure this matches your OAuth client
+      redirectUri: 'https://gmcglynn88.github.io/Late_Break-Report/',
       loginHost: 'https://login.mypurecloud.ie',
       apiHost: 'https://api.mypurecloud.ie'
     };
 
-    // Definition of “late” and “break”
+    // Definition of "late" and "break"
     const ATTENDANCE_CONFIG = {
       workdayStartHour: 9,          // 9am
       lateThresholdMinutes: 5,      // >= 5 mins after start
-      longBreakMinutes: 20          // >= 20 mins gap between convos = break
+      longBreakMinutes: 20,         // >= 20 mins gap between activities = break
+      workStartPresence: ['Available', 'Busy', 'On Queue', 'On Task'] // Statuses that count as "working"
     };
 
     // ===== State =====
@@ -155,6 +161,7 @@
     const $ = id => document.getElementById(id);
     const setStatus = (msg,err=false)=>{ $('statusMessage').textContent = err?'':(msg||''); $('errorMessage').textContent = err?(msg||''):''; };
     const fmt = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleString()}catch{return 'N/A'} };
+    const fmtTime = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleTimeString()}catch{return 'N/A'} };
     const fmtDMY = s => { if(!s||s.length<10) return s||''; const [y,m,d]=s.slice(0,10).split('-'); return `${d}-${m}-${y}`; };
     function setLoading(v){ $('mainContent').classList.toggle('loading', !!v); }
     function updateProgress(p,cur,total){ $('progressFill').style.width = `${p}%`; $('progressText').textContent = `${Math.round(p)}%`; $('chunkText').textContent = `Step ${cur}/${total}`; }
@@ -345,7 +352,7 @@
       // Try different possible response structures
       const details = analyticsData?.userDetails || analyticsData?.results || analyticsData?.conversations || [];
       
-      console.log(`Processing ${details.length} details entries`);
+      console.log(`Processing ${details.length} user details entries`);
       
       if(!Array.isArray(details)) {
         console.log('Details is not an array:', details);
@@ -355,40 +362,42 @@
       const longBreakMs = ATTENDANCE_CONFIG.longBreakMinutes * 60 * 1000;
       const lateThresholdMs = ATTENDANCE_CONFIG.lateThresholdMinutes * 60 * 1000;
 
-      for(const d of details){
+      for(const userDetail of details){
         try {
-          const userId = d.userId || d.user?.id;
+          const userId = userDetail.userId || userDetail.user?.id;
           if(!userId) {
-            console.log('Skipping entry with no userId:', d);
+            console.log('Skipping entry with no userId:', userDetail);
             continue;
           }
           
-          const userName = state.usersById[userId]?.name || d.user?.name || `User ${userId}`;
+          const userName = state.usersById[userId]?.name || userDetail.user?.name || `User ${userId}`;
           
-          // Handle different conversation structures
-          const convsRaw = d.conversations || d.conversationDetails || [];
-          const convs = convsRaw.filter(c => {
-            const hasStartEnd = c.conversationStart && c.conversationEnd;
-            if (!hasStartEnd) {
-              console.log('Skipping conversation without start/end:', c);
-            }
-            return hasStartEnd;
-          });
+          // Get ALL activities - not just conversations
+          const activities = userDetail.presence || userDetail.routingStatus || userDetail.activities || [];
           
-          console.log(`User ${userName}: ${convs.length} valid conversations out of ${convsRaw.length} total`);
+          console.log(`User ${userName}: ${activities.length} activities found`);
           
-          if(!convs.length) continue;
+          if(!activities.length) continue;
 
+          // Group activities by date
           const byDate = {};
-          for(const c of convs){
+          for(const activity of activities){
             try {
-              const start = c.conversationStart;
-              if(!start) continue;
-              const day = start.slice(0,10);
-              if(!byDate[day]) byDate[day]=[];
-              byDate[day].push(c);
+              // Use startTime for presence/routing status activities
+              const startTime = activity.startTime || activity.dateStart || activity.conversationStart;
+              if(!startTime) continue;
+              
+              const day = startTime.slice(0,10);
+              if(!byDate[day]) byDate[day] = [];
+              
+              byDate[day].push({
+                startTime: startTime,
+                endTime: activity.endTime || activity.dateEnd || activity.conversationEnd || startTime,
+                status: activity.status || activity.presence || activity.systemPresence || 'Unknown',
+                type: activity.type || 'Activity'
+              });
             } catch (e) {
-              console.warn('Error processing conversation:', c, e);
+              console.warn('Error processing activity:', activity, e);
             }
           }
 
@@ -396,26 +405,46 @@
           const teamNames = userTeams.map(t=>t.name).join(', ');
           const teamIds = userTeams.map(t=>t.id);
 
-          for(const [day, list] of Object.entries(byDate)){
+          // Process each day
+          for(const [day, dayActivities] of Object.entries(byDate)){
             try {
-              list.sort((a,b)=> new Date(a.conversationStart) - new Date(b.conversationStart));
-              const firstStart = list[0].conversationStart;
-              const lastEnd = list[list.length-1].conversationEnd;
-
+              if (dayActivities.length === 0) continue;
+              
+              // Sort activities by start time
+              dayActivities.sort((a,b) => new Date(a.startTime) - new Date(b.startTime));
+              
+              const firstActivity = dayActivities[0];
+              const lastActivity = dayActivities[dayActivities.length - 1];
+              
+              // Calculate breaks between activities
               let breakCount = 0;
               let longestBreakMs = 0;
-              for(let i=0;i<list.length-1;i++){
-                const gap = new Date(list[i+1].conversationStart) - new Date(list[i].conversationEnd);
+              let totalBreakTimeMs = 0;
+              
+              for(let i = 0; i < dayActivities.length - 1; i++){
+                const currentEnd = new Date(dayActivities[i].endTime);
+                const nextStart = new Date(dayActivities[i + 1].startTime);
+                const gap = nextStart - currentEnd;
+                
                 if(gap > longBreakMs){
                   breakCount++;
+                  totalBreakTimeMs += gap;
                   if(gap > longestBreakMs) longestBreakMs = gap;
                 }
               }
 
+              // Calculate late arrival
               const workdayStart = new Date(day + 'T' + String(ATTENDANCE_CONFIG.workdayStartHour).padStart(2,'0') + ':00:00');
-              let lateMs = new Date(firstStart) - workdayStart;
+              let lateMs = new Date(firstActivity.startTime) - workdayStart;
               if(lateMs < lateThresholdMs) lateMs = 0;
               const isLate = lateMs > 0;
+
+              // Build timeline of activities
+              const timeline = dayActivities.map(activity => ({
+                time: fmtTime(activity.startTime),
+                status: activity.status,
+                duration: activity.endTime ? Math.round((new Date(activity.endTime) - new Date(activity.startTime)) / 60000) : 0
+              }));
 
               rows.push({
                 userId,
@@ -423,21 +452,23 @@
                 teamNames,
                 teamIds,
                 date: day,
-                firstActivity: firstStart,
-                lastActivity: lastEnd,
-                conversationCount: list.length,
+                firstActivity: firstActivity.startTime,
+                lastActivity: lastActivity.endTime,
+                activityCount: dayActivities.length,
                 isLate,
                 lateMs,
                 breakCount,
                 longestBreakMs,
-                spanMs: new Date(lastEnd) - new Date(firstStart)
+                totalBreakTimeMs,
+                spanMs: new Date(lastActivity.endTime) - new Date(firstActivity.startTime),
+                timeline: timeline
               });
             } catch (e) {
               console.warn('Error processing day', day, 'for user', userName, e);
             }
           }
         } catch (e) {
-          console.warn('Error processing user detail:', d, e);
+          console.warn('Error processing user detail:', userDetail, e);
         }
       }
       
@@ -499,7 +530,7 @@
 
       const breakThreshold = ATTENDANCE_CONFIG.longBreakMinutes;
 
-      // Create table with better error handling
+      // Create table with activity timeline
       let tableHtml = '';
       try {
         tableHtml = `
@@ -512,34 +543,47 @@
                   <th>Team(s)</th>
                   <th>First Activity</th>
                   <th>Last Activity</th>
-                  <th>Span (hrs)</th>
-                  <th>Conversations</th>
+                  <th>Activities</th>
                   <th>Late?</th>
                   <th>Late (mins)</th>
                   <th>Breaks ≥ ${breakThreshold}m</th>
-                  <th>Longest Break (mins)</th>
+                  <th>Longest Break</th>
+                  <th>Activity Timeline</th>
                 </tr>
               </thead>
               <tbody>
                 ${rows.map(r=>{
                   try {
                     const lateClass = r.isLate ? 'late-yes' : 'late-no';
-                    const spanHours = r.spanMs>0 ? (r.spanMs/3600000).toFixed(2) : '0';
                     const lateMins = r.isLate ? (r.lateMs/60000).toFixed(1) : '0';
                     const longBreakMins = r.longestBreakMs>0 ? (r.longestBreakMs/60000).toFixed(1) : '0';
+                    
+                    const timelineHtml = r.timeline && r.timeline.length > 0 ? 
+                      `<div class="activity-timeline">
+                        ${r.timeline.slice(0, 5).map(activity => 
+                          `<div class="activity-item">
+                            <span class="activity-time">${activity.time}</span>
+                            <span class="activity-status">${escapeHtml(activity.status)}</span>
+                            ${activity.duration > 0 ? `<span class="muted">(${activity.duration}m)</span>` : ''}
+                          </div>`
+                        ).join('')}
+                        ${r.timeline.length > 5 ? `<div class="muted" style="text-align:center;padding:4px;">+${r.timeline.length - 5} more activities</div>` : ''}
+                      </div>` : 
+                      '<div class="muted">No timeline</div>';
+                    
                     return `
                       <tr>
                         <td>${fmtDMY(r.date)}</td>
                         <td>${escapeHtml(r.userName)}</td>
                         <td>${escapeHtml(r.teamNames || '-')}</td>
-                        <td>${fmt(r.firstActivity)}</td>
-                        <td>${fmt(r.lastActivity)}</td>
-                        <td>${spanHours}</td>
-                        <td>${r.conversationCount}</td>
+                        <td>${fmtTime(r.firstActivity)}</td>
+                        <td>${fmtTime(r.lastActivity)}</td>
+                        <td>${r.activityCount}</td>
                         <td><span class="${lateClass}">${r.isLate ? 'Yes' : 'No'}</span></td>
                         <td>${lateMins}</td>
                         <td>${r.breakCount}</td>
-                        <td>${longBreakMins}</td>
+                        <td>${longBreakMins}m</td>
+                        <td style="min-width: 200px;">${timelineHtml}</td>
                       </tr>
                     `;
                   } catch (e) {
@@ -598,16 +642,18 @@
         updateProgress(60,2,3);
         const data = await res.json();
         
-        console.log('Analytics API response:', data);
+        console.log('Analytics API response structure:', Object.keys(data));
+        console.log('Full analytics response:', data);
         
         // Debug: Check what we received
         if (data && data.userDetails) {
           console.log(`Received ${data.userDetails.length} user details`);
           data.userDetails.forEach((userDetail, index) => {
-            console.log(`User ${index}: ${userDetail.userId}, ${userDetail.conversations ? userDetail.conversations.length : 0} conversations`);
+            const activities = userDetail.presence || userDetail.routingStatus || userDetail.activities || [];
+            console.log(`User ${index}: ${userDetail.userId}, ${activities.length} activities`);
           });
         } else {
-          console.log('No userDetails in response, checking alternative structures:', Object.keys(data));
+          console.log('No userDetails in response, checking for results:', data.results ? data.results.length : 'none');
         }
 
         state.attendanceRows = buildAttendanceRows(data);
@@ -624,7 +670,7 @@
         if(state.attendanceRows.length){
           setStatus(`Attendance report completed - found ${state.attendanceRows.length} activity records`);
         }else{
-          setStatus('No activity found for the selected period. The API returned data but no conversations met the criteria.');
+          setStatus('No activity found for the selected period. Check console for API response details.');
         }
       }catch(e){
         console.error('Error in fetchAttendance:', e);
