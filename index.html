@@ -65,7 +65,7 @@
             <input id="toDate" type="date"/>
           </div>
           <div class="muted" style="margin-top:6px;font-size:13px;">
-            For best results, run one day or a small range at a time.
+            Best used on small ranges (e.g. 1–7 days).
           </div>
         </div>
         <div>
@@ -125,19 +125,19 @@
   </div>
 
   <script>
-    // ===== Config (adjust clientId/redirectUri as needed) =====
+    // ===== Config (match this redirect URI to your OAuth client) =====
     const CONFIG = {
       clientId: 'fe305808-b368-4547-8af9-325d28d552bb',
-      redirectUri: 'https://gmcglynn88.github.io/AttendanceExplorer/',
+      redirectUri: 'https://gmcglynn88.github.io/ConversationExplorer/', // <— make sure this matches your OAuth client
       loginHost: 'https://login.mypurecloud.ie',
       apiHost: 'https://api.mypurecloud.ie'
     };
 
-    // Tweaks for what "late" and "break" mean
+    // Definition of “late” and “break”
     const ATTENDANCE_CONFIG = {
-      workdayStartHour: 9,          // 9am local
-      lateThresholdMinutes: 5,      // only count as late if >= 5 mins past start
-      longBreakMinutes: 20          // gap between conversations >= 20 mins = break
+      workdayStartHour: 9,          // 9am
+      lateThresholdMinutes: 5,      // >= 5 mins after start
+      longBreakMinutes: 20          // >= 20 mins gap between convos = break
     };
 
     // ===== State =====
@@ -156,7 +156,6 @@
     const setStatus = (msg,err=false)=>{ $('statusMessage').textContent = err?'':(msg||''); $('errorMessage').textContent = err?(msg||''):''; };
     const fmt = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleString()}catch{return 'N/A'} };
     const fmtDMY = s => { if(!s||s.length<10) return s||''; const [y,m,d]=s.slice(0,10).split('-'); return `${d}-${m}-${y}`; };
-    const formatSeconds = ms => { if(!ms) return '0s'; const s=Math.floor(ms/1000), m=Math.floor(s/60), h=Math.floor(m/60); if(h) return `${h}h ${m%60}m`; if(m) return `${m}m ${s%60}s`; return `${s}s`; };
     function setLoading(v){ $('mainContent').classList.toggle('loading', !!v); }
     function updateProgress(p,cur,total){ $('progressFill').style.width = `${p}%`; $('progressText').textContent = `${Math.round(p)}%`; $('chunkText').textContent = `Step ${cur}/${total}`; }
     function showProgress(info){ $('progressSection').style.display='block'; $('resultsSection').style.display='none'; $('progressInfo').textContent = info || ''; }
@@ -176,7 +175,7 @@
       });
     }
 
-    // ===== Auth (implicit) =====
+    // ===== Auth (same pattern as convo app) =====
     function parseTokenFromHash(){
       const params = new URLSearchParams(location.hash.replace(/^#/, ''));
       return { token: params.get('access_token'), error: params.get('error'), errorDescription: params.get('error_description') };
@@ -203,6 +202,7 @@
       const attempted = sessionStorage.getItem('gc_auto_auth_attempted');
       if(!attempted && !error){
         sessionStorage.setItem('gc_auto_auth_attempted','1');
+        $('authStatus').style.display='block';
         location.assign(authUrl());
         return;
       }
@@ -276,6 +276,7 @@
       try{
         setLoading(true);
         setStatus('Loading teams…');
+
         let all=[], page=1, size=100;
         while(true){
           const data = await api(`/api/v2/teams?pageSize=${size}&pageNumber=${page}`);
@@ -289,7 +290,9 @@
 
         state.teamMembersByTeamId = {};
         state.teamsByUserId = {};
+        if(!state.teams.length){ setStatus('No teams found'); return; }
 
+        showProgress('Loading team members…');
         let step = 0;
         for(const team of state.teams){
           step++;
@@ -325,7 +328,7 @@
         const memberIds = new Set(members.map(m=>m.id));
         populateUserSelect(state.users.filter(u=>memberIds.has(u.id)));
       }
-      renderAttendance(); // re-filter current results
+      renderAttendance();
     }
 
     // ===== Attendance processing =====
@@ -345,12 +348,11 @@
         const convs = convsRaw.filter(c=>c.conversationStart && c.conversationEnd);
         if(!convs.length) continue;
 
-        // group by date
         const byDate = {};
         for(const c of convs){
           const start = c.conversationStart;
           if(!start) continue;
-          const day = start.slice(0,10); // YYYY-MM-DD
+          const day = start.slice(0,10);
           if(!byDate[day]) byDate[day]=[];
           byDate[day].push(c);
         }
@@ -455,7 +457,7 @@
               <th>Team(s)</th>
               <th>First Activity</th>
               <th>Last Activity</th>
-              <th>Span</th>
+              <th>Span (hrs)</th>
               <th>Conversations</th>
               <th>Late?</th>
               <th>Late (mins)</th>
@@ -506,7 +508,6 @@
 
         const body = {
           interval: `${from}T00:00:00/${to}T23:59:59`
-          // You can add additional filters/metrics here if needed
         };
 
         const res = await fetch(CONFIG.apiHost + '/api/v2/analytics/users/details/query', {
