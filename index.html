@@ -433,9 +433,66 @@
       }
     }
 
-    // ===== AGENT SCHEDULES SEARCH APPROACH =====
+    // Helper function to get week IDs for a date range
+    async function getWeekIdsForDateRange(businessUnitId, fromDate, toDate) {
+      try {
+        // Get business unit weeks
+        const weeksResponse = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks`);
+        const allWeeks = weeksResponse.entities || [];
+        
+        // Filter weeks that overlap with our date range
+        const targetWeeks = allWeeks.filter(week => {
+          const weekStart = week.weekStart || week.startDate;
+          const weekEnd = week.weekEnd || week.endDate;
+          
+          if (!weekStart || !weekEnd) return false;
+          
+          // Check if week overlaps with our date range
+          return (weekStart <= toDate && weekEnd >= fromDate);
+        });
+        
+        return targetWeeks.map(week => week.id);
+      } catch (e) {
+        console.error('Failed to get week IDs:', e);
+        return [];
+      }
+    }
+
+    // Helper function to get schedule ID for a user in a specific week
+    async function getScheduleIdForUserWeek(businessUnitId, weekId, userId) {
+      try {
+        // Get the schedule for the week
+        const scheduleResponse = await api(
+          `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules`
+        );
+        
+        if (scheduleResponse && scheduleResponse.entities) {
+          // Find the schedule that contains our user
+          for (const schedule of scheduleResponse.entities) {
+            if (schedule.user && schedule.user.id === userId) {
+              return schedule.id;
+            }
+            
+            // Also check in metadata if user list exists there
+            if (schedule.metadata && schedule.metadata.users) {
+              const userInSchedule = schedule.metadata.users.find(u => u.id === userId);
+              if (userInSchedule) {
+                return schedule.id;
+              }
+            }
+          }
+        }
+        
+        return null;
+      } catch (e) {
+        console.error(`Failed to get schedule ID for user ${userId} in week ${weekId}:`, e);
+        return null;
+      }
+    }
+
+    // ===== CORRECT SCHEDULE API APPROACH =====
     async function fetchScheduleData(businessUnitId, managementUnitId, fromDate, toDate) {
-      console.log('Using AGENT SCHEDULES SEARCH approach...');
+      console.log('Using CORRECT SCHEDULE API approach...');
       
       const scheduleData = {
         userSchedules: {},
@@ -443,7 +500,7 @@
       };
 
       try {
-        // First, fetch activity codes
+        // First, fetch activity codes using the API you specified
         await fetchActivityCodes(businessUnitId);
 
         // Get users from the management unit
@@ -458,6 +515,16 @@
         }
 
         showProgress(`Fetching schedules for ${muUsers.length} users...`);
+        
+        // Get the week IDs for the date range
+        const weekIds = await getWeekIdsForDateRange(businessUnitId, fromDate, toDate);
+        console.log('Week IDs for date range:', weekIds);
+
+        if (weekIds.length === 0) {
+          console.log('No week IDs found for the date range');
+          return scheduleData;
+        }
+
         let userIndex = 0;
 
         // Fetch schedules for each user in the management unit
@@ -468,69 +535,72 @@
           try {
             console.log(`Fetching schedule for user: ${user.name} (${user.id})`);
             
-            // Use the agent schedules search endpoint
-            const body = {
-              startDate: `${fromDate}T00:00:00.000Z`,
-              endDate: `${toDate}T23:59:59.999Z`
-            };
-
-            const response = await fetch(
-              `${CONFIG.apiHost}/api/v2/workforcemanagement/businessunits/${businessUnitId}/agentschedules/search`,
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${state.token}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  ...body,
-                  userIds: [user.id]
-                })
-              }
-            );
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.warn(`Agent schedules search failed for user ${user.name}:`, errorText);
-              continue;
-            }
-
-            const data = await response.json();
-            console.log(`Agent schedules for ${user.name}:`, data);
-
-            // Process the agent schedules
-            if (data.entities && data.entities.length > 0) {
-              const userShifts = [];
-              
-              data.entities.forEach(entity => {
-                if (entity.agentSchedule && entity.agentSchedule.shifts) {
-                  entity.agentSchedule.shifts.forEach(shift => {
-                    if (shift.activities) {
-                      shift.activities.forEach(activity => {
-                        // Map activity code to name
-                        const activityCodeId = activity.activityCodeId;
-                        const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
-                        
-                        userShifts.push({
-                          startDate: activity.startDate,
-                          endDate: new Date(new Date(activity.startDate).getTime() + activity.lengthMinutes * 60000).toISOString(),
-                          activityName: activityName,
-                          activityCodeId: activityCodeId,
-                          lengthMinutes: activity.lengthMinutes,
-                          paid: activity.paid
+            // Try to get user's schedule for each week
+            const userShifts = [];
+            
+            for (const weekId of weekIds) {
+              try {
+                // Get the schedule ID for this user and week
+                const scheduleId = await getScheduleIdForUserWeek(businessUnitId, weekId, user.id);
+                
+                if (scheduleId) {
+                  console.log(`Found schedule ID ${scheduleId} for user ${user.name} in week ${weekId}`);
+                  
+                  // Now get the detailed schedule using the correct API
+                  const detailedSchedule = await api(
+                    `/api/v2/workforcemanagement/businessunits/${businessUnitId}/weeks/${weekId}/schedules/${scheduleId}`
+                  );
+                  
+                  console.log(`Detailed schedule for ${user.name}:`, detailedSchedule);
+                  
+                  // Process the detailed schedule
+                  if (detailedSchedule && detailedSchedule.shifts) {
+                    detailedSchedule.shifts.forEach(shift => {
+                      if (shift.activities) {
+                        shift.activities.forEach(activity => {
+                          const activityStart = new Date(activity.startDate);
+                          const activityEnd = new Date(activityStart.getTime() + activity.lengthMinutes * 60000);
+                          
+                          // Check if this activity falls within our date range
+                          const activityDate = activityStart.toISOString().split('T')[0];
+                          if (activityDate >= fromDate && activityDate <= toDate) {
+                            // Map activity code to name using the activity codes API
+                            const activityCodeId = activity.activityCodeId;
+                            const activityName = state.activityCodes[activityCodeId]?.name || `Activity ${activityCodeId}`;
+                            
+                            userShifts.push({
+                              startDate: activity.startDate,
+                              endDate: activityEnd.toISOString(),
+                              activityName: activityName,
+                              activityCodeId: activityCodeId,
+                              lengthMinutes: activity.lengthMinutes,
+                              paid: activity.paid,
+                              weekId: weekId,
+                              scheduleId: scheduleId
+                            });
+                          }
                         });
-                      });
-                    }
-                  });
+                      }
+                    });
+                  }
+                } else {
+                  console.log(`No schedule found for user ${user.name} in week ${weekId}`);
                 }
-              });
-
-              if (userShifts.length > 0) {
-                scheduleData.userSchedules[user.id] = {
-                  shifts: userShifts
-                };
+              } catch (weekError) {
+                console.warn(`Failed to get schedule for user ${user.name} in week ${weekId}:`, weekError);
+                // Continue with other weeks
               }
             }
+
+            if (userShifts.length > 0) {
+              scheduleData.userSchedules[user.id] = {
+                shifts: userShifts
+              };
+              console.log(`Found ${userShifts.length} shifts for user ${user.name}`);
+            } else {
+              console.log(`No shifts found for user ${user.name} in the date range`);
+            }
+
           } catch (e) {
             console.warn(`Failed to fetch schedule for user ${user.name}:`, e);
             // Continue with other users even if one fails
@@ -541,7 +611,7 @@
         return scheduleData;
 
       } catch (e) {
-        console.error('Agent schedules search approach failed:', e);
+        console.error('Schedule API approach failed:', e);
         
         // Fallback to Management Unit schedules query
         console.log('Trying Management Unit schedules query as fallback...');
