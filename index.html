@@ -337,7 +337,7 @@
       }
     }
 
-    // ===== New function to load activity codes from business unit =====
+    // ===== Fixed function to load activity codes from business unit =====
     async function loadActivityCodes(businessUnitId) {
       try {
         console.log(`Loading activity codes for business unit: ${businessUnitId}`);
@@ -345,7 +345,8 @@
           `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(businessUnitId)}/activitycodes`
         );
         
-        const activityCodes = activityCodesResponse.entities || [];
+        // The response has activityCodes object, not entities array
+        const activityCodes = activityCodesResponse.activityCodes ? Object.values(activityCodesResponse.activityCodes) : [];
         console.log(`Loaded ${activityCodes.length} activity codes`, activityCodes);
         
         // Create a lookup map by ID
@@ -373,24 +374,12 @@
       
       const activityCodes = activityCodesByBuId[businessUnitId];
       
-      // System code fallbacks - these are standard Genesys codes
-      const systemCodes = {
-        '0': 'Work',
-        '1': 'Break',
-        '2': 'Meeting'
-      };
-      
-      // First check system codes
-      if (systemCodes[activityCodeId]) {
-        return systemCodes[activityCodeId];
-      }
-      
-      // Then check business unit activity codes
+      // Check business unit activity codes first
       if (activityCodes && activityCodes[activityCodeId]) {
         return activityCodes[activityCodeId];
       }
       
-      // Return the code ID if not found anywhere
+      // Return the code ID if not found
       return activityCodeId;
     }
 
