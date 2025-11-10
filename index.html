@@ -60,7 +60,7 @@
       color:#14532d;background:#dcfce7;border:1px solid:#bbf7d0;padding:10px;border-radius:6px
     }
     .info-message{
-      color:#6b4e16;background:#fff7ed;border:1px solid:#ffedd5;padding:10px;border-radius:6px
+      color:#6b4e16;background:#fff7ed;border:1px solid:#ffedd5;padding:10px;border-radius:6x
     }
 
     .schedule-table{width:100%;border-collapse:collapse;margin-top:16px}
@@ -780,14 +780,33 @@
     function extractUserActivitiesFromSearchResult(scheduleResult, userId, businessUnitId) {
       const activities = [];
       
-      console.log('Extracting activities from:', scheduleResult);
+      console.log('Extracting activities from schedule result:', scheduleResult);
       
-      if (!scheduleResult || !scheduleResult.userSchedules) {
-        console.log('No user schedules found');
+      if (!scheduleResult) {
+        console.log('No schedule result found');
         return activities;
       }
 
-      const userSchedule = scheduleResult.userSchedules.find(us => us.userId === userId);
+      // Handle different response formats
+      let userSchedules = [];
+      
+      if (Array.isArray(scheduleResult.userSchedules)) {
+        userSchedules = scheduleResult.userSchedules;
+      } else if (scheduleResult.userSchedules && typeof scheduleResult.userSchedules === 'object') {
+        // If userSchedules is an object, convert to array
+        userSchedules = Object.values(scheduleResult.userSchedules);
+      } else if (Array.isArray(scheduleResult)) {
+        userSchedules = scheduleResult;
+      } else {
+        console.log('Unexpected schedule result format:', scheduleResult);
+        return activities;
+      }
+
+      console.log('Processed user schedules:', userSchedules);
+
+      const userSchedule = userSchedules.find(us => us.user && us.user.id === userId) || 
+                          userSchedules.find(us => us.userId === userId);
+      
       if (!userSchedule) {
         console.log('No schedule found for user:', userId);
         return activities;
@@ -795,36 +814,47 @@
 
       console.log('User schedule found:', userSchedule);
 
-      // Process shifts
-      if (userSchedule.shifts) {
-        userSchedule.shifts.forEach(shift => {
+      // Process shifts - handle different field names
+      const shifts = userSchedule.shifts || userSchedule.publishedShifts || [];
+      if (shifts && Array.isArray(shifts)) {
+        shifts.forEach(shift => {
           console.log('Processing shift:', shift);
-          activities.push({
-            type: 'shift',
-            date: shift.startDate.split('T')[0],
-            start: new Date(shift.startDate),
-            end: new Date(shift.endDate),
-            durationMinutes: shift.activities ? shift.activities.reduce((total, activity) => total + activity.lengthMinutes, 0) : 0,
-            countsAsPaidTime: true,
-            activities: shift.activities || []
-          });
+          const shiftStart = shift.startDate || shift.startTime;
+          const shiftEnd = shift.endDate || shift.endTime;
+          
+          if (shiftStart && shiftEnd) {
+            activities.push({
+              type: 'shift',
+              date: shiftStart.split('T')[0],
+              start: new Date(shiftStart),
+              end: new Date(shiftEnd),
+              durationMinutes: shift.totalMinutes || (shift.activities ? shift.activities.reduce((total, activity) => total + (activity.lengthMinutes || 0), 0) : 0),
+              countsAsPaidTime: true,
+              activities: shift.activities || []
+            });
+          }
         });
       }
 
-      // Process full day time off markers
-      if (userSchedule.fullDayTimeOffMarkers) {
-        userSchedule.fullDayTimeOffMarkers.forEach(marker => {
+      // Process full day time off markers - handle different field names
+      const timeOffMarkers = userSchedule.fullDayTimeOffMarkers || userSchedule.timeOffMarkers || [];
+      if (timeOffMarkers && Array.isArray(timeOffMarkers)) {
+        timeOffMarkers.forEach(marker => {
           console.log('Processing time off marker:', marker);
-          activities.push({
-            type: 'fullDayOff',
-            date: marker.date.split('T')[0],
-            start: new Date(marker.date),
-            end: new Date(marker.date),
-            durationMinutes: 24 * 60, // Full day
-            countsAsPaidTime: false,
-            activityCodeId: marker.activityCodeId,
-            isFullDayOff: true
-          });
+          const markerDate = marker.date || marker.startDate;
+          
+          if (markerDate) {
+            activities.push({
+              type: 'fullDayOff',
+              date: markerDate.split('T')[0],
+              start: new Date(markerDate),
+              end: new Date(markerDate),
+              durationMinutes: 24 * 60, // Full day
+              countsAsPaidTime: false,
+              activityCodeId: marker.activityCodeId || marker.timeOffCodeId,
+              isFullDayOff: true
+            });
+          }
         });
       }
 
@@ -857,7 +887,14 @@
       console.log('Rendering schedule with activities:', activities);
       
       if (activities.length === 0) {
-        container.innerHTML = `<div class="info-message">No schedule found for the selected period.</div>`;
+        container.innerHTML = `
+          <div class="info-message">
+            No schedule found for the selected period. 
+            <details style="margin-top: 10px;">
+              <summary>Debug Information</summary>
+              <pre>${escapeHtml(JSON.stringify(scheduleResult, null, 2))}</pre>
+            </details>
+          </div>`;
         return;
       }
 
@@ -884,9 +921,10 @@
         
         let activityDetails = '';
         if (activity.activities && activity.activities.length > 0) {
-          activityDetails = activity.activities.map(a => 
-            `${getActivityName(businessUnitId, a.activityCodeId)} (${formatDuration(a.lengthMinutes)})`
-          ).join('<br>');
+          activityDetails = activity.activities.map(a => {
+            const activityName = getActivityName(businessUnitId, a.activityCodeId);
+            return `${activityName} (${formatDuration(a.lengthMinutes || 0)})`;
+          }).join('<br>');
         } else if (activity.isFullDayOff) {
           activityDetails = getActivityName(businessUnitId, activity.activityCodeId) || 'Time Off';
         } else {
@@ -931,7 +969,7 @@
     function getActivityName(businessUnitId, activityCodeId) {
       const codes = activityCodesByBuId[businessUnitId] || [];
       const code = codes.find(c => c.id === activityCodeId);
-      return code ? code.name : activityCodeId;
+      return code ? code.name : (activityCodeId || 'Unknown Activity');
     }
 
     // ===== Format Time =====
