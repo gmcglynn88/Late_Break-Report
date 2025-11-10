@@ -54,6 +54,12 @@
     .tab.active {background: var(--primary-color); color: white; border-color: var(--primary-color);}
     .tab-content {display: none;}
     .tab-content.active {display: block;}
+    
+    /* Status badges */
+    .status-adherent {color: #16a34a; font-weight: 600;}
+    .status-nonadherent {color: #dc2626; font-weight: 600;}
+    .status-unscheduled {color: #6b7280; font-weight: 600;}
+    .status-exception {color: #d97706; font-weight: 600;}
   </style>
 </head>
 <body>
@@ -73,13 +79,13 @@
   <div id="mainContent" style="display:none;">
     <!-- Tab Navigation -->
     <div class="tabs">
-      <div class="tab active" data-tab="schedules">Actual Activities</div>
-      <div class="tab" data-tab="attendance">Schedule vs Actual</div>
+      <div class="tab active" data-tab="adherence">Schedule vs Actual</div>
+      <div class="tab" data-tab="details">Detailed Breakdown</div>
     </div>
 
     <!-- Controls Card -->
     <div class="card">
-      <h2 style="margin:0 0 12px;">Select Date Range & Filters</h2>
+      <h2 style="margin:0 0 12px;">Select Date Range & Management Unit</h2>
       <div class="controls">
         <div>
           <label>Date Range</label>
@@ -89,30 +95,24 @@
             <input id="toDate" type="date"/>
           </div>
           <div class="muted" style="margin-top:6px;font-size:13px;">
-            Best used on small ranges (e.g. 1–7 days).
+            Historical adherence data for schedule vs actual comparison.
           </div>
         </div>
         <div>
-          <label>Management Unit & Users</label>
-          <div class="filter-controls">
-            <select id="managementUnitSelect">
-              <option value="">Loading management units...</option>
-            </select>
-            <select id="userSelect">
-              <option value="all">All users</option>
-            </select>
-          </div>
-          <label style="margin-top:12px;">Team Filters</label>
-          <div class="filter-controls">
-            <select id="teamSelect">
-              <option value="all">All teams</option>
-            </select>
-          </div>
+          <label>Management Unit</label>
+          <select id="managementUnitSelect">
+            <option value="">Loading management units...</option>
+          </select>
+          
+          <label style="margin-top:12px;">User Filter</label>
+          <select id="userSelect">
+            <option value="all">All users</option>
+          </select>
+          
           <input id="userSearch" type="text" placeholder="Search by user name" style="margin-top:8px;width:100%"/>
         </div>
       </div>
-      <button id="fetchActivitiesBtn" class="full-width-btn">Fetch Actual Activities</button>
-      <button id="fetchAttendanceBtn" class="full-width-btn" style="display:none; margin-top: 8px;">Run Attendance Report</button>
+      <button id="fetchAdherenceBtn" class="full-width-btn">Fetch Schedule vs Actual Data</button>
     </div>
 
     <div id="statusMessage" class="muted" style="margin-top:10px;"></div>
@@ -120,8 +120,8 @@
 
     <div id="progressSection" style="display:none;">
       <div class="card">
-        <h3 style="margin:0 0 8px;" id="progressTitle">Fetching Data</h3>
-        <div class="muted" id="progressInfo">Requesting data…</div>
+        <h3 style="margin:0 0 8px;" id="progressTitle">Processing Historical Adherence</h3>
+        <div class="muted" id="progressInfo">Starting adherence query job…</div>
         <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
         <div style="display:flex;justify-content:space-between;font-size:14px" class="muted">
           <span id="progressText">0%</span><span id="chunkText">Step 0/0</span>
@@ -129,55 +129,55 @@
       </div>
     </div>
 
-    <!-- Activities Tab -->
-    <div id="schedulesTab" class="tab-content active">
+    <!-- Adherence Tab -->
+    <div id="adherenceTab" class="tab-content active">
       <div class="card">
-        <h2 style="margin:0 0 12px;">Actual User Activities</h2>
+        <h2 style="margin:0 0 12px;">Schedule vs Actual Adherence</h2>
+        <div class="stats">
+          <div class="stat-card">
+            <div class="stat-number" id="totalShifts">0</div>
+            <div class="stat-label">Total Scheduled Shifts</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="adherentShifts">0</div>
+            <div class="stat-label">Adherent Shifts</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="nonAdherentShifts">0</div>
+            <div class="stat-label">Non-Adherent Shifts</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="adherenceRate">0%</div>
+            <div class="stat-label">Adherence Rate</div>
+          </div>
+        </div>
+        <div id="adherenceResults"></div>
+      </div>
+    </div>
+
+    <!-- Details Tab -->
+    <div id="detailsTab" class="tab-content">
+      <div class="card">
+        <h2 style="margin:0 0 12px;">Detailed Activity Breakdown</h2>
         <div class="stats">
           <div class="stat-card">
             <div class="stat-number" id="totalActivities">0</div>
             <div class="stat-label">Total Activities</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number" id="activeUsers">0</div>
-            <div class="stat-label">Active Users</div>
+            <div class="stat-number" id="scheduledTime">0h</div>
+            <div class="stat-label">Scheduled Time</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number" id="uniqueStatuses">0</div>
-            <div class="stat-label">Unique Statuses</div>
+            <div class="stat-number" id="actualTime">0h</div>
+            <div class="stat-label">Actual Time</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number" id="avgActivityLength">0h</div>
-            <div class="stat-label">Avg Activity Length</div>
+            <div class="stat-number" id="exceptionTime">0h</div>
+            <div class="stat-label">Exception Time</div>
           </div>
         </div>
-        <div id="activitiesResults"></div>
-      </div>
-    </div>
-
-    <!-- Attendance Tab -->
-    <div id="attendanceTab" class="tab-content">
-      <div class="card">
-        <h2 style="margin:0 0 12px;">Schedule vs Actual Activities</h2>
-        <div class="stats">
-          <div class="stat-card">
-            <div class="stat-number" id="totalShifts">0</div>
-            <div class="stat-label">Total Shifts</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="lateShifts">0</div>
-            <div class="stat-label">Late Shifts</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="uniqueUsers">0</div>
-            <div class="stat-label">Unique Users</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="avgLateMinutes">0</div>
-            <div class="stat-label">Avg Late Minutes</div>
-          </div>
-        </div>
-        <div id="attendanceResults"></div>
+        <div id="detailsResults"></div>
       </div>
     </div>
   </div>
@@ -200,26 +200,31 @@
       teamMembersByTeamId: {},
       teamsByUserId: {},
       managementUnits: [],
+      activityCodes: {},
+      adherenceData: [],
       activityRows: [],
-      attendanceRows: []
+      currentJobId: null
     };
 
     // ===== Utils =====
     const $ = id => document.getElementById(id);
-    const setStatus = (msg,err=false)=>{ $('statusMessage').textContent = err?'':(msg||''); $('errorMessage').textContent = err?(msg||''):''; };
+    const setStatus = (msg,err=false)=>{ 
+      $('statusMessage').textContent = err?'':(msg||''); 
+      $('errorMessage').textContent = err?(msg||''):''; 
+    };
     const fmt = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleString()}catch{return 'N/A'} };
     const fmtTime = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}catch{return 'N/A'} };
     const fmtDMY = s => { if(!s||s.length<10) return s||''; const [y,m,d]=s.slice(0,10).split('-'); return `${d}-${m}-${y}`; };
     function setLoading(v){ $('mainContent').classList.toggle('loading', !!v); }
     function updateProgress(p,cur,total){ $('progressFill').style.width = `${p}%`; $('progressText').textContent = `${Math.round(p)}%`; $('chunkText').textContent = `Step ${cur}/${total}`; }
-    function showProgress(info, title = "Fetching Data"){ 
+    function showProgress(info, title = "Processing Data"){ 
       $('progressSection').style.display='block'; 
       $('progressTitle').textContent = title;
       $('progressInfo').textContent = info || ''; 
     }
     function hideProgress(){ $('progressSection').style.display='none'; }
 
-    // Format hours from minutes
+    // Format minutes to hours
     function formatHours(minutes) {
       if (!minutes || minutes <= 0) return '0h';
       const hours = Math.floor(minutes / 60);
@@ -227,14 +232,15 @@
       return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
     }
 
-    // Format duration as HH:MM:SS
-    function formatDuration(ms) {
-      if (!ms || ms <= 0) return '00:00:00';
-      const seconds = Math.floor(ms / 1000);
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      const secs = seconds % 60;
-      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    // Format duration
+    function formatDuration(minutes) {
+      if (!minutes || minutes <= 0) return '0m';
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      if (hours > 0) {
+        return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+      }
+      return `${mins}m`;
     }
 
     // Add helper function to escape HTML
@@ -249,23 +255,12 @@
       const tabs = document.querySelectorAll('.tab');
       tabs.forEach(tab => {
         tab.addEventListener('click', () => {
-          // Remove active class from all tabs and contents
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
           document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
           
-          // Add active class to clicked tab and corresponding content
           tab.classList.add('active');
           const tabName = tab.getAttribute('data-tab');
           $(`${tabName}Tab`).classList.add('active');
-          
-          // Show/hide appropriate buttons
-          if (tabName === 'schedules') {
-            $('fetchActivitiesBtn').style.display = 'block';
-            $('fetchAttendanceBtn').style.display = 'none';
-          } else {
-            $('fetchActivitiesBtn').style.display = 'none';
-            $('fetchAttendanceBtn').style.display = 'block';
-          }
         });
       });
     }
@@ -387,28 +382,6 @@
     }
 
     // ===== Teams & members =====
-    function populateTeamSelect(teams){
-      const sel=$('teamSelect');
-      sel.innerHTML = '<option value="all">All teams</option>' +
-        teams.map(t=>`<option value="${t.id}">${t.name||'(Unnamed team)'}</option>`).join('');
-    }
-
-    async function fetchTeamMembers(teamId){
-      let members = [];
-      let page=1, size=100;
-      while(true){
-        const data = await api(`/api/v2/teams/${teamId}/members?pageSize=${size}&pageNumber=${page}`);
-        const ents = data?.entities || data?.members || [];
-        members = members.concat(ents);
-        if(!data?.nextUri || ents.length<size) break;
-        page++;
-      }
-      return members.map(m => ({
-        id: m.id || m.user?.id,
-        name: m.name || m.user?.name || ''
-      })).filter(m=>m.id);
-    }
-
     async function fetchAllTeamsAndMembers(){
       try{
         setLoading(true);
@@ -423,32 +396,12 @@
           page++;
         }
         state.teams = all.map(t=>({id:t.id,name:t.name||'(Unnamed team)'})).sort((a,b)=>a.name.localeCompare(b.name));
-        populateTeamSelect(state.teams);
 
         state.teamMembersByTeamId = {};
         state.teamsByUserId = {};
-        if(!state.teams.length){ setStatus('No teams found'); return; }
-
-        showProgress('Loading team members…');
-        let step = 0;
-        for(const team of state.teams){
-          step++;
-          updateProgress( (step/state.teams.length)*100, step, state.teams.length );
-          try{
-            const members = await fetchTeamMembers(team.id);
-            state.teamMembersByTeamId[team.id] = members;
-            for(const m of members){
-              if(!state.teamsByUserId[m.id]) state.teamsByUserId[m.id] = [];
-              state.teamsByUserId[m.id].push({id:team.id,name:team.name});
-            }
-          }catch(e){
-            console.warn('Failed to fetch members for team', team.id, e);
-          }
-        }
-        hideProgress();
+        
         setStatus('Users & teams loaded');
       }catch(e){
-        hideProgress();
         console.error(e);
         setStatus('Failed to load teams: ' + e.message, true);
       }finally{
@@ -456,251 +409,371 @@
       }
     }
 
-    // ===== ANALYTICS-BASED ACTIVITY FETCHING =====
-    async function fetchUserActivities(managementUnitId, fromDate, toDate) {
-      console.log('Fetching user activities from Analytics API...');
+    // ===== Activity Codes =====
+    async function fetchActivityCodes(businessUnitId) {
+      try {
+        console.log('Fetching activity codes for business unit:', businessUnitId);
+        const data = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/activitycodes`);
+        state.activityCodes = {};
+        
+        (data.entities || []).forEach(activity => {
+          state.activityCodes[activity.id] = {
+            name: activity.name,
+            category: activity.category
+          };
+        });
+        
+        console.log('Loaded activity codes:', state.activityCodes);
+        return state.activityCodes;
+      } catch (e) {
+        console.error('Failed to fetch activity codes:', e);
+        return {};
+      }
+    }
+
+    // ===== HISTORICAL ADHERENCE API INTEGRATION =====
+    async function startHistoricalAdherenceQuery(managementUnitId, fromDate, toDate) {
+      console.log('Starting historical adherence query...');
       
-      const activities = {
-        userActivities: {},
-        activityPeriods: []
+      const requestBody = {
+        startDate: `${fromDate}T00:00:00.000Z`,
+        endDate: `${toDate}T23:59:59.999Z`,
+        includeExceptions: true
       };
 
+      console.log('Adherence request body:', requestBody);
+
       try {
-        showProgress('Fetching user activity data from Analytics API...', 'Fetching Activities');
-
-        // Use the Analytics Users Details API (same as your working app)
-        const body = {
-          interval: `${fromDate}T00:00:00/${toDate}T23:59:59`,
-          order: "asc",
-          orderBy: "conversationStart",
-          paging: { pageSize: 100, pageNumber: 1 }
-        };
-
-        console.log('Fetching user activities from Analytics API...');
-        const response = await fetch(
-          `${CONFIG.apiHost}/api/v2/analytics/users/details/query`,
+        const response = await api(
+          `/api/v2/workforcemanagement/managementunits/${managementUnitId}/historicaladherencequery`,
           {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${state.token}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(requestBody)
           }
         );
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.warn('Analytics API query failed:', errorText);
-          throw new Error(`Analytics query failed: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        console.log('Analytics API query successful:', data);
-        
-        // Process the user activities
-        if (data.userDetails) {
-          data.userDetails.forEach(userDetail => {
-            const userId = userDetail.userId || userDetail.user?.id;
-            if (!userId) return;
-            
-            const userName = state.usersById[userId]?.name || userDetail.user?.name || `User ${userId}`;
-            const userActivities = [];
-            
-            // Get user's routing status/activities
-            const routingStatus = userDetail.routingStatus || userDetail.activities || [];
-            
-            routingStatus.forEach(activity => {
-              if (!activity.startTime && !activity.dateStart && !activity.conversationStart) return;
-              
-              const startTime = activity.startTime || activity.dateStart || activity.conversationStart;
-              const status = activity.status || activity.presence || activity.systemPresence || 'Unknown';
-              const endTime = activity.endTime || activity.dateEnd || activity.conversationEnd;
-              
-              // Calculate duration
-              let durationMs = 0;
-              if (endTime) {
-                durationMs = new Date(endTime) - new Date(startTime);
-              }
-              
-              userActivities.push({
-                startDate: startTime,
-                endDate: endTime,
-                activityName: status,
-                durationMs: durationMs,
-                inferred: false
-              });
-            });
-
-            if (userActivities.length > 0) {
-              activities.userActivities[userId] = {
-                activities: userActivities,
-                userName: userName
-              };
-              console.log(`Found ${userActivities.length} activities for user ${userName}`);
-            }
-          });
-        }
-
-        console.log('Final activities data collected:', activities);
-        return activities;
-
+        console.log('Adherence query started:', response);
+        return response.id; // Returns the job ID
       } catch (e) {
-        console.error('Analytics-based activity fetching failed:', e);
+        console.error('Failed to start adherence query:', e);
         throw e;
       }
     }
 
-    // ===== Process Activity Data for Display =====
-    function processActivityData(activityData) {
-      const rows = [];
-      const uniqueStatuses = new Set();
-      let totalActivityLength = 0;
-      let activityCount = 0;
+    async function checkAdherenceJobStatus(jobId) {
+      try {
+        const response = await api(`/api/v2/workforcemanagement/adherence/historical/jobs/${jobId}`);
+        console.log('Job status:', response);
+        return response;
+      } catch (e) {
+        console.error('Failed to check job status:', e);
+        throw e;
+      }
+    }
 
-      console.log('Processing activity data for display:', activityData);
-
-      Object.keys(activityData.userActivities).forEach(userId => {
-        const userActivity = activityData.userActivities[userId];
-        const userName = userActivity.userName;
-        
-        userActivity.activities.forEach(activity => {
-          uniqueStatuses.add(activity.activityName);
-          totalActivityLength += activity.durationMs;
-          activityCount++;
-
-          const userTeams = state.teamsByUserId[userId] || [];
-          const teamNames = userTeams.map(t => t.name).join(', ');
-          const teamIds = userTeams.map(t => t.id);
-
-          const row = {
-            userId,
-            userName,
-            teamNames,
-            teamIds,
-            date: activity.startDate.slice(0, 10),
-            activityName: activity.activityName,
-            startTime: activity.startDate,
-            endTime: activity.endDate,
-            durationMs: activity.durationMs,
-            inferred: activity.inferred || false
-          };
-
-          rows.push(row);
+    async function downloadAdherenceResults(downloadUrl) {
+      try {
+        console.log('Downloading adherence results from:', downloadUrl);
+        const response = await fetch(downloadUrl, {
+          headers: {
+            'Authorization': `Bearer ${state.token}`
+          }
         });
+        
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Downloaded adherence data:', data);
+        return data;
+      } catch (e) {
+        console.error('Failed to download adherence results:', e);
+        throw e;
+      }
+    }
+
+    async function waitForJobCompletion(jobId, maxWaitTime = 120000) {
+      const startTime = Date.now();
+      const checkInterval = 2000; // Check every 2 seconds
+      
+      while (Date.now() - startTime < maxWaitTime) {
+        const jobStatus = await checkAdherenceJobStatus(jobId);
+        
+        if (jobStatus.queryState === 'Complete') {
+          console.log('Job completed successfully');
+          return jobStatus;
+        } else if (jobStatus.queryState === 'Failed') {
+          throw new Error('Historical adherence query failed');
+        } else if (jobStatus.queryState === 'Error') {
+          throw new Error('Historical adherence query encountered an error');
+        }
+        
+        // Show progress
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min((elapsed / maxWaitTime) * 100, 90);
+        updateProgress(progress, 2, 3);
+        
+        // Wait before checking again
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+      }
+      
+      throw new Error('Job timed out waiting for completion');
+    }
+
+    // ===== Process Adherence Data =====
+    function processAdherenceData(adherenceResults) {
+      const adherenceRows = [];
+      const activityRows = [];
+      
+      let totalShifts = 0;
+      let adherentShifts = 0;
+      let nonAdherentShifts = 0;
+      let totalScheduledMinutes = 0;
+      let totalActualMinutes = 0;
+      let totalExceptionMinutes = 0;
+
+      // Process each user's adherence data
+      adherenceResults.forEach(userResult => {
+        const userId = userResult.userId;
+        const userName = state.usersById[userId]?.name || `User ${userId}`;
+        
+        // Process scheduled shifts
+        if (userResult.scheduledActivities) {
+          userResult.scheduledActivities.forEach(shift => {
+            totalShifts++;
+            totalScheduledMinutes += shift.scheduledActivityMinutes || 0;
+            
+            const isAdherent = shift.adherenceStatus === 'Adherent';
+            if (isAdherent) adherentShifts++;
+            else nonAdherentShifts++;
+            
+            const userTeams = state.teamsByUserId[userId] || [];
+            const teamNames = userTeams.map(t => t.name).join(', ');
+            
+            adherenceRows.push({
+              userId,
+              userName,
+              teamNames,
+              date: shift.startDate ? shift.startDate.slice(0, 10) : 'Unknown',
+              scheduledStart: shift.startDate,
+              scheduledEnd: shift.endDate,
+              scheduledActivity: state.activityCodes[shift.activityCodeId]?.name || `Activity ${shift.activityCodeId}`,
+              actualStatus: shift.actualActivity ? (state.activityCodes[shift.actualActivity]?.name || `Activity ${shift.actualActivity}`) : 'No Activity',
+              adherenceStatus: shift.adherenceStatus || 'Unknown',
+              scheduledMinutes: shift.scheduledActivityMinutes || 0,
+              actualMinutes: shift.actualActivityMinutes || 0,
+              isAdherent: isAdherent
+            });
+          });
+        }
+        
+        // Process actual activities
+        if (userResult.actuals) {
+          userResult.actuals.forEach(activity => {
+            totalActualMinutes += activity.activityMinutes || 0;
+            
+            activityRows.push({
+              userId,
+              userName,
+              date: activity.startDate ? activity.startDate.slice(0, 10) : 'Unknown',
+              startTime: activity.startDate,
+              endTime: activity.endDate,
+              activityName: state.activityCodes[activity.activityCodeId]?.name || `Activity ${activity.activityCodeId}`,
+              activityMinutes: activity.activityMinutes || 0,
+              category: state.activityCodes[activity.activityCodeId]?.category || 'Unknown'
+            });
+          });
+        }
+        
+        // Process exceptions
+        if (userResult.exceptions) {
+          userResult.exceptions.forEach(exception => {
+            totalExceptionMinutes += exception.durationMinutes || 0;
+          });
+        }
       });
 
+      const adherenceRate = totalShifts > 0 ? ((adherentShifts / totalShifts) * 100).toFixed(1) : 0;
+
       return {
-        rows,
-        uniqueStatuses: uniqueStatuses.size,
-        totalActivities: activityCount,
-        avgActivityLength: activityCount > 0 ? Math.round(totalActivityLength / activityCount / 60000) : 0 // in minutes
+        adherenceRows,
+        activityRows,
+        summary: {
+          totalShifts,
+          adherentShifts,
+          nonAdherentShifts,
+          adherenceRate,
+          totalScheduledMinutes,
+          totalActualMinutes,
+          totalExceptionMinutes
+        }
       };
     }
 
-    // ===== Render Activity Data =====
-    function renderActivities() {
-      const resultsDiv = $('activitiesResults');
+    // ===== Render Adherence Data =====
+    function renderAdherenceResults() {
+      const resultsDiv = $('adherenceResults');
       
-      console.log('Rendering activities, total rows:', state.activityRows.length);
-      
-      if (!state.activityRows.length) {
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No activity data available for the selected period.</div><div class="muted" style="margin-top:8px;">Try a different date range or management unit.</div></div>';
+      if (!state.adherenceData.length) {
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No adherence data available for the selected period.</div></div>';
         return;
       }
 
-      const rows = getFilteredActivityRows();
-      console.log('Filtered activity rows:', rows.length);
-
-      if (!rows.length) {
-        $('totalActivities').textContent = '0';
-        $('activeUsers').textContent = '0';
-        $('uniqueStatuses').textContent = '0';
-        $('avgActivityLength').textContent = '0h';
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">🔍</div><div>No activity data found for the selected filters.</div></div>';
+      const filteredRows = getFilteredAdherenceRows();
+      
+      if (!filteredRows.length) {
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">🔍</div><div>No adherence data found for the selected filters.</div></div>';
         return;
       }
 
-      // Calculate stats
-      const totalActivities = rows.length;
-      const activeUsers = new Set(rows.map(r => r.userId)).size;
-      const uniqueStatuses = new Set(rows.map(r => r.activityName)).size;
-      const totalMinutes = rows.reduce((sum, r) => sum + (r.durationMs / 60000), 0);
-      const avgActivityLength = totalActivities > 0 ? Math.round(totalMinutes / totalActivities) : 0;
+      // Update summary stats
+      const summary = state.adherenceDataSummary || {};
+      $('totalShifts').textContent = summary.totalShifts || 0;
+      $('adherentShifts').textContent = summary.adherentShifts || 0;
+      $('nonAdherentShifts').textContent = summary.nonAdherentShifts || 0;
+      $('adherenceRate').textContent = `${summary.adherenceRate || 0}%`;
 
-      $('totalActivities').textContent = totalActivities;
-      $('activeUsers').textContent = activeUsers;
-      $('uniqueStatuses').textContent = uniqueStatuses;
-      $('avgActivityLength').textContent = formatHours(avgActivityLength);
+      // Create adherence table
+      let tableHtml = `
+        <div style="overflow-x: auto;">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Team</th>
+                <th>Date</th>
+                <th>Scheduled Activity</th>
+                <th>Schedule Start</th>
+                <th>Schedule End</th>
+                <th>Actual Activity</th>
+                <th>Adherence Status</th>
+                <th>Scheduled Time</th>
+                <th>Actual Time</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
 
-      // Create table with activity data
-      let tableHtml = '';
-      try {
-        tableHtml = `
-          <div style="overflow-x: auto;">
-            <table class="attendance-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Team</th>
-                  <th>Date</th>
-                  <th>Activity</th>
-                  <th>Start Time</th>
-                  <th>End Time</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows.map(r => {
-                  try {
-                    const duration = formatDuration(r.durationMs);
-                    
-                    return `
-                      <tr>
-                        <td>${escapeHtml(r.userName)}</td>
-                        <td>${escapeHtml(r.teamNames || 'No Team')}</td>
-                        <td>${fmtDMY(r.date)}</td>
-                        <td>${escapeHtml(r.activityName)}</td>
-                        <td>${r.startTime ? fmtTime(r.startTime) : 'N/A'}</td>
-                        <td>${r.endTime ? fmtTime(r.endTime) : 'N/A'}</td>
-                        <td>${duration}</td>
-                      </tr>
-                    `;
-                  } catch (e) {
-                    console.warn('Error rendering activity row:', r, e);
-                    return '<tr><td colspan="7" style="color: red;">Error rendering row</td></tr>';
-                  }
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
+      filteredRows.forEach(row => {
+        const statusClass = row.isAdherent ? 'status-adherent' : 'status-nonadherent';
+        const statusText = row.isAdherent ? 'Adherent' : 'Non-Adherent';
+        
+        tableHtml += `
+          <tr class="${row.isAdherent ? 'schedule-match' : 'schedule-mismatch'}">
+            <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
+            <td>${fmtDMY(row.date)}</td>
+            <td>${escapeHtml(row.scheduledActivity)}</td>
+            <td>${fmtTime(row.scheduledStart)}</td>
+            <td>${fmtTime(row.scheduledEnd)}</td>
+            <td>${escapeHtml(row.actualStatus)}</td>
+            <td><span class="${statusClass}">${statusText}</span></td>
+            <td>${formatDuration(row.scheduledMinutes)}</td>
+            <td>${formatDuration(row.actualMinutes)}</td>
+          </tr>
         `;
-      } catch (e) {
-        console.error('Error generating activity table HTML:', e);
-        tableHtml = '<div style="color: red; padding: 20px; text-align: center;">Error generating activity table</div>';
-      }
-      
+      });
+
+      tableHtml += `
+            </tbody>
+          </table>
+        </div>
+      `;
+
       resultsDiv.innerHTML = tableHtml;
     }
 
-    function getFilteredActivityRows() {
-      const teamId = $('teamSelect').value;
+    function renderDetailedResults() {
+      const resultsDiv = $('detailsResults');
+      
+      if (!state.activityRows.length) {
+        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📊</div><div>No detailed activity data available.</div></div>';
+        return;
+      }
+
+      const filteredRows = getFilteredActivityRows();
+      
+      // Update detailed stats
+      const summary = state.adherenceDataSummary || {};
+      $('totalActivities').textContent = state.activityRows.length;
+      $('scheduledTime').textContent = formatHours(summary.totalScheduledMinutes || 0);
+      $('actualTime').textContent = formatHours(summary.totalActualMinutes || 0);
+      $('exceptionTime').textContent = formatHours(summary.totalExceptionMinutes || 0);
+
+      let tableHtml = `
+        <div style="overflow-x: auto;">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Date</th>
+                <th>Activity</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Duration</th>
+                <th>Category</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      filteredRows.forEach(row => {
+        tableHtml += `
+          <tr>
+            <td>${escapeHtml(row.userName)}</td>
+            <td>${fmtDMY(row.date)}</td>
+            <td>${escapeHtml(row.activityName)}</td>
+            <td>${fmtTime(row.startTime)}</td>
+            <td>${fmtTime(row.endTime)}</td>
+            <td>${formatDuration(row.activityMinutes)}</td>
+            <td>${escapeHtml(row.category)}</td>
+          </tr>
+        `;
+      });
+
+      tableHtml += `
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      resultsDiv.innerHTML = tableHtml;
+    }
+
+    function getFilteredAdherenceRows() {
       const userId = $('userSelect').value;
       const search = $('userSearch').value.trim().toLowerCase();
 
-      return state.activityRows.filter(r => {
-        if (teamId !== 'all' && !(r.teamIds || []).includes(teamId)) return false;
+      return state.adherenceData.filter(r => {
         if (userId !== 'all' && r.userId !== userId) return false;
         if (search) {
-          const hay = (r.userName + ' ' + (r.teamNames || '') + ' ' + r.date + ' ' + r.activityName).toLowerCase();
+          const hay = (r.userName + ' ' + (r.teamNames || '') + ' ' + r.date).toLowerCase();
           if (!hay.includes(search)) return false;
         }
         return true;
       });
     }
 
-    // ===== Fetch Activities =====
-    async function fetchActivities() {
+    function getFilteredActivityRows() {
+      const userId = $('userSelect').value;
+      const search = $('userSearch').value.trim().toLowerCase();
+
+      return state.activityRows.filter(r => {
+        if (userId !== 'all' && r.userId !== userId) return false;
+        if (search) {
+          const hay = (r.userName + ' ' + r.date + ' ' + r.activityName).toLowerCase();
+          if (!hay.includes(search)) return false;
+        }
+        return true;
+      });
+    }
+
+    // ===== Main Adherence Fetch Function =====
+    async function fetchAdherenceData() {
       try {
         const from = $('fromDate').value;
         const to = $('toDate').value || from;
@@ -713,62 +786,87 @@
         if (from > today || to > today) { setStatus('Date range cannot be in the future', true); return; }
         if (new Date(to) < new Date(from)) { setStatus('End date must be on or after start date', true); return; }
 
-        setStatus('Fetching activities…'); 
+        setStatus('Starting historical adherence query…'); 
         setLoading(true);
         
-        showProgress('Fetching activity data…', 'Fetching Activities');
-        updateProgress(50, 1, 2);
+        showProgress('Starting adherence query job…', 'Historical Adherence');
+        updateProgress(10, 1, 3);
 
-        // Fetch activity data using Analytics API
-        const activityData = await fetchUserActivities(managementUnitId, from, to);
+        // Step 1: Start the adherence query job
+        const jobId = await startHistoricalAdherenceQuery(managementUnitId, from, to);
+        state.currentJobId = jobId;
         
-        updateProgress(100, 2, 2);
-        showProgress('Processing activity data…', 'Fetching Activities');
+        updateProgress(30, 2, 3);
+        showProgress('Waiting for job to complete…', 'Historical Adherence');
 
-        // Process activity data for display
-        const processedData = processActivityData(activityData);
-        state.activityRows = processedData.rows;
+        // Step 2: Wait for job completion
+        const jobResult = await waitForJobCompletion(jobId);
         
-        hideProgress();
-        renderActivities();
+        updateProgress(70, 3, 3);
+        showProgress('Downloading results…', 'Historical Adherence');
+
+        // Step 3: Download and process results from all URLs
+        let allAdherenceResults = [];
         
-        if (state.activityRows.length) {
-          setStatus(`Activities loaded - ${state.activityRows.length} activities found`);
-        } else {
-          setStatus('No activity data found for the selected period.');
+        for (const downloadUrl of jobResult.downloadUrls) {
+          try {
+            const results = await downloadAdherenceResults(downloadUrl);
+            if (results && Array.isArray(results)) {
+              allAdherenceResults = allAdherenceResults.concat(results);
+            }
+          } catch (downloadError) {
+            console.error('Failed to download from one URL, continuing with others:', downloadError);
+          }
         }
-      } catch (e) {
-        console.error('Error in fetchActivities:', e);
+
+        if (allAdherenceResults.length === 0) {
+          throw new Error('No adherence data found in download URLs');
+        }
+
+        // Step 4: Get activity codes for mapping
+        const managementUnit = state.managementUnits.find(mu => mu.id === managementUnitId);
+        if (managementUnit && managementUnit.businessUnit) {
+          await fetchActivityCodes(managementUnit.businessUnit.id);
+        }
+
+        // Step 5: Process the data
+        const processedData = processAdherenceData(allAdherenceResults);
+        state.adherenceData = processedData.adherenceRows;
+        state.activityRows = processedData.activityRows;
+        state.adherenceDataSummary = processedData.summary;
+        
+        updateProgress(100, 3, 3);
         hideProgress();
-        setStatus('Error fetching activities: ' + e.message, true);
+        
+        // Render results
+        renderAdherenceResults();
+        renderDetailedResults();
+        
+        setStatus(`Adherence data loaded - ${state.adherenceData.length} shifts analyzed`);
+        
+      } catch (e) {
+        console.error('Error in fetchAdherenceData:', e);
+        hideProgress();
+        setStatus('Error fetching adherence data: ' + e.message, true);
       } finally {
         setLoading(false);
       }
     }
 
-    // ===== Existing Attendance Functions (simplified) =====
-    async function fetchAttendance() {
-      // This would combine schedule data with actual activities
-      console.log('Fetching attendance data...');
-      setStatus('Attendance comparison feature coming soon...');
-    }
-
     // ===== Events & Init =====
-    $('fetchActivitiesBtn').addEventListener('click', fetchActivities);
-    $('fetchAttendanceBtn').addEventListener('click', fetchAttendance);
-    $('teamSelect').addEventListener('change', function() {
-      if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
-        renderActivities();
-      }
-    });
+    $('fetchAdherenceBtn').addEventListener('click', fetchAdherenceData);
     $('userSelect').addEventListener('change', function() {
-      if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
-        renderActivities();
+      if (document.querySelector('.tab.active').getAttribute('data-tab') === 'adherence') {
+        renderAdherenceResults();
+      } else {
+        renderDetailedResults();
       }
     });
     $('userSearch').addEventListener('input', function() {
-      if (document.querySelector('.tab.active').getAttribute('data-tab') === 'schedules') {
-        renderActivities();
+      if (document.querySelector('.tab.active').getAttribute('data-tab') === 'adherence') {
+        renderAdherenceResults();
+      } else {
+        renderDetailedResults();
       }
     });
 
