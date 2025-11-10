@@ -351,15 +351,13 @@
         // Create a lookup map by ID
         const activityCodeMap = {};
         activityCodes.forEach(code => {
-          activityCodeMap[code.id] = {
-            name: code.name,
-            category: code.category
-          };
+          activityCodeMap[code.id] = code.name || code.id;
         });
         
         // Cache the activity codes for this business unit
         activityCodesByBuId[businessUnitId] = activityCodeMap;
         
+        console.log('Activity code map created:', activityCodeMap);
         return activityCodeMap;
       } catch (err) {
         console.error('Error loading activity codes:', err);
@@ -374,17 +372,14 @@
       if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
       
       const activityCodes = activityCodesByBuId[businessUnitId];
+      console.log(`Looking up activity code: ${activityCodeId} in business unit: ${businessUnitId}`, activityCodes);
+      
       if (activityCodes && activityCodes[activityCodeId]) {
-        return activityCodes[activityCodeId].name;
+        return activityCodes[activityCodeId];
       }
       
-      // Fallback for common system codes
-      const fallbackNames = {
-        '0': 'Work',
-        '1': 'Break'
-      };
-      
-      return fallbackNames[activityCodeId] || activityCodeId || 'Unknown Activity';
+      // No fallback - return the code ID if not found
+      return activityCodeId;
     }
 
     async function handleManagementUnitChange() {
@@ -548,9 +543,7 @@
             const end = new Date(start.getTime() + lengthMin * 60000);
 
             // Use the API-based activity name lookup
-            const activityLabel = activity.description && activity.description.trim().length 
-              ? activity.description 
-              : getActivityName(businessUnitId, activity.activityCodeId);
+            const activityLabel = getActivityName(businessUnitId, activity.activityCodeId);
 
             const dateStr = shiftDateStr || start.toISOString().slice(0, 10);
 
@@ -580,21 +573,15 @@
             return;
           }
 
-          // Create a full day activity (typically 9 AM to 5 PM)
-          const start = new Date(`${dateStr}T09:00:00Z`);
-          const end = new Date(`${dateStr}T17:00:00Z`);
-
           // Use the API-based activity name lookup
-          const activityLabel = marker.description && marker.description.trim().length 
-            ? marker.description 
-            : getActivityName(businessUnitId, marker.activityCodeId);
+          const activityLabel = getActivityName(businessUnitId, marker.activityCodeId);
 
           rows.push({
             date: dateStr,
-            start,
-            end,
+            start: null, // No specific start time for full day off
+            end: null,   // No specific end time for full day off
             durationMinutes: lengthMin,
-            activityLabel: `${activityLabel} (Full Day)`,
+            activityLabel: activityLabel,
             countsAsPaidTime: marker.isPaid !== false, // Default to true if not specified
             activityCodeId: marker.activityCodeId,
             type: 'fullDayOff'
@@ -604,7 +591,7 @@
 
       rows.sort((a, b) => {
         if (a.date === b.date) {
-          return a.start - b.start;
+          return (a.start || new Date(a.date)) - (b.start || new Date(b.date));
         }
         return a.date.localeCompare(b.date);
       });
@@ -614,7 +601,7 @@
     }
 
     function formatTime(d) {
-      if (!d) return '';
+      if (!d) return 'All Day';
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
@@ -665,7 +652,6 @@
                 <th>Start</th>
                 <th>End</th>
                 <th>Duration</th>
-                <th>Type</th>
               </tr>
             </thead>
             <tbody>
@@ -678,7 +664,6 @@
               <td>${escapeHtml(formatTime(row.start))}</td>
               <td>${escapeHtml(formatTime(row.end))}</td>
               <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
-              <td>${escapeHtml(row.type === 'fullDayOff' ? 'Full Day Off' : 'Shift')}</td>
             </tr>
           `;
         });
