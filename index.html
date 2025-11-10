@@ -372,13 +372,25 @@
       if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
       
       const activityCodes = activityCodesByBuId[businessUnitId];
-      console.log(`Looking up activity code: ${activityCodeId} in business unit: ${businessUnitId}`, activityCodes);
       
+      // System code fallbacks - these are standard Genesys codes
+      const systemCodes = {
+        '0': 'Work',
+        '1': 'Break',
+        '2': 'Meeting'
+      };
+      
+      // First check system codes
+      if (systemCodes[activityCodeId]) {
+        return systemCodes[activityCodeId];
+      }
+      
+      // Then check business unit activity codes
       if (activityCodes && activityCodes[activityCodeId]) {
         return activityCodes[activityCodeId];
       }
       
-      // No fallback - return the code ID if not found
+      // Return the code ID if not found anywhere
       return activityCodeId;
     }
 
