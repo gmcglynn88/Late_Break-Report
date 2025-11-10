@@ -136,7 +136,7 @@
     // ===== OAuth Config =====
     const clientId = 'fe305808-b368-4547-8af9-325d28d552bb';
     // IMPORTANT: update this to the URL where THIS file is hosted
-    const redirectUri = 'https://gmcglynn88.github.io/Late_Break-Report/';
+    const redirectUri = 'https://gmcglynn88.github.io/ExternalWorkCreation/';
 
     const oauthUrl =
       'https://login.mypurecloud.ie/oauth/authorize?client_id=' +
@@ -150,7 +150,10 @@
     let allUsers = [];
     let usersById = {};
     let allTeams = [];
-    let activityCodesByBuId = {}; // Cache for activity codes by business unit ID
+
+    // Activity codes cache (per MU)
+    let activityCodesById = {};
+    let activityCodesMuId = null;
 
     // ===== Auth bootstrap =====
     document.addEventListener('DOMContentLoaded', () => {
@@ -245,9 +248,7 @@
       document.getElementById('teamSelect').addEventListener('change', handleTeamChange);
 
       try {
-        await Promise.all([
-          populateInitialData()
-        ]);
+        await populateInitialData();
         showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
       } catch (err) {
         console.error('Error initialising app:', err);
@@ -317,9 +318,6 @@
       if (!buId) return;
 
       try {
-        // Load activity codes for this business unit
-        await loadActivityCodes(buId);
-        
         const muResponse = await authorizedFetchJson(
           `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
         );
@@ -337,72 +335,12 @@
       }
     }
 
-    // ===== Fixed function to load activity codes from business unit =====
-    async function loadActivityCodes(businessUnitId) {
-      try {
-        console.log(`Loading activity codes for business unit: ${businessUnitId}`);
-        const activityCodesResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(businessUnitId)}/activitycodes`
-        );
-        
-        // The response has activityCodes object, not entities array
-        const activityCodes = activityCodesResponse.activityCodes ? Object.values(activityCodesResponse.activityCodes) : [];
-        console.log(`Loaded ${activityCodes.length} activity codes`, activityCodes);
-        
-        // Create a lookup map by ID
-        const activityCodeMap = {};
-        activityCodes.forEach(code => {
-          activityCodeMap[code.id] = code.name || code.id;
-        });
-        
-        // Cache the activity codes for this business unit
-        activityCodesByBuId[businessUnitId] = activityCodeMap;
-        
-        console.log('Activity code map created:', activityCodeMap);
-        return activityCodeMap;
-      } catch (err) {
-        console.error('Error loading activity codes:', err);
-        // Return empty map but don't fail completely
-        activityCodesByBuId[businessUnitId] = {};
-        return {};
-      }
-    }
-
-    // ===== Function to get activity name from code =====
-    function getActivityName(businessUnitId, activityCodeId) {
-      if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
-      
-      // Default system activity codes - hardcoded
-      const systemCodes = {
-        '0': 'On Queue',
-        '1': 'Break', 
-        '2': 'Meal',
-        '3': 'Meeting',
-        '4': 'Off Queue',
-        '5': 'Time Off',
-        '6': 'Training',
-        '7': 'Agent Unavailable'
-      };
-      
-      // First check if it's a system code
-      if (systemCodes[activityCodeId]) {
-        return systemCodes[activityCodeId];
-      }
-      
-      // If it's a UUID, check business unit activity codes
-      const activityCodes = activityCodesByBuId[businessUnitId];
-      if (activityCodes && activityCodes[activityCodeId]) {
-        return activityCodes[activityCodeId];
-      }
-      
-      // Return the code ID if not found anywhere
-      return activityCodeId;
-    }
-
     async function handleManagementUnitChange() {
       const muId = document.getElementById('managementUnitSelect').value;
       if (!muId) {
         populateUserSelect(allUsers);
+        activityCodesById = {};
+        activityCodesMuId = null;
         return;
       }
 
@@ -413,6 +351,10 @@
         const list = muUsersResponse.entities || muUsersResponse.users || [];
         const enriched = list.map(uRef => usersById[uRef.id] || uRef);
         populateUserSelect(enriched);
+
+        // Clear activity code cache when MU changes
+        activityCodesById = {};
+        activityCodesMuId = null;
       } catch (err) {
         console.error('Error loading MU users:', err);
         showMessage(`Error loading management unit users: ${err.message}`, 'error');
@@ -440,6 +382,50 @@
         console.error('Error loading team members:', err);
         showMessage(`Error loading team members: ${err.message}`, 'error');
       }
+    }
+
+    // ===== Activity Codes =====
+    async function ensureActivityCodesLoaded(managementUnitId) {
+      if (activityCodesMuId === managementUnitId && Object.keys(activityCodesById).length > 0) {
+        return;
+      }
+      const codes = await fetchActivityCodes(managementUnitId);
+      activityCodesById = {};
+      (codes || []).forEach(code => {
+        if (code && code.id) {
+          activityCodesById[code.id] = code;
+        }
+      });
+      activityCodesMuId = managementUnitId;
+      console.log('Loaded activity codes for MU', managementUnitId, 'count:', Object.keys(activityCodesById).length);
+    }
+
+    async function fetchActivityCodes(managementUnitId) {
+      let all = [];
+      let pageNumber = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const url =
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}` +
+          `/activitycodes?pageNumber=${pageNumber}&pageSize=100`;
+
+        const response = await authorizedFetch(url);
+        if (!response.ok) {
+          throw new Error(`Error fetching activity codes: ${response.status} ${response.statusText}`);
+        }
+        const data = await response.json();
+        const entities = data.entities || data.activityCodes || [];
+        all = all.concat(entities);
+
+        if (data.pageCount && pageNumber < data.pageCount) {
+          pageNumber++;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      return all;
     }
 
     // ===== Main schedule search using MU schedules/search =====
@@ -484,10 +470,15 @@
       const endDateIso = `${endDate}T00:00:00.000Z`;
 
       try {
+        // Make sure we have activity codes loaded for this MU first
+        await ensureActivityCodesLoaded(muId);
+
         const searchResult = await searchSchedules(muId, userId, startDateIso, endDateIso, true);
         console.log('Raw WFM search result:', searchResult);
-        const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buId);
+
+        const activities = extractUserActivitiesFromSearchResult(searchResult, userId);
         console.log('Extracted activities count:', activities.length);
+
         renderScheduleResults(resultsDiv, activities, userId, startDateIso, endDateIso, searchResult);
       } catch (err) {
         console.error('Error loading schedule:', err);
@@ -514,111 +505,101 @@
       });
     }
 
-    // ===== Fixed function to extract activities from search result =====
-    function extractUserActivitiesFromSearchResult(response, userId, businessUnitId) {
-      console.log('Full response structure:', response);
-      
-      let userSchedule = null;
+    // ===== Extract activities from search result (uses activityCodesById for names) =====
+    function extractUserActivitiesFromSearchResult(response, userId) {
+      let schedules = [];
 
-      // Handle the nested structure from your sample data
       if (response && response.userSchedules) {
-        // Your data structure: userSchedules is an object keyed by userId
-        if (response.userSchedules[userId]) {
-          userSchedule = response.userSchedules[userId];
+        // userSchedules can be object keyed by userId
+        if (Array.isArray(response.userSchedules)) {
+          schedules = response.userSchedules;
         } else {
-          // Fallback: take the first user schedule if userId doesn't match key
-          const firstUserId = Object.keys(response.userSchedules)[0];
-          userSchedule = response.userSchedules[firstUserId];
+          if (userId && response.userSchedules[userId]) {
+            schedules = [response.userSchedules[userId]];
+          } else {
+            schedules = Object.values(response.userSchedules);
+          }
         }
+      } else if (Array.isArray(response.schedules)) {
+        schedules = response.schedules;
+      } else if (Array.isArray(response.results)) {
+        schedules = response.results;
+      } else if (Array.isArray(response.entities)) {
+        schedules = response.entities;
+      } else if (Array.isArray(response)) {
+        schedules = response;
       }
+
+      console.log('UserSchedules parsed, schedule objects:', schedules.length);
 
       const rows = [];
 
-      // If we found a user schedule, extract shifts and full day time off markers
-      if (userSchedule) {
-        // Process shifts (regular scheduled activities)
+      schedules.forEach(userSchedule => {
         const shifts = Array.isArray(userSchedule.shifts) ? userSchedule.shifts : [];
-        console.log(`Found ${shifts.length} shifts for user`, shifts);
 
         shifts.forEach(shift => {
-          const shiftStartDate = shift.startDate ? new Date(shift.startDate) : null;
-          const shiftDateStr = shiftStartDate ? shiftStartDate.toISOString().slice(0, 10) : null;
-          
+          const shiftDateRaw = shift.startDate || shift.date || null;
           const activities = Array.isArray(shift.activities) ? shift.activities : [];
-          console.log(`Shift ${shift.id} has ${activities.length} activities`, activities);
 
           activities.forEach(activity => {
-            const startIso = activity.startDate;
-            const lengthMin = activity.lengthInMinutes;
+            const startIso = activity.startDate || activity.startTime || activity.startDateTime;
+            const endIso = activity.endDate || activity.endTime || activity.endDateTime;
+            const lengthMin = activity.lengthInMinutes || activity.lengthMinutes || null;
 
-            if (!startIso || lengthMin == null) {
-              console.warn('Skipping activity missing startDate or lengthInMinutes:', activity);
-              return;
-            }
+            if (!startIso) return;
 
             const start = new Date(startIso);
-            const end = new Date(start.getTime() + lengthMin * 60000);
+            let end = endIso ? new Date(endIso) : null;
 
-            // Use the API-based activity name lookup
-            const activityLabel = getActivityName(businessUnitId, activity.activityCodeId);
+            if (!end && lengthMin != null) {
+              end = new Date(start.getTime() + lengthMin * 60000);
+            }
 
-            const dateStr = shiftDateStr || start.toISOString().slice(0, 10);
+            let durationMin = lengthMin;
+            if (durationMin == null && end) {
+              durationMin = Math.round((end - start) / 60000);
+            }
+
+            // Look up activity code name if we have an ID
+            let codeName = null;
+            if (activity.activityCodeId && activityCodesById[activity.activityCodeId]) {
+              codeName = activityCodesById[activity.activityCodeId].name || null;
+            }
+
+            const activityLabel =
+              (activity.description && activity.description.trim().length)
+                ? activity.description.trim()
+                : (codeName ||
+                   activity.activityCodeId ||
+                   (activity.countsAsPaidTime ? 'Paid time' : 'Unpaid time'));
+
+            const dateStr = shiftDateRaw
+              ? String(shiftDateRaw).substring(0, 10)
+              : start.toISOString().slice(0, 10);
 
             rows.push({
               date: dateStr,
               start,
               end,
-              durationMinutes: lengthMin,
-              activityLabel,
-              countsAsPaidTime: activity.countsAsPaidTime,
-              activityCodeId: activity.activityCodeId,
-              type: 'shift'
+              durationMinutes: durationMin,
+              activityLabel
             });
           });
         });
-
-        // Process full day time off markers (like Sick days)
-        const fullDayTimeOffMarkers = Array.isArray(userSchedule.fullDayTimeOffMarkers) ? userSchedule.fullDayTimeOffMarkers : [];
-        console.log(`Found ${fullDayTimeOffMarkers.length} full day time off markers`, fullDayTimeOffMarkers);
-
-        fullDayTimeOffMarkers.forEach(marker => {
-          const dateStr = marker.managementUnitDate;
-          const lengthMin = marker.lengthInMinutes || 480; // Default to 8 hours if not specified
-          
-          if (!dateStr) {
-            console.warn('Skipping marker missing managementUnitDate:', marker);
-            return;
-          }
-
-          // Use the API-based activity name lookup
-          const activityLabel = getActivityName(businessUnitId, marker.activityCodeId);
-
-          rows.push({
-            date: dateStr,
-            start: null, // No specific start time for full day off
-            end: null,   // No specific end time for full day off
-            durationMinutes: lengthMin,
-            activityLabel: activityLabel,
-            countsAsPaidTime: marker.isPaid !== false, // Default to true if not specified
-            activityCodeId: marker.activityCodeId,
-            type: 'fullDayOff'
-          });
-        });
-      }
+      });
 
       rows.sort((a, b) => {
         if (a.date === b.date) {
-          return (a.start || new Date(a.date)) - (b.start || new Date(b.date));
+          return a.start - b.start;
         }
         return a.date.localeCompare(b.date);
       });
 
-      console.log(`Extracted ${rows.length} activities total (${rows.filter(r => r.type === 'shift').length} shifts + ${rows.filter(r => r.type === 'fullDayOff').length} full day off)`);
       return rows;
     }
 
     function formatTime(d) {
-      if (!d) return 'All Day';
+      if (!d) return '';
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
