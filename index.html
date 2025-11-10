@@ -372,14 +372,30 @@
     function getActivityName(businessUnitId, activityCodeId) {
       if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
       
-      const activityCodes = activityCodesByBuId[businessUnitId];
+      // Default system activity codes - hardcoded
+      const systemCodes = {
+        '0': 'On Queue',
+        '1': 'Break', 
+        '2': 'Meal',
+        '3': 'Meeting',
+        '4': 'Off Queue',
+        '5': 'Time Off',
+        '6': 'Training',
+        '7': 'Agent Unavailable'
+      };
       
-      // Check business unit activity codes first
+      // First check if it's a system code
+      if (systemCodes[activityCodeId]) {
+        return systemCodes[activityCodeId];
+      }
+      
+      // If it's a UUID, check business unit activity codes
+      const activityCodes = activityCodesByBuId[businessUnitId];
       if (activityCodes && activityCodes[activityCodeId]) {
         return activityCodes[activityCodeId];
       }
       
-      // Return the code ID if not found
+      // Return the code ID if not found anywhere
       return activityCodeId;
     }
 
