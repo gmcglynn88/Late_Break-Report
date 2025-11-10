@@ -448,90 +448,85 @@
       });
     }
 
-    // ===== Extract activities from search result (matches your sample JSON) =====
+    // ===== Fixed function to extract activities from search result =====
     function extractUserActivitiesFromSearchResult(response, userId) {
+      console.log('Full response structure:', response);
+      
       let schedules = [];
+      let userSchedule = null;
 
+      // Handle the nested structure from your sample data
       if (response && response.userSchedules) {
-        // Your example: userSchedules is an object keyed by userId
-        if (Array.isArray(response.userSchedules)) {
-          schedules = response.userSchedules;
+        // Your data structure: userSchedules is an object keyed by userId
+        if (response.userSchedules[userId]) {
+          userSchedule = response.userSchedules[userId];
         } else {
-          if (userId && response.userSchedules[userId]) {
-            schedules = [response.userSchedules[userId]];
-          } else {
-            schedules = Object.values(response.userSchedules);
-          }
+          // Fallback: take the first user schedule if userId doesn't match key
+          const firstUserId = Object.keys(response.userSchedules)[0];
+          userSchedule = response.userSchedules[firstUserId];
         }
-      } else if (Array.isArray(response.schedules)) {
-        schedules = response.schedules;
-      } else if (Array.isArray(response.results)) {
-        schedules = response.results;
-      } else if (Array.isArray(response.entities)) {
-        schedules = response.entities;
-      } else if (Array.isArray(response)) {
-        schedules = response;
       }
 
-      console.log('UserSchedules parsed, schedule objects:', schedules.length);
-
-      const rows = [];
-
-      schedules.forEach(userSchedule => {
+      // If we found a user schedule, extract shifts and activities
+      if (userSchedule) {
         const shifts = Array.isArray(userSchedule.shifts) ? userSchedule.shifts : [];
+        console.log(`Found ${shifts.length} shifts for user`, shifts);
+
+        const rows = [];
 
         shifts.forEach(shift => {
-          const shiftDateRaw = shift.startDate || shift.date || null;
+          const shiftStartDate = shift.startDate ? new Date(shift.startDate) : null;
+          const shiftDateStr = shiftStartDate ? shiftStartDate.toISOString().slice(0, 10) : null;
+          
           const activities = Array.isArray(shift.activities) ? shift.activities : [];
+          console.log(`Shift ${shift.id} has ${activities.length} activities`, activities);
 
           activities.forEach(activity => {
-            const startIso = activity.startDate || activity.startTime || activity.startDateTime;
-            const endIso = activity.endDate || activity.endTime || activity.endDateTime;
-            const lengthMin = activity.lengthInMinutes || activity.lengthMinutes || null;
+            const startIso = activity.startDate;
+            const lengthMin = activity.lengthInMinutes;
 
-            if (!startIso) return;
+            if (!startIso || lengthMin == null) {
+              console.warn('Skipping activity missing startDate or lengthInMinutes:', activity);
+              return;
+            }
 
             const start = new Date(startIso);
-            let end = endIso ? new Date(endIso) : null;
+            const end = new Date(start.getTime() + lengthMin * 60000);
 
-            if (!end && lengthMin != null) {
-              end = new Date(start.getTime() + lengthMin * 60000);
-            }
+            const activityLabel = activity.description && activity.description.trim().length 
+              ? activity.description 
+              : (activity.activityCodeId === '0' ? 'Work' 
+                 : activity.activityCodeId === '1' ? 'Break' 
+                 : activity.activityCodeId === '72c7139f-e32f-4171-b5d1-ba5ad50096e6' ? 'Lunch' 
+                 : activity.activityCodeId || 'Activity');
 
-            let durationMin = lengthMin;
-            if (durationMin == null && end) {
-              durationMin = Math.round((end - start) / 60000);
-            }
-
-            const activityLabel =
-              (activity.description && activity.description.trim().length)
-                ? activity.description
-                : activity.activityCodeId ||
-                  (activity.countsAsPaidTime ? 'Paid time' : 'Unpaid time');
-
-            const dateStr = shiftDateRaw
-              ? String(shiftDateRaw).substring(0, 10)
-              : start.toISOString().slice(0, 10);
+            const dateStr = shiftDateStr || start.toISOString().slice(0, 10);
 
             rows.push({
               date: dateStr,
               start,
               end,
-              durationMinutes: durationMin,
-              activityLabel
+              durationMinutes: lengthMin,
+              activityLabel,
+              countsAsPaidTime: activity.countsAsPaidTime,
+              activityCodeId: activity.activityCodeId
             });
           });
         });
-      });
 
-      rows.sort((a, b) => {
-        if (a.date === b.date) {
-          return a.start - b.start;
-        }
-        return a.date.localeCompare(b.date);
-      });
+        rows.sort((a, b) => {
+          if (a.date === b.date) {
+            return a.start - b.start;
+          }
+          return a.date.localeCompare(b.date);
+        });
 
-      return rows;
+        console.log(`Extracted ${rows.length} activities total`);
+        return rows;
+      }
+
+      console.warn('No user schedule found in response');
+      return [];
     }
 
     function formatTime(d) {
