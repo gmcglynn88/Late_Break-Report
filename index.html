@@ -150,7 +150,7 @@
     let allUsers = [];
     let usersById = {};
     let allTeams = [];
-    let activityCodesByMuId = {}; // Cache for activity codes by management unit ID
+    let activityCodesByBuId = {}; // Cache for activity codes by business unit ID
 
     // ===== Auth bootstrap =====
     document.addEventListener('DOMContentLoaded', () => {
@@ -317,6 +317,9 @@
       if (!buId) return;
 
       try {
+        // Load activity codes for this business unit
+        await loadActivityCodes(buId);
+        
         const muResponse = await authorizedFetchJson(
           `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
         );
@@ -334,35 +337,12 @@
       }
     }
 
-    async function handleManagementUnitChange() {
-      const muId = document.getElementById('managementUnitSelect').value;
-      if (!muId) {
-        populateUserSelect(allUsers);
-        return;
-      }
-
+    // ===== New function to load activity codes from business unit =====
+    async function loadActivityCodes(businessUnitId) {
       try {
-        // Load activity codes for this management unit
-        await loadActivityCodes(muId);
-        
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
-        );
-        const list = muUsersResponse.entities || muUsersResponse.users || [];
-        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
-        populateUserSelect(enriched);
-      } catch (err) {
-        console.error('Error loading MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
-    }
-
-    // ===== New function to load activity codes =====
-    async function loadActivityCodes(managementUnitId) {
-      try {
-        console.log(`Loading activity codes for management unit: ${managementUnitId}`);
+        console.log(`Loading activity codes for business unit: ${businessUnitId}`);
         const activityCodesResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}/activitycodes`
+          `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(businessUnitId)}/activitycodes`
         );
         
         const activityCodes = activityCodesResponse.entities || [];
@@ -377,23 +357,23 @@
           };
         });
         
-        // Cache the activity codes for this management unit
-        activityCodesByMuId[managementUnitId] = activityCodeMap;
+        // Cache the activity codes for this business unit
+        activityCodesByBuId[businessUnitId] = activityCodeMap;
         
         return activityCodeMap;
       } catch (err) {
         console.error('Error loading activity codes:', err);
         // Return empty map but don't fail completely
-        activityCodesByMuId[managementUnitId] = {};
+        activityCodesByBuId[businessUnitId] = {};
         return {};
       }
     }
 
     // ===== Function to get activity name from code =====
-    function getActivityName(managementUnitId, activityCodeId) {
-      if (!managementUnitId || !activityCodeId) return 'Unknown Activity';
+    function getActivityName(businessUnitId, activityCodeId) {
+      if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
       
-      const activityCodes = activityCodesByMuId[managementUnitId];
+      const activityCodes = activityCodesByBuId[businessUnitId];
       if (activityCodes && activityCodes[activityCodeId]) {
         return activityCodes[activityCodeId].name;
       }
@@ -405,6 +385,26 @@
       };
       
       return fallbackNames[activityCodeId] || activityCodeId || 'Unknown Activity';
+    }
+
+    async function handleManagementUnitChange() {
+      const muId = document.getElementById('managementUnitSelect').value;
+      if (!muId) {
+        populateUserSelect(allUsers);
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
+        );
+        const list = muUsersResponse.entities || muUsersResponse.users || [];
+        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
+        populateUserSelect(enriched);
+      } catch (err) {
+        console.error('Error loading MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
     }
 
     async function handleTeamChange() {
@@ -474,7 +474,7 @@
       try {
         const searchResult = await searchSchedules(muId, userId, startDateIso, endDateIso, true);
         console.log('Raw WFM search result:', searchResult);
-        const activities = extractUserActivitiesFromSearchResult(searchResult, userId, muId);
+        const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buId);
         console.log('Extracted activities count:', activities.length);
         renderScheduleResults(resultsDiv, activities, userId, startDateIso, endDateIso, searchResult);
       } catch (err) {
@@ -503,10 +503,9 @@
     }
 
     // ===== Fixed function to extract activities from search result =====
-    function extractUserActivitiesFromSearchResult(response, userId, managementUnitId) {
+    function extractUserActivitiesFromSearchResult(response, userId, businessUnitId) {
       console.log('Full response structure:', response);
       
-      let schedules = [];
       let userSchedule = null;
 
       // Handle the nested structure from your sample data
@@ -521,12 +520,13 @@
         }
       }
 
-      // If we found a user schedule, extract shifts and activities
+      const rows = [];
+
+      // If we found a user schedule, extract shifts and full day time off markers
       if (userSchedule) {
+        // Process shifts (regular scheduled activities)
         const shifts = Array.isArray(userSchedule.shifts) ? userSchedule.shifts : [];
         console.log(`Found ${shifts.length} shifts for user`, shifts);
-
-        const rows = [];
 
         shifts.forEach(shift => {
           const shiftStartDate = shift.startDate ? new Date(shift.startDate) : null;
@@ -550,7 +550,7 @@
             // Use the API-based activity name lookup
             const activityLabel = activity.description && activity.description.trim().length 
               ? activity.description 
-              : getActivityName(managementUnitId, activity.activityCodeId);
+              : getActivityName(businessUnitId, activity.activityCodeId);
 
             const dateStr = shiftDateStr || start.toISOString().slice(0, 10);
 
@@ -561,24 +561,56 @@
               durationMinutes: lengthMin,
               activityLabel,
               countsAsPaidTime: activity.countsAsPaidTime,
-              activityCodeId: activity.activityCodeId
+              activityCodeId: activity.activityCodeId,
+              type: 'shift'
             });
           });
         });
 
-        rows.sort((a, b) => {
-          if (a.date === b.date) {
-            return a.start - b.start;
-          }
-          return a.date.localeCompare(b.date);
-        });
+        // Process full day time off markers (like Sick days)
+        const fullDayTimeOffMarkers = Array.isArray(userSchedule.fullDayTimeOffMarkers) ? userSchedule.fullDayTimeOffMarkers : [];
+        console.log(`Found ${fullDayTimeOffMarkers.length} full day time off markers`, fullDayTimeOffMarkers);
 
-        console.log(`Extracted ${rows.length} activities total`);
-        return rows;
+        fullDayTimeOffMarkers.forEach(marker => {
+          const dateStr = marker.managementUnitDate;
+          const lengthMin = marker.lengthInMinutes || 480; // Default to 8 hours if not specified
+          
+          if (!dateStr) {
+            console.warn('Skipping marker missing managementUnitDate:', marker);
+            return;
+          }
+
+          // Create a full day activity (typically 9 AM to 5 PM)
+          const start = new Date(`${dateStr}T09:00:00Z`);
+          const end = new Date(`${dateStr}T17:00:00Z`);
+
+          // Use the API-based activity name lookup
+          const activityLabel = marker.description && marker.description.trim().length 
+            ? marker.description 
+            : getActivityName(businessUnitId, marker.activityCodeId);
+
+          rows.push({
+            date: dateStr,
+            start,
+            end,
+            durationMinutes: lengthMin,
+            activityLabel: `${activityLabel} (Full Day)`,
+            countsAsPaidTime: marker.isPaid !== false, // Default to true if not specified
+            activityCodeId: marker.activityCodeId,
+            type: 'fullDayOff'
+          });
+        });
       }
 
-      console.warn('No user schedule found in response');
-      return [];
+      rows.sort((a, b) => {
+        if (a.date === b.date) {
+          return a.start - b.start;
+        }
+        return a.date.localeCompare(b.date);
+      });
+
+      console.log(`Extracted ${rows.length} activities total (${rows.filter(r => r.type === 'shift').length} shifts + ${rows.filter(r => r.type === 'fullDayOff').length} full day off)`);
+      return rows;
     }
 
     function formatTime(d) {
@@ -633,6 +665,7 @@
                 <th>Start</th>
                 <th>End</th>
                 <th>Duration</th>
+                <th>Type</th>
               </tr>
             </thead>
             <tbody>
@@ -645,6 +678,7 @@
               <td>${escapeHtml(formatTime(row.start))}</td>
               <td>${escapeHtml(formatTime(row.end))}</td>
               <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
+              <td>${escapeHtml(row.type === 'fullDayOff' ? 'Full Day Off' : 'Shift')}</td>
             </tr>
           `;
         });
