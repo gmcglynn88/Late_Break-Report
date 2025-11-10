@@ -244,7 +244,9 @@
       document.getElementById('teamSelect').addEventListener('change', handleTeamChange);
 
       try {
-        await populateInitialData();
+        await Promise.all([
+          populateInitialData()
+        ]);
         showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
       } catch (err) {
         console.error('Error initialising app:', err);
@@ -417,7 +419,9 @@
 
       try {
         const searchResult = await searchSchedules(muId, userId, startDateIso, endDateIso, true);
+        console.log('Raw WFM search result:', searchResult);
         const activities = extractUserActivitiesFromSearchResult(searchResult, userId);
+        console.log('Extracted activities count:', activities.length);
         renderScheduleResults(resultsDiv, activities, userId, startDateIso, endDateIso, searchResult);
       } catch (err) {
         console.error('Error loading schedule:', err);
@@ -444,11 +448,12 @@
       });
     }
 
-    // ===== Extract activities from search result (handles userSchedules keyed by userId) =====
+    // ===== Extract activities from search result (matches your sample JSON) =====
     function extractUserActivitiesFromSearchResult(response, userId) {
       let schedules = [];
 
       if (response && response.userSchedules) {
+        // Your example: userSchedules is an object keyed by userId
         if (Array.isArray(response.userSchedules)) {
           schedules = response.userSchedules;
         } else {
@@ -467,6 +472,8 @@
       } else if (Array.isArray(response)) {
         schedules = response;
       }
+
+      console.log('UserSchedules parsed, schedule objects:', schedules.length);
 
       const rows = [];
 
@@ -499,8 +506,7 @@
             const activityLabel =
               (activity.description && activity.description.trim().length)
                 ? activity.description
-                : (activity.activityCode && activity.activityCode.name) ||
-                  activity.activityCodeId ||
+                : activity.activityCodeId ||
                   (activity.countsAsPaidTime ? 'Paid time' : 'Unpaid time');
 
             const dateStr = shiftDateRaw
