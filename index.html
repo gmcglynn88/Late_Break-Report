@@ -2,882 +2,615 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <title>Schedule Viewer (MU Search)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Attendance Insights - By IPI</title>
   <style>
     :root{
       --primary-color:#63AB8F; --secondary-color:#4A8C7D; --border-color:#DEE2E6;
       --light-bg:#F8F9FA; --card-bg:#FFFFFF; --text-color:#2C3E50; --text-light:#6C757D;
       --pill:#e9f6f0;
     }
-    body{font-family:"Aptos","Segoe UI",Arial,sans-serif;margin:20px;padding:20px;max-width:1400px;background:var(--light-bg);color:var(--text-color)}
-    #logo-container{text-align:center;margin-bottom:20px} #logo{width:300px}
+    body{
+      font-family:'Aptos','Segoe UI',system-ui,-apple-system,Arial,sans-serif;
+      margin:20px;padding:20px;max-width:1200px;background:var(--light-bg);color:var(--text-color)
+    }
+    #logo-container{text-align:center;margin-bottom:20px}
+    #logo{width:300px}
     h1{margin:0 0 16px}
-    .card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:24px;margin-top:16px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .card{
+      background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;
+      padding:24px;margin-top:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)
+    }
     label{display:block;font-weight:600;margin-bottom:6px}
-    select,input,button{padding:10px;border:1px solid var(--border-color);border-radius:6px;background:var(--card-bg);font-size:14px}
-    button{background:var(--primary-color);color:#fff;font-weight:600;cursor:pointer;transition:background .2s}
-    button:hover{background:var(--secondary-color)} button:disabled{background:var(--text-light);cursor:not-allowed}
-    .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px 24px;align-items:start}
-    .inline{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center} .inline span{color:var(--text-light)}
+    input,select,button,textarea{
+      padding:10px;border:1px solid var(--border-color);border-radius:6px;background:#fff;font-size:14px
+    }
+    button{
+      background:var(--primary-color);color:#fff;font-weight:600;cursor:pointer;transition:background .2s
+    }
+    button:hover{background:var(--secondary-color)}
+    button:disabled{background:var(--text-light);cursor:not-allowed}
+    .controls{
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:end
+    }
     .full-width-btn{width:100%;padding:14px 18px;font-size:16px;margin-top:12px}
-    .muted{color:var(--text-light)} .mono{font-family:ui-monospace,Consolas,Menlo,monospace}
-    .loading{opacity:.6;pointer-events:none}
-    .progress-bar{width:100%;height:8px;background:var(--border-color);border-radius:4px;overflow:hidden;margin:10px 0}
-    .progress-fill{height:100%;background:var(--primary-color);transition:width .3s}
-    .stats{display:flex;gap:16px;margin:16px 0;flex-wrap:wrap}
-    .stat-card{flex:1;min-width:180px;border:1px solid var(--border-color);border-radius:8px;padding:16px;text-align:center;background:var(--card-bg)}
-    .stat-number{font-size:22px;color:#63AB8F;font-weight:700}
-    .stat-label{font-size:13px;color:var(--text-light)}
-    .filter-controls{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap}
-    .filter-controls > *{flex:1;min-width:160px}
-    .future-date{color:#ccc;cursor:not-allowed}
-    .attendance-table{width:100%;border-collapse:collapse;margin-top:12px}
-    .attendance-table th,.attendance-table td{border-bottom:1px solid var(--border-color);padding:8px 10px;vertical-align:top}
-    .attendance-table th{background:var(--primary-color);color:#fff;text-align:left}
-    .late-yes{color:#dc2626;font-weight:700}
-    .late-no{color:#16a34a;font-weight:700}
-    .on-time{color:#16a34a;font-weight:600}
-    .late{color:#dc2626;font-weight:600}
-    .activity-timeline {background: #f8f9fa; border-radius: 8px; padding: 12px; margin-top: 8px;}
-    .activity-item {display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #e9ecef;}
-    .activity-item:last-child {border-bottom: none;}
-    .activity-time {font-family: ui-monospace, Consolas, Menlo, monospace; color: #495057;}
-    .activity-status {font-weight: 600; color: #2c3e50;}
-    .schedule-match {background-color: #f0f9ff; border-left: 4px solid #3b82f6;}
-    .schedule-mismatch {background-color: #fef2f2; border-left: 4px solid #ef4444;}
-    
-    /* Tab Styles */
-    .tabs {display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px;}
-    .tab {padding: 12px 24px; background: var(--light-bg); border: 1px solid var(--border-color); border-bottom: none; border-radius: 8px 8px 0 0; margin-right: 4px; cursor: pointer; transition: all 0.2s;}
-    .tab:hover {background: var(--card-bg);}
-    .tab.active {background: var(--primary-color); color: white; border-color: var(--primary-color);}
-    .tab-content {display: none;}
-    .tab-content.active {display: block;}
-    
-    /* Status badges */
-    .status-adherent {color: #16a34a; font-weight: 600;}
-    .status-nonadherent {color: #dc2626; font-weight: 600;}
-    .status-unscheduled {color: #6b7280; font-weight: 600;}
-    .status-exception {color: #d97706; font-weight: 600;}
+    .muted{color:var(--text-light);font-size:12px;margin-top:4px}
+    .section-title{margin:0 0 10px;color:var(--secondary-color)}
+
+    #messageContainer{display:none;margin-top:12px}
+    .error-message{
+      color:#b4231a;background:#fee2e2;border:1px solid:#fecaca;padding:10px;border-radius:6px
+    }
+    .success-message{
+      color:#14532d;background:#dcfce7;border:1px solid:#bbf7d0;padding:10px;border-radius:6px
+    }
+    .info-message{
+      color:#6b4e16;background:#fff7ed;border:1px solid:#ffedd5;padding:10px;border-radius:6px
+    }
+
+    .schedule-table{width:100%;border-collapse:collapse;margin-top:16px}
+    .schedule-table th,.schedule-table td{
+      border:1px solid var(--border-color);padding:8px;font-size:13px
+    }
+    .schedule-table th{background:var(--light-bg);text-align:left}
+    .pill{
+      display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;
+      background:var(--pill);font-size:11px;color:var(--secondary-color)
+    }
+    .schedule-meta{margin-top:8px;font-size:12px;color:var(--text-light)}
+    details pre{
+      max-height:250px;overflow:auto;background:#0f172a;color:#e5e7eb;
+      padding:10px;border-radius:6px;font-size:11px
+    }
   </style>
 </head>
 <body>
   <div id="logo-container">
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
-  <h1>Attendance Insights - By IPI</h1>
-  <button id="signinBtn" style="display:none;margin-bottom:12px;">Sign in to Genesys Cloud</button>
 
-  <div id="authStatus" class="card" style="display:none;">
-    <div style="text-align:center;padding:20px;">
-      <div style="font-size:18px;color:var(--secondary-color);margin-bottom:8px;">🔐 Authenticating…</div>
-      <div class="muted">Connecting to Genesys Cloud</div>
-    </div>
+  <h1>Schedule Viewer</h1>
+
+  <div id="authCard" class="card">
+    <div id="auth-message" class="info-message">Authenticating with Genesys Cloud...</div>
   </div>
 
-  <div id="mainContent" style="display:none;">
-    <!-- Tab Navigation -->
-    <div class="tabs">
-      <div class="tab active" data-tab="adherence">Schedule vs Actual</div>
-      <div class="tab" data-tab="details">Detailed Breakdown</div>
-    </div>
+  <div id="appContent" style="display:none;">
+    <div id="messageContainer"></div>
 
-    <!-- Controls Card -->
     <div class="card">
-      <h2 style="margin:0 0 12px;">Select Date Range & Management Unit</h2>
+      <h2 class="section-title">Filters</h2>
       <div class="controls">
         <div>
-          <label>Date Range</label>
-          <div class="inline">
-            <input id="fromDate" type="date"/>
-            <span>to</span>
-            <input id="toDate" type="date"/>
-          </div>
-          <div class="muted" style="margin-top:6px;font-size:13px;">
-            Historical adherence data for schedule vs actual comparison.
-          </div>
+          <label for="businessUnitSelect">Business Unit</label>
+          <select id="businessUnitSelect">
+            <option value="">Select business unit</option>
+          </select>
+          <div class="muted">Required</div>
         </div>
+
         <div>
-          <label>Management Unit</label>
-          <select id="managementUnitSelect">
-            <option value="">Loading management units...</option>
+          <label for="managementUnitSelect">Management Unit</label>
+          <select id="managementUnitSelect" disabled>
+            <option value="">Select management unit</option>
           </select>
-          
-          <label style="margin-top:12px;">User Filter</label>
+          <div class="muted">Required for schedule search</div>
+        </div>
+
+        <div>
+          <label for="teamSelect">Team</label>
+          <select id="teamSelect">
+            <option value="">All teams</option>
+          </select>
+          <div class="muted">Optional – narrows users by team</div>
+        </div>
+
+        <div>
+          <label for="userSelect">User</label>
           <select id="userSelect">
-            <option value="all">All users</option>
+            <option value="">Select user</option>
           </select>
-          
-          <input id="userSearch" type="text" placeholder="Search by user name" style="margin-top:8px;width:100%"/>
+          <div class="muted">Required – schedule shown for this user</div>
+        </div>
+
+        <div>
+          <label for="startDate">Start date</label>
+          <input type="date" id="startDate" />
+          <div class="muted">e.g. 2025-11-03</div>
+        </div>
+
+        <div>
+          <label for="endDate">End date</label>
+          <input type="date" id="endDate" />
+          <div class="muted">e.g. 2025-11-08</div>
         </div>
       </div>
-      <button id="fetchAdherenceBtn" class="full-width-btn">Fetch Schedule vs Actual Data</button>
+
+      <button id="loadScheduleBtn" class="full-width-btn">Load Schedule</button>
     </div>
 
-    <div id="statusMessage" class="muted" style="margin-top:10px;"></div>
-    <div id="errorMessage" style="color:#dc2626;margin-top:6px;"></div>
-
-    <div id="progressSection" style="display:none;">
-      <div class="card">
-        <h3 style="margin:0 0 8px;" id="progressTitle">Processing Historical Adherence</h3>
-        <div class="muted" id="progressInfo">Starting adherence query job…</div>
-        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-        <div style="display:flex;justify-content:space-between;font-size:14px" class="muted">
-          <span id="progressText">0%</span><span id="chunkText">Step 0/0</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Adherence Tab -->
-    <div id="adherenceTab" class="tab-content active">
-      <div class="card">
-        <h2 style="margin:0 0 12px;">Schedule vs Actual Adherence</h2>
-        <div class="stats">
-          <div class="stat-card">
-            <div class="stat-number" id="totalShifts">0</div>
-            <div class="stat-label">Total Scheduled Shifts</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="adherentShifts">0</div>
-            <div class="stat-label">Adherent Shifts</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="nonAdherentShifts">0</div>
-            <div class="stat-label">Non-Adherent Shifts</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="adherenceRate">0%</div>
-            <div class="stat-label">Adherence Rate</div>
-          </div>
-        </div>
-        <div id="adherenceResults"></div>
-      </div>
-    </div>
-
-    <!-- Details Tab -->
-    <div id="detailsTab" class="tab-content">
-      <div class="card">
-        <h2 style="margin:0 0 12px;">Detailed Activity Breakdown</h2>
-        <div class="stats">
-          <div class="stat-card">
-            <div class="stat-number" id="totalActivities">0</div>
-            <div class="stat-label">Total Activities</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="scheduledTime">0h</div>
-            <div class="stat-label">Scheduled Time</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="actualTime">0h</div>
-            <div class="stat-label">Actual Time</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="exceptionTime">0h</div>
-            <div class="stat-label">Exception Time</div>
-          </div>
-        </div>
-        <div id="detailsResults"></div>
-      </div>
-    </div>
+    <div id="results" class="card" style="display:none;"></div>
   </div>
 
   <script>
-    // ===== Config =====
-    const CONFIG = {
-      clientId: 'fe305808-b368-4547-8af9-325d28d552bb',
-      redirectUri: 'https://gmcglynn88.github.io/Late_Break-Report/',
-      loginHost: 'https://login.mypurecloud.ie',
-      apiHost: 'https://api.mypurecloud.ie'
-    };
+    // ===== OAuth Config =====
+    const clientId = 'fe305808-b368-4547-8af9-325d28d552bb';
+    // Update this to the URL where THIS file is hosted
+    const redirectUri = 'https://gmcglynn88.github.io/Late_Break-Report/';
 
-    // ===== State =====
-    const state = {
-      token: null,
-      users: [],
-      usersById: {},
-      teams: [],
-      teamMembersByTeamId: {},
-      teamsByUserId: {},
-      managementUnits: [],
-      activityCodes: {},
-      adherenceData: [],
-      activityRows: [],
-      currentJobId: null
-    };
+    const oauthUrl =
+      'https://login.mypurecloud.ie/oauth/authorize?client_id=' +
+      encodeURIComponent(clientId) +
+      '&response_type=token&redirect_uri=' +
+      encodeURIComponent(redirectUri);
 
-    // ===== Utils =====
-    const $ = id => document.getElementById(id);
-    const setStatus = (msg,err=false)=>{ 
-      $('statusMessage').textContent = err?'':(msg||''); 
-      $('errorMessage').textContent = err?(msg||''):''; 
-    };
-    const fmt = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleString()}catch{return 'N/A'} };
-    const fmtTime = d => { if(!d) return 'N/A'; try{return new Date(d).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}catch{return 'N/A'} };
-    const fmtDMY = s => { if(!s||s.length<10) return s||''; const [y,m,d]=s.slice(0,10).split('-'); return `${d}-${m}-${y}`; };
-    function setLoading(v){ $('mainContent').classList.toggle('loading', !!v); }
-    function updateProgress(p,cur,total){ $('progressFill').style.width = `${p}%`; $('progressText').textContent = `${Math.round(p)}%`; $('chunkText').textContent = `Step ${cur}/${total}`; }
-    function showProgress(info, title = "Processing Data"){ 
-      $('progressSection').style.display='block'; 
-      $('progressTitle').textContent = title;
-      $('progressInfo').textContent = info || ''; 
-    }
-    function hideProgress(){ $('progressSection').style.display='none'; }
+    const apiBase = 'https://api.mypurecloud.ie';
 
-    // Format minutes to hours
-    function formatHours(minutes) {
-      if (!minutes || minutes <= 0) return '0h';
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-    }
+    let accessToken = null;
+    let allUsers = [];
+    let usersById = {};
+    let allTeams = [];
 
-    // Format duration
-    function formatDuration(minutes) {
-      if (!minutes || minutes <= 0) return '0m';
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      if (hours > 0) {
-        return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-      }
-      return `${mins}m`;
-    }
+    // ===== Auth bootstrap =====
+    document.addEventListener('DOMContentLoaded', () => {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const qparams = new URLSearchParams(window.location.search);
 
-    // Add helper function to escape HTML
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
+      const oauthError = params.get('error') || qparams.get('error');
+      const oauthErrorDesc = params.get('error_description') || qparams.get('error_description');
 
-    // ===== Tab Management =====
-    function setupTabs() {
-      const tabs = document.querySelectorAll('.tab');
-      tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-          
-          tab.classList.add('active');
-          const tabName = tab.getAttribute('data-tab');
-          $(`${tabName}Tab`).classList.add('active');
-        });
-      });
-    }
-
-    // ===== Date Range Limiting =====
-    function setupDateLimits() {
-      const today = new Date().toISOString().split('T')[0];
-      $('fromDate').max = today; $('toDate').max = today;
-      $('fromDate').addEventListener('change', function() {
-        if (this.value > today) this.value = today;
-        if ($('toDate').value && this.value > $('toDate').value) $('toDate').value = this.value;
-      });
-      $('toDate').addEventListener('change', function() {
-        if (this.value > today) this.value = today;
-        if ($('fromDate').value && this.value < $('fromDate').value) $('fromDate').value = this.value;
-      });
-    }
-
-    // ===== Auth =====
-    function parseTokenFromHash(){
-      const params = new URLSearchParams(location.hash.replace(/^#/, ''));
-      return { token: params.get('access_token'), error: params.get('error'), errorDescription: params.get('error_description') };
-    }
-    function authUrl(){
-      return `${CONFIG.loginHost}/oauth/authorize?client_id=${encodeURIComponent(CONFIG.clientId)}&response_type=token&redirect_uri=${encodeURIComponent(CONFIG.redirectUri)}`;
-    }
-    function showMain(){ $('authStatus').style.display='none'; $('mainContent').style.display='block'; }
-
-    function initAuth(){
-      const {token, error} = parseTokenFromHash();
-      if(location.hash) history.replaceState(null,'',location.pathname);
-
-      if(token){
-        sessionStorage.removeItem('gc_auto_auth_attempted');
-        state.token = token;
-        showMain();
-        setupDateLimits();
-        setupTabs();
-        fetchManagementUnits();
-        fetchAllUsers();
-        fetchAllTeamsAndMembers();
+      if (oauthError) {
+        const msg = document.getElementById('auth-message');
+        msg.textContent = `OAuth error: ${oauthErrorDesc || oauthError}`;
+        msg.className = 'error-message';
+        console.error('OAuth error details:', { error: oauthError, description: oauthErrorDesc });
         return;
       }
 
-      const attempted = sessionStorage.getItem('gc_auto_auth_attempted');
-      if(!attempted && !error){
-        sessionStorage.setItem('gc_auto_auth_attempted','1');
-        $('authStatus').style.display='block';
-        location.assign(authUrl());
-        return;
-      }
+      accessToken = params.get('access_token');
 
-      $('signinBtn').style.display = 'inline-block';
-      $('signinBtn').onclick = () => { sessionStorage.setItem('gc_auto_auth_attempted','1'); location.assign(authUrl()); };
-      $('authStatus').style.display = 'none';
+      if (accessToken) {
+        sessionStorage.setItem('purecloud_token', accessToken);
+        window.location.hash = '';
+        initializeApplication();
+      } else if (sessionStorage.getItem('purecloud_token')) {
+        accessToken = sessionStorage.getItem('purecloud_token');
+        initializeApplication();
+      } else {
+        window.location.href = oauthUrl;
+      }
+    });
+
+    function showMessage(msg, type = 'error') {
+      const box = document.getElementById('messageContainer');
+      box.innerHTML = `<div class="${type}-message">${msg}</div>`;
+      box.style.display = 'block';
+      if (type === 'success' || type === 'info') {
+        setTimeout(() => { box.style.display = 'none'; }, 6000);
+      }
     }
 
-    // ===== API helper =====
-    async function api(path, options = {}){
-      if(!state.token) throw new Error('Not authenticated');
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${state.token}`,
-          ...options.headers
-        },
-        ...options
+    function initializeApplication() {
+      document.getElementById('auth-message').textContent = 'Authenticated successfully!';
+      document.getElementById('authCard').style.display = 'none';
+      document.getElementById('appContent').style.display = 'block';
+
+      initializeScheduleApp();
+    }
+
+    function authorizedFetch(url, options = {}) {
+      const headers = {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
       };
-      
-      const res = await fetch(`${CONFIG.apiHost}${path}`, config);
-      if(res.status===401||res.status===403) throw new Error(`Authentication error (${res.status}). Please refresh.`);
-      if(!res.ok){ 
-        const t = await res.text().catch(()=> '');
-        throw new Error(`API Error: ${res.status} ${res.statusText}${t?` - ${t.slice(0,200)}`:''}`);
+      return fetch(url, { ...options, headers });
+    }
+
+    async function authorizedFetchJson(url, options = {}) {
+      const response = await authorizedFetch(url, options);
+      if (!response.ok) {
+        throw new Error(`Error calling ${url}: ${response.status} ${response.statusText}`);
       }
-      return res.json();
+      return response.json();
     }
 
-    // ===== Management Units =====
-    async function fetchManagementUnits(){
-      try{
-        const data = await api('/api/v2/workforcemanagement/managementunits');
-        state.managementUnits = data.entities || [];
-        const select = $('managementUnitSelect');
-        select.innerHTML = '<option value="">Select Management Unit</option>' +
-          state.managementUnits.map(mu => `<option value="${mu.id}">${mu.name}</option>`).join('');
-      }catch(e){
-        console.error('Failed to fetch management units:', e);
-        $('managementUnitSelect').innerHTML = '<option value="">Failed to load management units</option>';
-      }
-    }
+    async function fetchAllPages(url) {
+      let allItems = [];
+      let pageNumber = 1;
+      let hasMorePages = true;
 
-    // ===== Users =====
-    async function fetchAllUsers(){
-      try{
-        setStatus('Loading users…'); setLoading(true);
-        let all=[], page=1, size=100;
-        while(true){
-          const data = await api(`/api/v2/users?pageSize=${size}&pageNumber=${page}`);
-          const ents = data?.entities||[];
-          all = all.concat(ents);
-          if(!data?.nextUri || ents.length<size) break;
-          page++;
-        }
-        state.users = all.map(u=>({id:u.id,name:u.name||'',email:u.email||''})).sort((a,b)=>a.name.localeCompare(b.name));
-        state.usersById = {};
-        state.users.forEach(u=>{ state.usersById[u.id]=u; });
-        populateUserSelect(state.users);
-        setStatus(`Loaded ${state.users.length} users`);
-      }catch(e){
-        setStatus(`Failed to load users: ${e.message}`, true);
-        $('userSelect').innerHTML='<option value="all">Failed to load users</option>';
-      }finally{ setLoading(false); }
-    }
-
-    function populateUserSelect(users){
-      const sel=$('userSelect');
-      sel.innerHTML = '<option value="all">All users</option>' +
-        users.map(u=>`<option value="${u.id}">${u.name||'(Unnamed)'}</option>`).join('');
-    }
-
-    // ===== Teams & members =====
-    async function fetchAllTeamsAndMembers(){
-      try{
-        setLoading(true);
-        setStatus('Loading teams…');
-
-        let all=[], page=1, size=100;
-        while(true){
-          const data = await api(`/api/v2/teams?pageSize=${size}&pageNumber=${page}`);
-          const ents = data?.entities||[];
-          all = all.concat(ents);
-          if(!data?.nextUri || ents.length<size) break;
-          page++;
-        }
-        state.teams = all.map(t=>({id:t.id,name:t.name||'(Unnamed team)'})).sort((a,b)=>a.name.localeCompare(b.name));
-
-        state.teamMembersByTeamId = {};
-        state.teamsByUserId = {};
-        
-        setStatus('Users & teams loaded');
-      }catch(e){
-        console.error(e);
-        setStatus('Failed to load teams: ' + e.message, true);
-      }finally{
-        setLoading(false);
-      }
-    }
-
-    // ===== Activity Codes =====
-    async function fetchActivityCodes(businessUnitId) {
-      try {
-        console.log('Fetching activity codes for business unit:', businessUnitId);
-        const data = await api(`/api/v2/workforcemanagement/businessunits/${businessUnitId}/activitycodes`);
-        state.activityCodes = {};
-        
-        (data.entities || []).forEach(activity => {
-          state.activityCodes[activity.id] = {
-            name: activity.name,
-            category: activity.category
-          };
-        });
-        
-        console.log('Loaded activity codes:', state.activityCodes);
-        return state.activityCodes;
-      } catch (e) {
-        console.error('Failed to fetch activity codes:', e);
-        return {};
-      }
-    }
-
-    // ===== HISTORICAL ADHERENCE API INTEGRATION =====
-    async function startHistoricalAdherenceQuery(managementUnitId, fromDate, toDate) {
-      console.log('Starting historical adherence query...');
-      
-      const requestBody = {
-        startDate: `${fromDate}T00:00:00.000Z`,
-        endDate: `${toDate}T23:59:59.999Z`,
-        includeExceptions: true
-      };
-
-      console.log('Adherence request body:', requestBody);
-
-      try {
-        const response = await api(
-          `/api/v2/workforcemanagement/managementunits/${managementUnitId}/historicaladherencequery`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-          }
-        );
-
-        console.log('Adherence query started:', response);
-        return response.id; // Returns the job ID
-      } catch (e) {
-        console.error('Failed to start adherence query:', e);
-        throw e;
-      }
-    }
-
-    async function checkAdherenceJobStatus(jobId) {
-      try {
-        const response = await api(`/api/v2/workforcemanagement/adherence/historical/jobs/${jobId}`);
-        console.log('Job status:', response);
-        return response;
-      } catch (e) {
-        console.error('Failed to check job status:', e);
-        throw e;
-      }
-    }
-
-    async function downloadAdherenceResults(downloadUrl) {
-      try {
-        console.log('Downloading adherence results from:', downloadUrl);
-        const response = await fetch(downloadUrl, {
-          headers: {
-            'Authorization': `Bearer ${state.token}`
-          }
-        });
-        
+      while (hasMorePages) {
+        const response = await authorizedFetch(`${url}?pageNumber=${pageNumber}&pageSize=100`);
         if (!response.ok) {
-          throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+          throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
         }
-        
         const data = await response.json();
-        console.log('Downloaded adherence data:', data);
-        return data;
-      } catch (e) {
-        console.error('Failed to download adherence results:', e);
-        throw e;
+        allItems = allItems.concat(data.entities || []);
+        if (data.pageCount && data.pageCount > pageNumber) {
+          pageNumber++;
+        } else {
+          hasMorePages = false;
+        }
+      }
+      return allItems;
+    }
+
+    async function initializeScheduleApp() {
+      document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
+      document.getElementById('businessUnitSelect').addEventListener('change', handleBusinessUnitChange);
+      document.getElementById('managementUnitSelect').addEventListener('change', handleManagementUnitChange);
+      document.getElementById('teamSelect').addEventListener('change', handleTeamChange);
+
+      try {
+        await populateInitialData();
+        showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
+      } catch (err) {
+        console.error('Error initialising app:', err);
+        showMessage(`Error loading initial data: ${err.message}`, 'error');
       }
     }
 
-    async function waitForJobCompletion(jobId, maxWaitTime = 120000) {
-      const startTime = Date.now();
-      const checkInterval = 2000; // Check every 2 seconds
-      
-      while (Date.now() - startTime < maxWaitTime) {
-        const jobStatus = await checkAdherenceJobStatus(jobId);
-        
-        if (jobStatus.queryState === 'Complete') {
-          console.log('Job completed successfully');
-          return jobStatus;
-        } else if (jobStatus.queryState === 'Failed') {
-          throw new Error('Historical adherence query failed');
-        } else if (jobStatus.queryState === 'Error') {
-          throw new Error('Historical adherence query encountered an error');
-        }
-        
-        // Show progress
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min((elapsed / maxWaitTime) * 100, 90);
-        updateProgress(progress, 2, 3);
-        
-        // Wait before checking again
-        await new Promise(resolve => setTimeout(resolve, checkInterval));
-      }
-      
-      throw new Error('Job timed out waiting for completion');
+    async function populateInitialData() {
+      const [users, businessUnitsResponse, teams] = await Promise.all([
+        fetchAllPages(`${apiBase}/api/v2/users`),
+        authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
+        fetchAllPages(`${apiBase}/api/v2/teams`)
+      ]);
+
+      allUsers = (users || []).filter(u => !u.deleted);
+      usersById = {};
+      allUsers.forEach(u => { usersById[u.id] = u; });
+
+      populateUserSelect(allUsers);
+      populateBusinessUnitSelect(businessUnitsResponse);
+      populateTeamSelect(teams);
     }
 
-    // ===== Process Adherence Data =====
-    function processAdherenceData(adherenceResults) {
-      const adherenceRows = [];
-      const activityRows = [];
-      
-      let totalShifts = 0;
-      let adherentShifts = 0;
-      let nonAdherentShifts = 0;
-      let totalScheduledMinutes = 0;
-      let totalActualMinutes = 0;
-      let totalExceptionMinutes = 0;
-
-      // Process each user's adherence data
-      adherenceResults.forEach(userResult => {
-        const userId = userResult.userId;
-        const userName = state.usersById[userId]?.name || `User ${userId}`;
-        
-        // Process scheduled shifts
-        if (userResult.scheduledActivities) {
-          userResult.scheduledActivities.forEach(shift => {
-            totalShifts++;
-            totalScheduledMinutes += shift.scheduledActivityMinutes || 0;
-            
-            const isAdherent = shift.adherenceStatus === 'Adherent';
-            if (isAdherent) adherentShifts++;
-            else nonAdherentShifts++;
-            
-            const userTeams = state.teamsByUserId[userId] || [];
-            const teamNames = userTeams.map(t => t.name).join(', ');
-            
-            adherenceRows.push({
-              userId,
-              userName,
-              teamNames,
-              date: shift.startDate ? shift.startDate.slice(0, 10) : 'Unknown',
-              scheduledStart: shift.startDate,
-              scheduledEnd: shift.endDate,
-              scheduledActivity: state.activityCodes[shift.activityCodeId]?.name || `Activity ${shift.activityCodeId}`,
-              actualStatus: shift.actualActivity ? (state.activityCodes[shift.actualActivity]?.name || `Activity ${shift.actualActivity}`) : 'No Activity',
-              adherenceStatus: shift.adherenceStatus || 'Unknown',
-              scheduledMinutes: shift.scheduledActivityMinutes || 0,
-              actualMinutes: shift.actualActivityMinutes || 0,
-              isAdherent: isAdherent
-            });
-          });
-        }
-        
-        // Process actual activities
-        if (userResult.actuals) {
-          userResult.actuals.forEach(activity => {
-            totalActualMinutes += activity.activityMinutes || 0;
-            
-            activityRows.push({
-              userId,
-              userName,
-              date: activity.startDate ? activity.startDate.slice(0, 10) : 'Unknown',
-              startTime: activity.startDate,
-              endTime: activity.endDate,
-              activityName: state.activityCodes[activity.activityCodeId]?.name || `Activity ${activity.activityCodeId}`,
-              activityMinutes: activity.activityMinutes || 0,
-              category: state.activityCodes[activity.activityCodeId]?.category || 'Unknown'
-            });
-          });
-        }
-        
-        // Process exceptions
-        if (userResult.exceptions) {
-          userResult.exceptions.forEach(exception => {
-            totalExceptionMinutes += exception.durationMinutes || 0;
-          });
-        }
+    function populateUserSelect(users) {
+      const userSelect = document.getElementById('userSelect');
+      userSelect.innerHTML = '<option value="">Select user</option>';
+      const sorted = [...users].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      sorted.forEach(user => {
+        const opt = document.createElement('option');
+        opt.value = user.id;
+        opt.text = user.name || user.id;
+        userSelect.add(opt);
       });
+    }
 
-      const adherenceRate = totalShifts > 0 ? ((adherentShifts / totalShifts) * 100).toFixed(1) : 0;
+    function populateBusinessUnitSelect(businessUnitsResponse) {
+      const buSelect = document.getElementById('businessUnitSelect');
+      buSelect.innerHTML = '<option value="">Select business unit</option>';
+      const list = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
+      list.forEach(bu => {
+        const opt = document.createElement('option');
+        opt.value = bu.id;
+        opt.text = bu.name || bu.id;
+        buSelect.add(opt);
+      });
+    }
 
-      return {
-        adherenceRows,
-        activityRows,
-        summary: {
-          totalShifts,
-          adherentShifts,
-          nonAdherentShifts,
-          adherenceRate,
-          totalScheduledMinutes,
-          totalActualMinutes,
-          totalExceptionMinutes
+    function populateTeamSelect(teams) {
+      allTeams = teams || [];
+      const teamSelect = document.getElementById('teamSelect');
+      teamSelect.innerHTML = '<option value="">All teams</option>';
+      const sorted = [...allTeams].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      sorted.forEach(team => {
+        const opt = document.createElement('option');
+        opt.value = team.id;
+        opt.text = team.name || team.id;
+        teamSelect.add(opt);
+      });
+    }
+
+    async function handleBusinessUnitChange() {
+      const buId = document.getElementById('businessUnitSelect').value;
+      const muSelect = document.getElementById('managementUnitSelect');
+      muSelect.innerHTML = '<option value="">Select management unit</option>';
+      muSelect.disabled = true;
+
+      if (!buId) return;
+
+      try {
+        const muResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
+        );
+        const list = muResponse.entities || muResponse.managementUnits || [];
+        list.forEach(mu => {
+          const opt = document.createElement('option');
+          opt.value = mu.id;
+          opt.text = mu.name || mu.id;
+          muSelect.add(opt);
+        });
+        muSelect.disabled = false;
+      } catch (err) {
+        console.error('Error loading management units:', err);
+        showMessage(`Error loading management units: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleManagementUnitChange() {
+      const muId = document.getElementById('managementUnitSelect').value;
+      if (!muId) {
+        populateUserSelect(allUsers);
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
+        );
+        const list = muUsersResponse.entities || muUsersResponse.users || [];
+        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
+        populateUserSelect(enriched);
+      } catch (err) {
+        console.error('Error loading MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleTeamChange() {
+      const teamId = document.getElementById('teamSelect').value;
+      if (!teamId) {
+        const muId = document.getElementById('managementUnitSelect').value;
+        if (!muId) {
+          populateUserSelect(allUsers);
         }
+        return;
+      }
+
+      try {
+        const teamMembersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
+        );
+        const members = teamMembersResponse.entities || teamMembersResponse.members || [];
+        const enriched = members.map(m => usersById[m.id] || m);
+        populateUserSelect(enriched);
+      } catch (err) {
+        console.error('Error loading team members:', err);
+        showMessage(`Error loading team members: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== Main schedule search using MU schedules/search =====
+    async function loadSchedule() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.style.display = 'block';
+      resultsDiv.innerHTML = '';
+
+      const buId = document.getElementById('businessUnitSelect').value;
+      const muId = document.getElementById('managementUnitSelect').value;
+      const userId = document.getElementById('userSelect').value;
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      if (!buId) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select a business unit.</div>`;
+        return;
+      }
+      if (!muId) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select a management unit.</div>`;
+        return;
+      }
+      if (!userId) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select a user.</div>`;
+        return;
+      }
+      if (!startDate || !endDate) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select both a start and end date.</div>`;
+        return;
+      }
+      if (endDate < startDate) {
+        resultsDiv.innerHTML = `<div class="error-message">End date must be on or after the start date.</div>`;
+        return;
+      }
+
+      const button = document.getElementById('loadScheduleBtn');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Loading schedule...';
+
+      // Build ISO strings like your example:
+      // 2025-11-03T00:00:00.000Z
+      const startDateIso = `${startDate}T00:00:00.000Z`;
+      const endDateIso = `${endDate}T00:00:00.000Z`;
+
+      try {
+        const searchResult = await searchSchedules(muId, userId, startDateIso, endDateIso, true);
+        const activities = extractUserActivitiesFromSearchResult(searchResult, userId);
+        renderScheduleResults(resultsDiv, activities, userId, startDateIso, endDateIso, searchResult);
+      } catch (err) {
+        console.error('Error loading schedule:', err);
+        resultsDiv.innerHTML = `<div class="error-message">Error loading schedule: ${err.message}</div>`;
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    async function searchSchedules(managementUnitId, userId, startDateIso, endDateIso, loadFullWeeks) {
+      const body = {
+        userIds: [userId],
+        startDate: startDateIso,
+        endDate: endDateIso,
+        loadFullWeeks: loadFullWeeks
       };
+
+      const url = `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}/schedules/search`;
+
+      return authorizedFetchJson(url, {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
     }
 
-    // ===== Render Adherence Data =====
-    function renderAdherenceResults() {
-      const resultsDiv = $('adherenceResults');
-      
-      if (!state.adherenceData.length) {
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📭</div><div>No adherence data available for the selected period.</div></div>';
-        return;
+    // Try to be tolerant of slightly different response shapes
+    function extractUserActivitiesFromSearchResult(response, userId) {
+      let schedules = [];
+
+      if (Array.isArray(response.userSchedules)) {
+        schedules = response.userSchedules;
+      } else if (Array.isArray(response.schedules)) {
+        schedules = response.schedules;
+      } else if (Array.isArray(response.results)) {
+        schedules = response.results;
+      } else if (Array.isArray(response.entities)) {
+        schedules = response.entities;
+      } else if (Array.isArray(response)) {
+        schedules = response;
       }
 
-      const filteredRows = getFilteredAdherenceRows();
-      
-      if (!filteredRows.length) {
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">🔍</div><div>No adherence data found for the selected filters.</div></div>';
-        return;
+      // If multiple users are ever requested, filter to requested one
+      if (userId) {
+        schedules = schedules.filter(s =>
+          (s.user && s.user.id === userId) ||
+          s.userId === userId ||
+          s.userId === (s.user && s.user.id) // belt and braces
+        );
       }
 
-      // Update summary stats
-      const summary = state.adherenceDataSummary || {};
-      $('totalShifts').textContent = summary.totalShifts || 0;
-      $('adherentShifts').textContent = summary.adherentShifts || 0;
-      $('nonAdherentShifts').textContent = summary.nonAdherentShifts || 0;
-      $('adherenceRate').textContent = `${summary.adherenceRate || 0}%`;
+      const rows = [];
 
-      // Create adherence table
-      let tableHtml = `
-        <div style="overflow-x: auto;">
-          <table class="attendance-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Team</th>
-                <th>Date</th>
-                <th>Scheduled Activity</th>
-                <th>Schedule Start</th>
-                <th>Schedule End</th>
-                <th>Actual Activity</th>
-                <th>Adherence Status</th>
-                <th>Scheduled Time</th>
-                <th>Actual Time</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
+      schedules.forEach(userSchedule => {
+        const shifts = Array.isArray(userSchedule.shifts) ? userSchedule.shifts : [];
 
-      filteredRows.forEach(row => {
-        const statusClass = row.isAdherent ? 'status-adherent' : 'status-nonadherent';
-        const statusText = row.isAdherent ? 'Adherent' : 'Non-Adherent';
-        
-        tableHtml += `
-          <tr class="${row.isAdherent ? 'schedule-match' : 'schedule-mismatch'}">
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
-            <td>${fmtDMY(row.date)}</td>
-            <td>${escapeHtml(row.scheduledActivity)}</td>
-            <td>${fmtTime(row.scheduledStart)}</td>
-            <td>${fmtTime(row.scheduledEnd)}</td>
-            <td>${escapeHtml(row.actualStatus)}</td>
-            <td><span class="${statusClass}">${statusText}</span></td>
-            <td>${formatDuration(row.scheduledMinutes)}</td>
-            <td>${formatDuration(row.actualMinutes)}</td>
-          </tr>
-        `;
+        shifts.forEach(shift => {
+          const shiftDateRaw = shift.startDate || shift.date || null;
+          const activities = Array.isArray(shift.activities) ? shift.activities : [];
+
+          activities.forEach(activity => {
+            const startIso = activity.startDate || activity.startTime || activity.startDateTime;
+            const endIso = activity.endDate || activity.endTime || activity.endDateTime;
+            const lengthMin = activity.lengthInMinutes || activity.lengthMinutes || null;
+
+            if (!startIso) return;
+
+            const start = new Date(startIso);
+            let end = endIso ? new Date(endIso) : null;
+
+            if (!end && lengthMin != null) {
+              end = new Date(start.getTime() + lengthMin * 60000);
+            }
+
+            let durationMin = lengthMin;
+            if (durationMin == null && end) {
+              durationMin = Math.round((end - start) / 60000);
+            }
+
+            const activityLabel =
+              (activity.activityCode && activity.activityCode.name) ||
+              activity.description ||
+              activity.activityCodeId ||
+              activity.category ||
+              'Activity';
+
+            const dateStr = shiftDateRaw
+              ? String(shiftDateRaw).substring(0, 10)
+              : start.toISOString().slice(0, 10);
+
+            rows.push({
+              date: dateStr,
+              start,
+              end,
+              durationMinutes: durationMin,
+              activityLabel
+            });
+          });
+        });
       });
 
-      tableHtml += `
-            </tbody>
-          </table>
+      // Sort by date then time
+      rows.sort((a, b) => {
+        if (a.date === b.date) {
+          return a.start - b.start;
+        }
+        return a.date.localeCompare(b.date);
+      });
+
+      return rows;
+    }
+
+    function formatTime(d) {
+      if (!d) return '';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatDuration(mins) {
+      if (mins == null || isNaN(mins)) return '';
+      const total = Math.max(0, Math.round(mins));
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      if (h === 0) return `${m}m`;
+      if (m === 0) return `${h}h`;
+      return `${h}h ${m}m`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function renderScheduleResults(container, activities, userId, startDateIso, endDateIso, rawResult) {
+      const user = usersById[userId];
+      const userName = user ? user.name : userId;
+
+      const startDateStr = startDateIso.slice(0, 10);
+      const endDateStr = endDateIso.slice(0, 10);
+
+      let html = `
+        <h2 class="section-title">Schedule for ${escapeHtml(userName)}</h2>
+        <div class="schedule-meta">
+          <span class="pill">From: ${escapeHtml(startDateStr)}</span>
+          &nbsp;
+          <span class="pill">To: ${escapeHtml(endDateStr)}</span>
+          &nbsp;
+          <span class="pill">Source: MU schedules/search</span>
         </div>
       `;
 
-      resultsDiv.innerHTML = tableHtml;
-    }
-
-    function renderDetailedResults() {
-      const resultsDiv = $('detailsResults');
-      
-      if (!state.activityRows.length) {
-        resultsDiv.innerHTML = '<div class="muted" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">📊</div><div>No detailed activity data available.</div></div>';
-        return;
-      }
-
-      const filteredRows = getFilteredActivityRows();
-      
-      // Update detailed stats
-      const summary = state.adherenceDataSummary || {};
-      $('totalActivities').textContent = state.activityRows.length;
-      $('scheduledTime').textContent = formatHours(summary.totalScheduledMinutes || 0);
-      $('actualTime').textContent = formatHours(summary.totalActualMinutes || 0);
-      $('exceptionTime').textContent = formatHours(summary.totalExceptionMinutes || 0);
-
-      let tableHtml = `
-        <div style="overflow-x: auto;">
-          <table class="attendance-table">
+      if (!activities.length) {
+        html += `<div class="info-message" style="margin-top:12px;">No activities found for this user in the selected date range.</div>`;
+      } else {
+        html += `
+          <table class="schedule-table">
             <thead>
               <tr>
-                <th>Name</th>
                 <th>Date</th>
                 <th>Activity</th>
-                <th>Start Time</th>
-                <th>End Time</th>
+                <th>Start</th>
+                <th>End</th>
                 <th>Duration</th>
-                <th>Category</th>
               </tr>
             </thead>
             <tbody>
-      `;
-
-      filteredRows.forEach(row => {
-        tableHtml += `
-          <tr>
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${fmtDMY(row.date)}</td>
-            <td>${escapeHtml(row.activityName)}</td>
-            <td>${fmtTime(row.startTime)}</td>
-            <td>${fmtTime(row.endTime)}</td>
-            <td>${formatDuration(row.activityMinutes)}</td>
-            <td>${escapeHtml(row.category)}</td>
-          </tr>
         `;
-      });
+        activities.forEach(row => {
+          html += `
+            <tr>
+              <td>${escapeHtml(row.date)}</td>
+              <td>${escapeHtml(row.activityLabel)}</td>
+              <td>${escapeHtml(formatTime(row.start))}</td>
+              <td>${escapeHtml(formatTime(row.end))}</td>
+              <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
+            </tr>
+          `;
+        });
+        html += `</tbody></table>`;
+      }
 
-      tableHtml += `
-            </tbody>
-          </table>
-        </div>
+      html += `
+        <details style="margin-top:16px;">
+          <summary class="muted">Raw search JSON (debug)</summary>
+          <pre>${escapeHtml(JSON.stringify(rawResult, null, 2))}</pre>
+        </details>
       `;
 
-      resultsDiv.innerHTML = tableHtml;
+      container.innerHTML = html;
     }
-
-    function getFilteredAdherenceRows() {
-      const userId = $('userSelect').value;
-      const search = $('userSearch').value.trim().toLowerCase();
-
-      return state.adherenceData.filter(r => {
-        if (userId !== 'all' && r.userId !== userId) return false;
-        if (search) {
-          const hay = (r.userName + ' ' + (r.teamNames || '') + ' ' + r.date).toLowerCase();
-          if (!hay.includes(search)) return false;
-        }
-        return true;
-      });
-    }
-
-    function getFilteredActivityRows() {
-      const userId = $('userSelect').value;
-      const search = $('userSearch').value.trim().toLowerCase();
-
-      return state.activityRows.filter(r => {
-        if (userId !== 'all' && r.userId !== userId) return false;
-        if (search) {
-          const hay = (r.userName + ' ' + r.date + ' ' + r.activityName).toLowerCase();
-          if (!hay.includes(search)) return false;
-        }
-        return true;
-      });
-    }
-
-    // ===== Main Adherence Fetch Function =====
-    async function fetchAdherenceData() {
-      try {
-        const from = $('fromDate').value;
-        const to = $('toDate').value || from;
-        const managementUnitId = $('managementUnitSelect').value;
-        
-        if (!from) { setStatus('Please select a start date', true); return; }
-        if (!managementUnitId) { setStatus('Please select a management unit', true); return; }
-        
-        const today = new Date().toISOString().split('T')[0];
-        if (from > today || to > today) { setStatus('Date range cannot be in the future', true); return; }
-        if (new Date(to) < new Date(from)) { setStatus('End date must be on or after start date', true); return; }
-
-        setStatus('Starting historical adherence query…'); 
-        setLoading(true);
-        
-        showProgress('Starting adherence query job…', 'Historical Adherence');
-        updateProgress(10, 1, 3);
-
-        // Step 1: Start the adherence query job
-        const jobId = await startHistoricalAdherenceQuery(managementUnitId, from, to);
-        state.currentJobId = jobId;
-        
-        updateProgress(30, 2, 3);
-        showProgress('Waiting for job to complete…', 'Historical Adherence');
-
-        // Step 2: Wait for job completion
-        const jobResult = await waitForJobCompletion(jobId);
-        
-        updateProgress(70, 3, 3);
-        showProgress('Downloading results…', 'Historical Adherence');
-
-        // Step 3: Download and process results from all URLs
-        let allAdherenceResults = [];
-        
-        for (const downloadUrl of jobResult.downloadUrls) {
-          try {
-            const results = await downloadAdherenceResults(downloadUrl);
-            if (results && Array.isArray(results)) {
-              allAdherenceResults = allAdherenceResults.concat(results);
-            }
-          } catch (downloadError) {
-            console.error('Failed to download from one URL, continuing with others:', downloadError);
-          }
-        }
-
-        if (allAdherenceResults.length === 0) {
-          throw new Error('No adherence data found in download URLs');
-        }
-
-        // Step 4: Get activity codes for mapping
-        const managementUnit = state.managementUnits.find(mu => mu.id === managementUnitId);
-        if (managementUnit && managementUnit.businessUnit) {
-          await fetchActivityCodes(managementUnit.businessUnit.id);
-        }
-
-        // Step 5: Process the data
-        const processedData = processAdherenceData(allAdherenceResults);
-        state.adherenceData = processedData.adherenceRows;
-        state.activityRows = processedData.activityRows;
-        state.adherenceDataSummary = processedData.summary;
-        
-        updateProgress(100, 3, 3);
-        hideProgress();
-        
-        // Render results
-        renderAdherenceResults();
-        renderDetailedResults();
-        
-        setStatus(`Adherence data loaded - ${state.adherenceData.length} shifts analyzed`);
-        
-      } catch (e) {
-        console.error('Error in fetchAdherenceData:', e);
-        hideProgress();
-        setStatus('Error fetching adherence data: ' + e.message, true);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    // ===== Events & Init =====
-    $('fetchAdherenceBtn').addEventListener('click', fetchAdherenceData);
-    $('userSelect').addEventListener('change', function() {
-      if (document.querySelector('.tab.active').getAttribute('data-tab') === 'adherence') {
-        renderAdherenceResults();
-      } else {
-        renderDetailedResults();
-      }
-    });
-    $('userSearch').addEventListener('input', function() {
-      if (document.querySelector('.tab.active').getAttribute('data-tab') === 'adherence') {
-        renderAdherenceResults();
-      } else {
-        renderDetailedResults();
-      }
-    });
-
-    (function init() {
-      const today = new Date(); 
-      const weekAgo = new Date(); 
-      weekAgo.setDate(today.getDate() - 7);
-      $('fromDate').value = weekAgo.toISOString().slice(0,10);
-      $('toDate').value = today.toISOString().slice(0,10);
-      initAuth();
-    })();
   </script>
 </body>
 </html>
