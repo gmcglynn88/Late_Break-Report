@@ -135,7 +135,7 @@
   <script>
     // ===== OAuth Config =====
     const clientId = 'fe305808-b368-4547-8af9-325d28d552bb';
-    // Update this to the URL where THIS file is hosted
+    // IMPORTANT: update this to the URL where THIS file is hosted
     const redirectUri = 'https://gmcglynn88.github.io/Late_Break-Report/';
 
     const oauthUrl =
@@ -412,8 +412,6 @@
       button.disabled = true;
       button.textContent = 'Loading schedule...';
 
-      // Build ISO strings like your example:
-      // 2025-11-03T00:00:00.000Z
       const startDateIso = `${startDate}T00:00:00.000Z`;
       const endDateIso = `${endDate}T00:00:00.000Z`;
 
@@ -446,12 +444,20 @@
       });
     }
 
-    // Try to be tolerant of slightly different response shapes
+    // ===== Extract activities from search result (handles userSchedules keyed by userId) =====
     function extractUserActivitiesFromSearchResult(response, userId) {
       let schedules = [];
 
-      if (Array.isArray(response.userSchedules)) {
-        schedules = response.userSchedules;
+      if (response && response.userSchedules) {
+        if (Array.isArray(response.userSchedules)) {
+          schedules = response.userSchedules;
+        } else {
+          if (userId && response.userSchedules[userId]) {
+            schedules = [response.userSchedules[userId]];
+          } else {
+            schedules = Object.values(response.userSchedules);
+          }
+        }
       } else if (Array.isArray(response.schedules)) {
         schedules = response.schedules;
       } else if (Array.isArray(response.results)) {
@@ -460,15 +466,6 @@
         schedules = response.entities;
       } else if (Array.isArray(response)) {
         schedules = response;
-      }
-
-      // If multiple users are ever requested, filter to requested one
-      if (userId) {
-        schedules = schedules.filter(s =>
-          (s.user && s.user.id === userId) ||
-          s.userId === userId ||
-          s.userId === (s.user && s.user.id) // belt and braces
-        );
       }
 
       const rows = [];
@@ -500,11 +497,11 @@
             }
 
             const activityLabel =
-              (activity.activityCode && activity.activityCode.name) ||
-              activity.description ||
-              activity.activityCodeId ||
-              activity.category ||
-              'Activity';
+              (activity.description && activity.description.trim().length)
+                ? activity.description
+                : (activity.activityCode && activity.activityCode.name) ||
+                  activity.activityCodeId ||
+                  (activity.countsAsPaidTime ? 'Paid time' : 'Unpaid time');
 
             const dateStr = shiftDateRaw
               ? String(shiftDateRaw).substring(0, 10)
@@ -521,7 +518,6 @@
         });
       });
 
-      // Sort by date then time
       rows.sort((a, b) => {
         if (a.date === b.date) {
           return a.start - b.start;
@@ -592,7 +588,7 @@
           html += `
             <tr>
               <td>${escapeHtml(row.date)}</td>
-              <td>${escapeHtml(row.activityLabel)}</td>
+              <td>${escapeHtml(row.activityLabel || '')}</td>
               <td>${escapeHtml(formatTime(row.start))}</td>
               <td>${escapeHtml(formatTime(row.end))}</td>
               <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
