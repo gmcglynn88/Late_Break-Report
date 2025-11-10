@@ -684,17 +684,33 @@
       const absenceDays = new Set();
       let instances = 0;
       
+      console.log('Analyzing activities for absence:', activities);
+      
       activities.forEach(activity => {
         const activityName = getActivityName(businessUnitId, activity.activityCodeId);
-        // Consider Time Off, Sick, and other absence-related activities
-        if (activityName.includes('Time Off') || activityName.includes('Sick') || 
-            activityName.includes('Absence') || activityName.includes('Vacation') ||
-            activityName === 'Time Off') {
+        const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
+        
+        console.log(`Activity: ${activityName}, Category: ${activityCategory}, Code: ${activity.activityCodeId}, Duration: ${activity.durationMinutes}min`);
+        
+        // Check if it's absence based on category or name
+        const isAbsence = activity.type === 'fullDayOff' || 
+                         activityCategory === 'TimeOff' ||
+                         activityName.includes('Time Off') || 
+                         activityName.includes('Sick') || 
+                         activityName.includes('Absence') || 
+                         activityName.includes('Vacation') ||
+                         activityName.includes('Holiday') ||
+                         activityName.includes('Leave');
+        
+        if (isAbsence) {
           totalHours += activity.durationMinutes / 60;
           absenceDays.add(activity.date);
           instances++;
+          console.log(`✓ Counted as absence: ${activityName} (${activity.durationMinutes/60}h, Category: ${activityCategory})`);
         }
       });
+      
+      console.log(`Total absence: ${totalHours}h over ${absenceDays.size} days, ${instances} instances`);
       
       return {
         totalHours: parseFloat(totalHours.toFixed(1)),
@@ -906,12 +922,15 @@
         
         console.log(`Loaded ${activityCodes.length} activity codes:`, activityCodes);
         
-        // Create a lookup map by ID
+        // Create a lookup map by ID - now storing both name and category
         const activityCodeMap = {};
         activityCodes.forEach(code => {
-          if (code && code.id && code.name) {
-            activityCodeMap[code.id] = code.name.trim(); // Trim any extra spaces
-            console.log(`Mapped: ${code.id} -> "${code.name}"`);
+          if (code && code.id) {
+            activityCodeMap[code.id] = {
+              name: code.name ? code.name.trim() : code.id,
+              category: code.category || 'Unknown'
+            };
+            console.log(`Mapped: ${code.id} -> "${code.name}" (Category: ${code.category})`);
           } else {
             console.log('Skipping invalid activity code:', code);
           }
@@ -953,14 +972,44 @@
       
       // If it's a UUID, check business unit activity codes
       const activityCodes = activityCodesByBuId[businessUnitId];
-      console.log(`Looking up activity code ${activityCodeId} in map:`, activityCodes);
       
       if (activityCodes && activityCodes[activityCodeId]) {
-        return activityCodes[activityCodeId];
+        return activityCodes[activityCodeId].name;
       }
       
       // Return the code ID if not found anywhere
       return activityCodeId;
+    }
+
+    // ===== Function to get activity category =====
+    function getActivityCategory(businessUnitId, activityCodeId) {
+      if (!businessUnitId || !activityCodeId) return 'Unknown';
+      
+      // System code categories
+      const systemCodeCategories = {
+        '0': 'OnQueueWork',
+        '1': 'Break', 
+        '2': 'Meal',
+        '3': 'Meeting',
+        '4': 'OffQueueWork',
+        '5': 'TimeOff',
+        '6': 'Training',
+        '7': 'Unavailable'
+      };
+      
+      // First check if it's a system code
+      if (systemCodeCategories[activityCodeId]) {
+        return systemCodeCategories[activityCodeId];
+      }
+      
+      // If it's a UUID, check business unit activity codes
+      const activityCodes = activityCodesByBuId[businessUnitId];
+      
+      if (activityCodes && activityCodes[activityCodeId]) {
+        return activityCodes[activityCodeId].category;
+      }
+      
+      return 'Unknown';
     }
 
     async function handleManagementUnitChange() {
