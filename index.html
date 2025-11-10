@@ -433,24 +433,32 @@
     }
 
     async function populateInitialData() {
-      const [users, businessUnitsResponse, teams] = await Promise.all([
-        fetchAllPages(`${apiBase}/api/v2/users`),
-        authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
-        fetchAllPages(`${apiBase}/api/v2/teams`)
-      ]);
+      try {
+        // Fetch users, business units, and teams in parallel
+        const [users, businessUnitsResponse, teams] = await Promise.all([
+          fetchAllPages(`${apiBase}/api/v2/users`),
+          authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
+          fetchAllPages(`${apiBase}/api/v2/teams`)
+        ]);
 
-      allUsers = (users || []).filter(u => !u.deleted);
-      usersById = {};
-      allUsers.forEach(u => { usersById[u.id] = u; });
-      businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
-      allTeams = teams || [];
+        allUsers = (users || []).filter(u => !u.deleted);
+        usersById = {};
+        allUsers.forEach(u => { usersById[u.id] = u; });
+        
+        // Handle different response formats for business units
+        businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
+        allTeams = teams || [];
 
-      populateUserSelect(allUsers);
-      populateBusinessUnitSelect(businessUnits);
-      populateTeamSelect(allTeams);
-      
-      // Also populate analytics dropdowns
-      populateAnalyticsDropdowns();
+        populateUserSelect(allUsers);
+        populateBusinessUnitSelect(businessUnits);
+        populateTeamSelect(allTeams);
+        
+        // Also populate analytics dropdowns
+        populateAnalyticsDropdowns();
+      } catch (err) {
+        console.error('Error in populateInitialData:', err);
+        throw err;
+      }
     }
 
     function populateUserSelect(users) {
@@ -539,6 +547,7 @@
       if (!buId) return;
 
       try {
+        // FIX: Filter management units by business unit ID
         const muResponse = await authorizedFetchJson(
           `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
         );
@@ -554,6 +563,315 @@
         console.error('Error loading management units:', err);
         showMessage(`Error loading management units: ${err.message}`, 'error');
       }
+    }
+
+    // ===== Business Unit Change Handler =====
+    async function handleBusinessUnitChange(event) {
+      const buId = event.target.value;
+      const muSelect = document.getElementById('managementUnitSelect');
+      const userSelect = document.getElementById('userSelect');
+      
+      // Reset dependent fields
+      muSelect.innerHTML = '<option value="">Select management unit</option>';
+      muSelect.disabled = true;
+      userSelect.innerHTML = '<option value="">Select user</option>';
+      userSelect.disabled = true;
+
+      if (!buId) return;
+
+      try {
+        // FIX: Filter management units by business unit ID
+        const muResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
+        );
+        const list = muResponse.entities || muResponse.managementUnits || [];
+        list.forEach(mu => {
+          const opt = document.createElement('option');
+          opt.value = mu.id;
+          opt.text = mu.name || mu.id;
+          muSelect.add(opt);
+        });
+        muSelect.disabled = false;
+      } catch (err) {
+        console.error('Error loading management units:', err);
+        showMessage(`Error loading management units: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== Management Unit Change Handler =====
+    async function handleManagementUnitChange(event) {
+      const muId = event.target.value;
+      const userSelect = document.getElementById('userSelect');
+      
+      userSelect.innerHTML = '<option value="">Select user</option>';
+      userSelect.disabled = true;
+
+      if (!muId) return;
+
+      try {
+        // Get users for the selected management unit
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
+        );
+        const users = muUsersResponse.entities || muUsersResponse.users || [];
+        
+        // Populate user dropdown
+        userSelect.innerHTML = '<option value="">Select user</option>';
+        const sorted = [...users].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        sorted.forEach(user => {
+          const opt = document.createElement('option');
+          opt.value = user.id;
+          opt.text = user.name || user.id;
+          userSelect.add(opt);
+        });
+        userSelect.disabled = false;
+      } catch (err) {
+        console.error('Error loading users for management unit:', err);
+        showMessage(`Error loading users: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== Team Change Handler =====
+    async function handleTeamChange(event) {
+      const teamId = event.target.value;
+      const userSelect = document.getElementById('userSelect');
+      
+      userSelect.innerHTML = '<option value="">Select user</option>';
+      userSelect.disabled = true;
+
+      if (!teamId) return;
+
+      try {
+        // Get team members
+        const teamMembersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
+        );
+        const members = teamMembersResponse.entities || teamMembersResponse.members || [];
+        
+        // Populate user dropdown with team members
+        userSelect.innerHTML = '<option value="">Select user</option>';
+        const sorted = [...members].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        sorted.forEach(member => {
+          const opt = document.createElement('option');
+          opt.value = member.id;
+          opt.text = member.name || member.id;
+          userSelect.add(opt);
+        });
+        userSelect.disabled = false;
+      } catch (err) {
+        console.error('Error loading team members:', err);
+        showMessage(`Error loading team members: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== Load Schedule =====
+    async function loadSchedule() {
+      const muId = document.getElementById('managementUnitSelect').value;
+      const userId = document.getElementById('userSelect').value;
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      if (!muId || !userId || !startDate || !endDate) {
+        showMessage('Please select management unit, user, and date range', 'error');
+        return;
+      }
+
+      const button = document.getElementById('loadScheduleBtn');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Loading...';
+
+      try {
+        const startDateIso = `${startDate}T00:00:00.000Z`;
+        const endDateIso = `${endDate}T00:00:00.000Z`;
+
+        const schedule = await searchSchedules(muId, userId, startDateIso, endDateIso);
+        renderScheduleResults(schedule, userId);
+      } catch (err) {
+        console.error('Error loading schedule:', err);
+        showMessage(`Error loading schedule: ${err.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    // ===== Search Schedules =====
+    async function searchSchedules(muId, userId, startDate, endDate, includeFullDayTimeOffMarkers = false) {
+      const body = {
+        startDate: startDate,
+        endDate: endDate,
+        userIds: [userId]
+      };
+
+      if (includeFullDayTimeOffMarkers) {
+        body['includeFullDayTimeOffMarkers'] = true;
+      }
+
+      const response = await authorizedFetch(
+        `${apiBase}/api/v2/workforcemanagement/managementunits/${muId}/schedules/search`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body)
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error searching schedules: ${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
+    }
+
+    // ===== Extract User Activities =====
+    function extractUserActivitiesFromSearchResult(scheduleResult, userId, businessUnitId) {
+      const activities = [];
+      
+      if (!scheduleResult || !scheduleResult.userSchedules) {
+        return activities;
+      }
+
+      const userSchedule = scheduleResult.userSchedules.find(us => us.userId === userId);
+      if (!userSchedule || !userSchedule.shifts) {
+        return activities;
+      }
+
+      // Process shifts
+      userSchedule.shifts.forEach(shift => {
+        activities.push({
+          type: 'shift',
+          date: shift.startDate.split('T')[0],
+          start: new Date(shift.startDate),
+          end: new Date(shift.endDate),
+          durationMinutes: shift.activities.reduce((total, activity) => total + activity.lengthMinutes, 0),
+          countsAsPaidTime: true,
+          activities: shift.activities.map(activity => ({
+            activityCodeId: activity.activityCodeId,
+            lengthMinutes: activity.lengthMinutes
+          }))
+        });
+      });
+
+      // Process full day time off markers
+      if (userSchedule.fullDayTimeOffMarkers) {
+        userSchedule.fullDayTimeOffMarkers.forEach(marker => {
+          activities.push({
+            type: 'fullDayOff',
+            date: marker.date.split('T')[0],
+            start: new Date(marker.date),
+            end: new Date(marker.date),
+            durationMinutes: 24 * 60, // Full day
+            countsAsPaidTime: false,
+            activityCodeId: marker.activityCodeId,
+            isFullDayOff: true
+          });
+        });
+      }
+
+      return activities;
+    }
+
+    // ===== Format Duration =====
+    function formatDuration(minutes) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+
+    // ===== Escape HTML =====
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ===== Render Schedule Results =====
+    function renderScheduleResults(scheduleResult, userId) {
+      const container = document.getElementById('results');
+      container.style.display = 'block';
+      
+      const activities = extractUserActivitiesFromSearchResult(scheduleResult, userId, document.getElementById('businessUnitSelect').value);
+      
+      if (activities.length === 0) {
+        container.innerHTML = `<div class="info-message">No schedule found for the selected period.</div>`;
+        return;
+      }
+
+      let html = `
+        <h3 class="section-title">Schedule for ${escapeHtml(usersById[userId]?.name || userId)}</h3>
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+              <th>Activities</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      activities.forEach(activity => {
+        const startTime = formatTime(activity.start);
+        const endTime = formatTime(activity.end);
+        const duration = formatDuration(activity.durationMinutes);
+        
+        let activityDetails = '';
+        if (activity.activities) {
+          activityDetails = activity.activities.map(a => 
+            `${getActivityName(document.getElementById('businessUnitSelect').value, a.activityCodeId)} (${formatDuration(a.lengthMinutes)})`
+          ).join('<br>');
+        } else if (activity.isFullDayOff) {
+          activityDetails = getActivityName(document.getElementById('businessUnitSelect').value, activity.activityCodeId) || 'Time Off';
+        }
+
+        html += `
+          <tr>
+            <td>${escapeHtml(activity.date)}</td>
+            <td>${escapeHtml(activity.type)}</td>
+            <td>${startTime}</td>
+            <td>${endTime}</td>
+            <td>${duration}</td>
+            <td>${activityDetails}</td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    }
+
+    // ===== Load Activity Codes =====
+    async function loadActivityCodes(businessUnitId) {
+      if (activityCodesByBuId[businessUnitId]) {
+        return activityCodesByBuId[businessUnitId];
+      }
+
+      try {
+        const response = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/businessunits/${businessUnitId}/activitycodes`
+        );
+        activityCodesByBuId[businessUnitId] = response.entities || [];
+        return activityCodesByBuId[businessUnitId];
+      } catch (err) {
+        console.error('Error loading activity codes:', err);
+        return [];
+      }
+    }
+
+    // ===== Get Activity Name =====
+    function getActivityName(businessUnitId, activityCodeId) {
+      const codes = activityCodesByBuId[businessUnitId] || [];
+      const code = codes.find(c => c.id === activityCodeId);
+      return code ? code.name : activityCodeId;
+    }
+
+    // ===== Format Time =====
+    function formatTime(d) {
+      if (!d) return '';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
     // ===== Overtime Analysis =====
@@ -846,11 +1164,6 @@
       return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
     }
 
-    function formatTime(d) {
-      if (!d) return '';
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
     // ===== Rendering Functions =====
     function renderOvertimeResults(data, weeklyThreshold, dailyThreshold) {
       const container = document.getElementById('overtimeResults');
@@ -989,11 +1302,61 @@
       });
     }
 
-    // ===== Rest of the functions remain the same as previous version =====
-    // [Include all the remaining functions: renderAbsenceResults, handleBusinessUnitChange, loadActivityCodes, 
-    // getActivityName, handleManagementUnitChange, handleTeamChange, loadSchedule, searchSchedules, 
-    // extractUserActivitiesFromSearchResult, formatDuration, escapeHtml, renderScheduleResults]
-
+    function renderAbsenceResults(data, thresholdHours, startDate, endDate) {
+      const container = document.getElementById('absenceResults');
+      container.style.display = 'block';
+      
+      if (data.length === 0) {
+        container.innerHTML = `<div class="info-message">No absence detected for the selected period.</div>`;
+        return;
+      }
+      
+      // Sort by total hours (descending)
+      data.sort((a, b) => b.totalHours - a.totalHours);
+      
+      let html = `
+        <h3 class="section-title">Absence Report</h3>
+        <div class="schedule-meta">
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
+          &nbsp;
+          <span class="pill">Threshold: ${thresholdHours} hours</span>
+          &nbsp;
+          <span class="pill">Agents with absence: ${data.length}</span>
+        </div>
+        
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Total Absence Hours</th>
+              <th>Absence Days</th>
+              <th>Instances</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      data.forEach(item => {
+        const statusClass = item.exceedsThreshold ? 'warning-row' : '';
+        const statusBadge = item.exceedsThreshold 
+          ? `<span class="absence-badge">Above Threshold</span>` 
+          : `<span class="pill">Within Limits</span>`;
+        
+        html += `
+          <tr class="${statusClass}">
+            <td>${escapeHtml(item.user)}</td>
+            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
+            <td>${item.absenceDays}</td>
+            <td>${item.instances}</td>
+            <td>${statusBadge}</td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    }
   </script>
 </body>
 </html>
