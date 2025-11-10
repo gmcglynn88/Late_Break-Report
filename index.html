@@ -60,7 +60,7 @@
       color:#14532d;background:#dcfce7;border:1px solid:#bbf7d0;padding:10px;border-radius:6px
     }
     .info-message{
-      color:#6b4e16;background:#fff7ed;border:1px solid:#ffedd5;padding:10px;border-radius:6x
+      color:#6b4e16;background:#fff7ed;border:1px solid:#ffedd5;padding:10px;border-radius:6px
     }
 
     .schedule-table{width:100%;border-collapse:collapse;margin-top:16px}
@@ -311,6 +311,7 @@
     let allTeams = [];
     let activityCodesByBuId = {};
     let businessUnits = [];
+    let managementUnits = [];
 
     // ===== Tab Management =====
     function initializeTabs() {
@@ -398,18 +399,32 @@
     async function fetchAllPages(url) {
       let allItems = [];
       let pageNumber = 1;
+      let pageSize = 100;
       let hasMorePages = true;
 
       while (hasMorePages) {
-        const response = await authorizedFetch(`${url}?pageNumber=${pageNumber}&pageSize=100`);
-        if (!response.ok) {
-          throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
-        }
-        const data = await response.json();
-        allItems = allItems.concat(data.entities || []);
-        if (data.pageCount && data.pageCount > pageNumber) {
-          pageNumber++;
-        } else {
+        try {
+          const response = await authorizedFetch(`${url}?pageNumber=${pageNumber}&pageSize=${pageSize}`);
+          if (!response.ok) {
+            throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
+          }
+          const data = await response.json();
+          
+          // Handle different response formats
+          const entities = data.entities || data.users || data.members || data.businessUnits || data.managementUnits || data.teams || [];
+          allItems = allItems.concat(entities);
+          
+          if (data.pageCount && data.pageCount > pageNumber) {
+            pageNumber++;
+          } else if (data.pageCount === pageNumber) {
+            hasMorePages = false;
+          } else if (!entities.length || entities.length < pageSize) {
+            hasMorePages = false;
+          } else {
+            pageNumber++;
+          }
+        } catch (err) {
+          console.error('Error in fetchAllPages:', err);
           hasMorePages = false;
         }
       }
@@ -424,7 +439,7 @@
       document.getElementById('teamSelect').addEventListener('change', handleTeamChange);
 
       try {
-        await Promise.all([populateInitialData()]);
+        await populateInitialData();
         showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
       } catch (err) {
         console.error('Error initialising app:', err);
@@ -434,19 +449,41 @@
 
     async function populateInitialData() {
       try {
-        // Fetch users, business units, and teams in parallel
-        const [users, businessUnitsResponse, teams] = await Promise.all([
+        console.log('Starting to populate initial data...');
+        
+        // Fetch all data in parallel
+        const [users, businessUnitsData, teams, managementUnitsData] = await Promise.all([
           fetchAllPages(`${apiBase}/api/v2/users`),
-          authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
-          fetchAllPages(`${apiBase}/api/v2/teams`)
+          fetchAllPages(`${apiBase}/api/v2/workforcemanagement/businessunits`),
+          fetchAllPages(`${apiBase}/api/v2/teams`),
+          fetchAllPages(`${apiBase}/api/v2/workforcemanagement/managementunits`)
         ]);
 
-        allUsers = (users || []).filter(u => !u.deleted);
+        console.log('Data fetched:', { 
+          users: users.length, 
+          businessUnits: businessUnitsData.length,
+          teams: teams.length,
+          managementUnits: managementUnitsData.length
+        });
+
+        // Process users
+        allUsers = (users || []).filter(u => !u.deleted && u.name);
         usersById = {};
-        allUsers.forEach(u => { usersById[u.id] = u; });
+        allUsers.forEach(u => { 
+          usersById[u.id] = u;
+          // Ensure user has name property
+          if (!u.name && u.username) {
+            u.name = u.username;
+          }
+        });
+
+        // Process business units
+        businessUnits = businessUnitsData || [];
         
-        // Handle different response formats for business units
-        businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
+        // Process management units
+        managementUnits = managementUnitsData || [];
+        
+        // Process teams
         allTeams = teams || [];
 
         populateUserSelect(allUsers);
@@ -455,6 +492,8 @@
         
         // Also populate analytics dropdowns
         populateAnalyticsDropdowns();
+        
+        console.log('Initial data population completed');
       } catch (err) {
         console.error('Error in populateInitialData:', err);
         throw err;
@@ -476,7 +515,8 @@
     function populateBusinessUnitSelect(businessUnits) {
       const buSelect = document.getElementById('businessUnitSelect');
       buSelect.innerHTML = '<option value="">Select business unit</option>';
-      businessUnits.forEach(bu => {
+      const sorted = [...businessUnits].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      sorted.forEach(bu => {
         const opt = document.createElement('option');
         opt.value = bu.id;
         opt.text = bu.name || bu.id;
@@ -547,12 +587,12 @@
       if (!buId) return;
 
       try {
-        // FIX: Filter management units by business unit ID
-        const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
+        // Filter management units by business unit ID
+        const filteredManagementUnits = managementUnits.filter(mu => 
+          mu.businessUnit && mu.businessUnit.id === buId
         );
-        const list = muResponse.entities || muResponse.managementUnits || [];
-        list.forEach(mu => {
+        
+        filteredManagementUnits.forEach(mu => {
           const opt = document.createElement('option');
           opt.value = mu.id;
           opt.text = mu.name || mu.id;
@@ -580,12 +620,14 @@
       if (!buId) return;
 
       try {
-        // FIX: Filter management units by business unit ID
-        const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
+        // Filter management units by business unit ID
+        const filteredManagementUnits = managementUnits.filter(mu => 
+          mu.businessUnit && mu.businessUnit.id === buId
         );
-        const list = muResponse.entities || muResponse.managementUnits || [];
-        list.forEach(mu => {
+        
+        console.log(`Filtered management units for BU ${buId}:`, filteredManagementUnits);
+        
+        filteredManagementUnits.forEach(mu => {
           const opt = document.createElement('option');
           opt.value = mu.id;
           opt.text = mu.name || mu.id;
@@ -610,18 +652,21 @@
 
       try {
         // Get users for the selected management unit
-        const muUsersResponse = await authorizedFetchJson(
+        const muUsers = await fetchAllPages(
           `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
         );
-        const users = muUsersResponse.entities || muUsersResponse.users || [];
+        
+        console.log(`Users for MU ${muId}:`, muUsers);
         
         // Populate user dropdown
         userSelect.innerHTML = '<option value="">Select user</option>';
-        const sorted = [...users].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        const sorted = [...muUsers].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         sorted.forEach(user => {
           const opt = document.createElement('option');
           opt.value = user.id;
-          opt.text = user.name || user.id;
+          // Use the user object from our cached data if available, otherwise use what we got
+          const userObj = usersById[user.id] || user;
+          opt.text = userObj.name || userObj.id;
           userSelect.add(opt);
         });
         userSelect.disabled = false;
@@ -643,18 +688,21 @@
 
       try {
         // Get team members
-        const teamMembersResponse = await authorizedFetchJson(
+        const teamMembers = await fetchAllPages(
           `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
         );
-        const members = teamMembersResponse.entities || teamMembersResponse.members || [];
+        
+        console.log(`Team members for team ${teamId}:`, teamMembers);
         
         // Populate user dropdown with team members
         userSelect.innerHTML = '<option value="">Select user</option>';
-        const sorted = [...members].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        const sorted = [...teamMembers].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         sorted.forEach(member => {
           const opt = document.createElement('option');
           opt.value = member.id;
-          opt.text = member.name || member.id;
+          // Use the user object from our cached data if available, otherwise use what we got
+          const userObj = usersById[member.id] || member;
+          opt.text = userObj.name || userObj.id;
           userSelect.add(opt);
         });
         userSelect.disabled = false;
@@ -683,9 +731,13 @@
 
       try {
         const startDateIso = `${startDate}T00:00:00.000Z`;
-        const endDateIso = `${endDate}T00:00:00.000Z`;
+        const endDateIso = `${endDate}T23:59:59.999Z`;
+
+        console.log('Loading schedule with params:', { muId, userId, startDateIso, endDateIso });
 
         const schedule = await searchSchedules(muId, userId, startDateIso, endDateIso);
+        console.log('Schedule response:', schedule);
+        
         renderScheduleResults(schedule, userId);
       } catch (err) {
         console.error('Error loading schedule:', err);
@@ -697,16 +749,15 @@
     }
 
     // ===== Search Schedules =====
-    async function searchSchedules(muId, userId, startDate, endDate, includeFullDayTimeOffMarkers = false) {
+    async function searchSchedules(muId, userId, startDate, endDate, includeFullDayTimeOffMarkers = true) {
       const body = {
         startDate: startDate,
         endDate: endDate,
-        userIds: [userId]
+        userIds: [userId],
+        includeFullDayTimeOffMarkers: includeFullDayTimeOffMarkers
       };
 
-      if (includeFullDayTimeOffMarkers) {
-        body['includeFullDayTimeOffMarkers'] = true;
-      }
+      console.log('Searching schedules with body:', body);
 
       const response = await authorizedFetch(
         `${apiBase}/api/v2/workforcemanagement/managementunits/${muId}/schedules/search`,
@@ -717,6 +768,8 @@
       );
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Schedule search error:', errorText);
         throw new Error(`Error searching schedules: ${response.status} ${response.statusText}`);
       }
 
@@ -727,34 +780,41 @@
     function extractUserActivitiesFromSearchResult(scheduleResult, userId, businessUnitId) {
       const activities = [];
       
+      console.log('Extracting activities from:', scheduleResult);
+      
       if (!scheduleResult || !scheduleResult.userSchedules) {
+        console.log('No user schedules found');
         return activities;
       }
 
       const userSchedule = scheduleResult.userSchedules.find(us => us.userId === userId);
-      if (!userSchedule || !userSchedule.shifts) {
+      if (!userSchedule) {
+        console.log('No schedule found for user:', userId);
         return activities;
       }
 
+      console.log('User schedule found:', userSchedule);
+
       // Process shifts
-      userSchedule.shifts.forEach(shift => {
-        activities.push({
-          type: 'shift',
-          date: shift.startDate.split('T')[0],
-          start: new Date(shift.startDate),
-          end: new Date(shift.endDate),
-          durationMinutes: shift.activities.reduce((total, activity) => total + activity.lengthMinutes, 0),
-          countsAsPaidTime: true,
-          activities: shift.activities.map(activity => ({
-            activityCodeId: activity.activityCodeId,
-            lengthMinutes: activity.lengthMinutes
-          }))
+      if (userSchedule.shifts) {
+        userSchedule.shifts.forEach(shift => {
+          console.log('Processing shift:', shift);
+          activities.push({
+            type: 'shift',
+            date: shift.startDate.split('T')[0],
+            start: new Date(shift.startDate),
+            end: new Date(shift.endDate),
+            durationMinutes: shift.activities ? shift.activities.reduce((total, activity) => total + activity.lengthMinutes, 0) : 0,
+            countsAsPaidTime: true,
+            activities: shift.activities || []
+          });
         });
-      });
+      }
 
       // Process full day time off markers
       if (userSchedule.fullDayTimeOffMarkers) {
         userSchedule.fullDayTimeOffMarkers.forEach(marker => {
+          console.log('Processing time off marker:', marker);
           activities.push({
             type: 'fullDayOff',
             date: marker.date.split('T')[0],
@@ -768,6 +828,7 @@
         });
       }
 
+      console.log('Extracted activities:', activities);
       return activities;
     }
 
@@ -790,7 +851,10 @@
       const container = document.getElementById('results');
       container.style.display = 'block';
       
-      const activities = extractUserActivitiesFromSearchResult(scheduleResult, userId, document.getElementById('businessUnitSelect').value);
+      const businessUnitId = document.getElementById('businessUnitSelect').value;
+      const activities = extractUserActivitiesFromSearchResult(scheduleResult, userId, businessUnitId);
+      
+      console.log('Rendering schedule with activities:', activities);
       
       if (activities.length === 0) {
         container.innerHTML = `<div class="info-message">No schedule found for the selected period.</div>`;
@@ -819,12 +883,14 @@
         const duration = formatDuration(activity.durationMinutes);
         
         let activityDetails = '';
-        if (activity.activities) {
+        if (activity.activities && activity.activities.length > 0) {
           activityDetails = activity.activities.map(a => 
-            `${getActivityName(document.getElementById('businessUnitSelect').value, a.activityCodeId)} (${formatDuration(a.lengthMinutes)})`
+            `${getActivityName(businessUnitId, a.activityCodeId)} (${formatDuration(a.lengthMinutes)})`
           ).join('<br>');
         } else if (activity.isFullDayOff) {
-          activityDetails = getActivityName(document.getElementById('businessUnitSelect').value, activity.activityCodeId) || 'Time Off';
+          activityDetails = getActivityName(businessUnitId, activity.activityCodeId) || 'Time Off';
+        } else {
+          activityDetails = 'Work';
         }
 
         html += `
@@ -898,6 +964,8 @@
         // Get users based on filters
         let users = await getUsersForAnalytics(muId, teamId);
         
+        console.log(`Analyzing overtime for ${users.length} users`);
+        
         const overtimeData = {
           daily: [],
           weekly: [],
@@ -905,11 +973,12 @@
         };
         
         const startDateIso = `${startDate}T00:00:00.000Z`;
-        const endDateIso = `${endDate}T00:00:00.000Z`;
+        const endDateIso = `${endDate}T23:59:59.999Z`;
 
         // Analyze each user's schedule
         for (const user of users) {
           try {
+            console.log(`Analyzing user: ${user.name}`);
             const schedule = await searchSchedules(muId, user.id, startDateIso, endDateIso, true);
             const userOvertime = calculateOvertimeDetails(schedule, user.id, weeklyThreshold, dailyThreshold);
             
@@ -959,10 +1028,13 @@
         let users = await getUsersForAnalytics(muId, teamId);
         const absenceData = [];
         const startDateIso = `${startDate}T00:00:00.000Z`;
-        const endDateIso = `${endDate}T00:00:00.000Z`;
+        const endDateIso = `${endDate}T23:59:59.999Z`;
+
+        console.log(`Analyzing absence for ${users.length} users`);
 
         for (const user of users) {
           try {
+            console.log(`Analyzing absence for user: ${user.name}`);
             const schedule = await searchSchedules(muId, user.id, startDateIso, endDateIso, true);
             const absenceStats = calculateAbsenceStats(schedule, user.id, buId);
             
@@ -995,18 +1067,25 @@
       let users = [];
       
       if (teamId) {
-        const teamMembersResponse = await authorizedFetchJson(
+        const teamMembers = await fetchAllPages(
           `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
         );
-        users = teamMembersResponse.entities || teamMembersResponse.members || [];
+        users = teamMembers || [];
       } else {
-        const muUsersResponse = await authorizedFetchJson(
+        const muUsers = await fetchAllPages(
           `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
         );
-        users = muUsersResponse.entities || muUsersResponse.users || [];
+        users = muUsers || [];
       }
       
-      return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
+      // Map to our cached user objects to get proper names
+      return users.map(uRef => {
+        const user = usersById[uRef.id] || uRef;
+        return {
+          id: user.id,
+          name: user.name || user.id
+        };
+      }).filter(u => u && u.name);
     }
 
     function calculateOvertimeDetails(schedule, userId, weeklyThreshold, dailyThreshold) {
