@@ -1457,11 +1457,11 @@
       filteredData.sort((a, b) => b.totalHours - a.totalHours);
       
       // Calculate enhanced analytics
+      const usersAboveThreshold = data.filter(item => item.exceedsThreshold).length;
       const totalAbsenceHours = filteredData.reduce((sum, item) => sum + item.totalHours, 0);
       const totalAbsenceDays = filteredData.reduce((sum, item) => sum + item.absenceDays, 0);
       const totalInstances = filteredData.reduce((sum, item) => sum + item.instances, 0);
       const avgHoursPerUser = totalAbsenceHours / filteredData.length;
-      const usersAboveThreshold = data.filter(item => item.exceedsThreshold).length;
       const mostCommonType = findMostCommonAbsenceType(filteredData);
       
       let html = `
