@@ -74,7 +74,7 @@
     
     /* Analytics specific styles */
     .analytics-controls{
-      display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:16px
     }
     .warning-row{background:var(--warning-bg) !important;border-left:4px solid var(--warning-text)}
     .overtime-badge{
@@ -95,6 +95,45 @@
     details pre{
       max-height:250px;overflow:auto;background:#0f172a;color:#e5e7eb;
       padding:10px;border-radius:6px;font-size:11px
+    }
+    
+    /* Overtime metrics row */
+    .overtime-metrics {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .overtime-metric-card {
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      flex: 1;
+      min-width: 150px;
+    }
+    
+    /* Nested absence details */
+    .absence-details {
+      margin-top: 8px;
+      padding-left: 16px;
+      border-left: 2px solid var(--border-color);
+    }
+    .absence-day {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .absence-day:last-child {
+      border-bottom: none;
+    }
+    .absence-date {
+      font-weight: 500;
+    }
+    .absence-duration {
+      color: var(--text-light);
     }
   </style>
 </head>
@@ -179,7 +218,7 @@
     <div id="overtime-tab" class="tab-content">
       <div class="card">
         <h2 class="section-title">Overtime Analysis</h2>
-        <div class="analytics-controls">
+        <div class="controls">
           <div>
             <label for="overtimeBuSelect">Business Unit</label>
             <select id="overtimeBuSelect">
@@ -221,7 +260,7 @@
     <div id="absence-tab" class="tab-content">
       <div class="card">
         <h2 class="section-title">Absence Analytics</h2>
-        <div class="analytics-controls">
+        <div class="controls">
           <div>
             <label for="absenceBuSelect">Business Unit</label>
             <select id="absenceBuSelect">
@@ -558,7 +597,8 @@
                   week: weekData.week,
                   totalHours: weekData.totalHours,
                   overtimeHours: weekData.totalHours - thresholdHours,
-                  days: weekData.days
+                  days: weekData.days,
+                  overtimeActivities: weekData.overtimeActivities
                 });
               }
             });
@@ -616,7 +656,8 @@
                 totalHours: absenceStats.totalHours,
                 absenceDays: absenceStats.days,
                 instances: absenceStats.instances,
-                exceedsThreshold: absenceStats.totalHours >= thresholdHours
+                exceedsThreshold: absenceStats.totalHours >= thresholdHours,
+                absenceDetails: absenceStats.details
               });
             }
           } catch (err) {
@@ -666,12 +707,23 @@
             weeklyData[weekKey] = {
               week: weekKey,
               totalHours: 0,
-              days: new Set()
+              days: new Set(),
+              overtimeActivities: []
             };
           }
           
           weeklyData[weekKey].totalHours += activity.durationMinutes / 60;
           weeklyData[weekKey].days.add(activity.date);
+          
+          // Track overtime activities
+          weeklyData[weekKey].overtimeActivities.push({
+            date: activity.date,
+            activity: activity.activityLabel,
+            startTime: formatTime(activity.start),
+            endTime: formatTime(activity.end),
+            duration: formatDuration(activity.durationMinutes),
+            rate: calculateOvertimeRate(activity.durationMinutes / 60)
+          });
         }
       });
       
@@ -683,6 +735,7 @@
       let totalHours = 0;
       const absenceDays = new Set();
       let instances = 0;
+      const absenceDetails = [];
       
       console.log('Analyzing activities for absence:', activities);
       
@@ -706,6 +759,15 @@
           totalHours += activity.durationMinutes / 60;
           absenceDays.add(activity.date);
           instances++;
+          
+          // Store details for each absence
+          absenceDetails.push({
+            date: activity.date,
+            type: activityName,
+            duration: formatDuration(activity.durationMinutes),
+            hours: (activity.durationMinutes / 60).toFixed(1)
+          });
+          
           console.log(`✓ Counted as absence: ${activityName} (${activity.durationMinutes/60}h, Category: ${activityCategory})`);
         }
       });
@@ -715,7 +777,8 @@
       return {
         totalHours: parseFloat(totalHours.toFixed(1)),
         days: absenceDays.size,
-        instances: instances
+        instances: instances,
+        details: absenceDetails
       };
     }
 
@@ -731,6 +794,13 @@
       return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
     }
 
+    function calculateOvertimeRate(hours) {
+      // Simplified logic - in a real app, you'd use company policy
+      if (hours > 50) return '2.0';
+      if (hours > 40) return '1.5';
+      return '1.0';
+    }
+
     // ===== Rendering Functions =====
     function renderOvertimeResults(data, thresholdHours) {
       const container = document.getElementById('overtimeResults');
@@ -741,6 +811,9 @@
         return;
       }
       
+      // Calculate metrics for overtime rates
+      const rateMetrics = calculateOvertimeRateMetrics(data);
+      
       let html = `
         <h3 class="section-title">Overtime Report</h3>
         <div class="schedule-meta">
@@ -748,6 +821,31 @@
           &nbsp;
           <span class="pill">Total Cases: ${data.length}</span>
         </div>
+        
+        <!-- Overtime Metrics -->
+        <div class="overtime-metrics">
+          <div class="overtime-metric-card">
+            <div class="metric-label">Month</div>
+            <div class="metric-value">${getCurrentMonth()}</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">Total Overtime</div>
+            <div class="metric-value">${data.reduce((sum, item) => sum + item.overtimeHours, 0).toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">1.0 Rate</div>
+            <div class="metric-value">${rateMetrics.rate1.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">1.5 Rate</div>
+            <div class="metric-value">${rateMetrics.rate1_5.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">2.0 Rate</div>
+            <div class="metric-value">${rateMetrics.rate2.toFixed(1)}h</div>
+          </div>
+        </div>
+        
         <table class="schedule-table">
           <thead>
             <tr>
@@ -771,6 +869,25 @@
             <td>${item.days.size}</td>
           </tr>
         `;
+        
+        // Add overtime activities details
+        if (item.overtimeActivities && item.overtimeActivities.length > 0) {
+          html += `
+            <tr>
+              <td colspan="5">
+                <div class="absence-details">
+                  <strong>Overtime Activities:</strong>
+                  ${item.overtimeActivities.map(activity => `
+                    <div class="absence-day">
+                      <span class="absence-date">${activity.date} - ${activity.activity}</span>
+                      <span class="absence-duration">${activity.startTime} - ${activity.endTime} (${activity.duration}) - Rate: ${activity.rate}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </td>
+            </tr>
+          `;
+        }
       });
       
       html += `</tbody></table>`;
@@ -826,6 +943,25 @@
             <td>${status}</td>
           </tr>
         `;
+        
+        // Add absence details
+        if (item.absenceDetails && item.absenceDetails.length > 0) {
+          html += `
+            <tr>
+              <td colspan="5">
+                <div class="absence-details">
+                  <strong>Absence Details:</strong>
+                  ${item.absenceDetails.map(detail => `
+                    <div class="absence-day">
+                      <span class="absence-date">${detail.date} - ${detail.type}</span>
+                      <span class="absence-duration">${detail.duration} (${detail.hours}h)</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </td>
+            </tr>
+          `;
+        }
       });
       
       html += `</tbody></table>`;
@@ -854,6 +990,34 @@
       
       html += `</div></div>`;
       container.innerHTML = html;
+    }
+
+    function calculateOvertimeRateMetrics(overtimeData) {
+      const metrics = {
+        rate1: 0,
+        rate1_5: 0,
+        rate2: 0
+      };
+      
+      overtimeData.forEach(item => {
+        item.overtimeActivities.forEach(activity => {
+          const hours = parseFloat(activity.duration.split('h')[0]) || 0;
+          if (activity.rate === '1.0') metrics.rate1 += hours;
+          else if (activity.rate === '1.5') metrics.rate1_5 += hours;
+          else if (activity.rate === '2.0') metrics.rate2 += hours;
+        });
+      });
+      
+      return metrics;
+    }
+
+    function getCurrentMonth() {
+      const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      const now = new Date();
+      return months[now.getMonth()];
     }
 
     // ===== Existing Schedule Functions =====
