@@ -135,6 +135,53 @@
     .absence-duration {
       color: var(--text-light);
     }
+    
+    /* Overtime details */
+    .overtime-details {
+      margin-top: 8px;
+      padding-left: 16px;
+      border-left: 2px solid var(--border-color);
+    }
+    .overtime-activity {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .overtime-activity:last-child {
+      border-bottom: none;
+    }
+    .overtime-date {
+      font-weight: 500;
+    }
+    .overtime-duration {
+      color: var(--text-light);
+    }
+    
+    /* Subtabs for overtime */
+    .subtabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin: 16px 0;
+    }
+    .subtab {
+      padding: 8px 16px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-weight: 600;
+      transition: all 0.2s;
+      color: var(--text-light);
+    }
+    .subtab.active {
+      color: var(--primary-color);
+      border-bottom-color: var(--primary-color);
+    }
+    .subtab-content {
+      display: none;
+    }
+    .subtab-content.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -244,10 +291,6 @@
           <div>
             <label for="overtimeEndDate">End Date</label>
             <input type="date" id="overtimeEndDate" />
-          </div>
-          <div>
-            <label for="overtimeThreshold">Overtime Threshold (hours)</label>
-            <input type="number" id="overtimeThreshold" value="40" min="0" step="0.5" />
           </div>
         </div>
         <button id="analyzeOvertimeBtn" class="full-width-btn">Analyze Overtime</button>
@@ -564,7 +607,6 @@
       const teamId = document.getElementById('overtimeTeamSelect').value;
       const startDate = document.getElementById('overtimeStartDate').value;
       const endDate = document.getElementById('overtimeEndDate').value;
-      const thresholdHours = parseFloat(document.getElementById('overtimeThreshold').value) || 40;
 
       if (!buId || !muId || !startDate || !endDate) {
         showMessage('Please select business unit, management unit, and date range', 'error');
@@ -584,30 +626,28 @@
         const startDateIso = `${startDate}T00:00:00.000Z`;
         const endDateIso = `${endDate}T00:00:00.000Z`;
 
-        // Analyze each user's schedule
+        // Analyze each user's schedule for overtime activities
         for (const user of users) {
           try {
             const schedule = await searchSchedules(muId, user.id, startDateIso, endDateIso, true);
-            const weeklyHours = calculateWeeklyHours(schedule, user.id, startDate, endDate);
+            const userOvertime = extractOvertimeActivities(schedule, user.id, buId);
             
-            weeklyHours.forEach(weekData => {
-              if (weekData.totalHours > thresholdHours) {
-                overtimeData.push({
-                  user: user.name,
-                  week: weekData.week,
-                  totalHours: weekData.totalHours,
-                  overtimeHours: weekData.totalHours - thresholdHours,
-                  days: weekData.days,
-                  overtimeActivities: weekData.overtimeActivities
-                });
-              }
-            });
+            if (userOvertime.totalHours > 0) {
+              overtimeData.push({
+                user: user.name,
+                totalHours: userOvertime.totalHours,
+                rate1Hours: userOvertime.rate1Hours,
+                rate1_5Hours: userOvertime.rate1_5Hours,
+                rate2Hours: userOvertime.rate2Hours,
+                activities: userOvertime.activities
+              });
+            }
           } catch (err) {
             console.error(`Error analyzing user ${user.name}:`, err);
           }
         }
 
-        renderOvertimeResults(overtimeData, thresholdHours);
+        renderOvertimeResults(overtimeData, startDate, endDate);
       } catch (err) {
         console.error('Error analyzing overtime:', err);
         showMessage(`Error analyzing overtime: ${err.message}`, 'error');
@@ -694,40 +734,60 @@
       return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
     }
 
-    function calculateWeeklyHours(schedule, userId, startDate, endDate) {
-      const activities = extractUserActivitiesFromSearchResult(schedule, userId, document.getElementById('overtimeBuSelect').value);
-      const weeklyData = {};
+    function extractOvertimeActivities(schedule, userId, businessUnitId) {
+      const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
+      let totalHours = 0;
+      let rate1Hours = 0;
+      let rate1_5Hours = 0;
+      let rate2Hours = 0;
+      const overtimeActivities = [];
+      
+      console.log('Analyzing activities for overtime:', activities);
       
       activities.forEach(activity => {
-        if (activity.type === 'shift' && activity.countsAsPaidTime) {
-          const date = new Date(activity.date);
-          const weekKey = getWeekKey(date);
+        const activityName = getActivityName(businessUnitId, activity.activityCodeId);
+        
+        // Only include activities with "overtime" in the name
+        if (activityName.toLowerCase().includes('overtime')) {
+          const hours = activity.durationMinutes / 60;
+          totalHours += hours;
           
-          if (!weeklyData[weekKey]) {
-            weeklyData[weekKey] = {
-              week: weekKey,
-              totalHours: 0,
-              days: new Set(),
-              overtimeActivities: []
-            };
+          // Determine rate based on activity name
+          let rate = '1.0';
+          if (activityName.toLowerCase().includes('1.5')) {
+            rate = '1.5';
+            rate1_5Hours += hours;
+          } else if (activityName.toLowerCase().includes('2.0')) {
+            rate = '2.0';
+            rate2Hours += hours;
+          } else {
+            rate1Hours += hours;
           }
           
-          weeklyData[weekKey].totalHours += activity.durationMinutes / 60;
-          weeklyData[weekKey].days.add(activity.date);
-          
-          // Track overtime activities
-          weeklyData[weekKey].overtimeActivities.push({
+          // Store activity details
+          overtimeActivities.push({
             date: activity.date,
-            activity: activity.activityLabel,
+            activity: activityName,
             startTime: formatTime(activity.start),
             endTime: formatTime(activity.end),
             duration: formatDuration(activity.durationMinutes),
-            rate: calculateOvertimeRate(activity.durationMinutes / 60)
+            hours: hours.toFixed(1),
+            rate: rate
           });
+          
+          console.log(`✓ Counted as overtime: ${activityName} (${hours}h, Rate: ${rate})`);
         }
       });
       
-      return Object.values(weeklyData);
+      console.log(`Total overtime: ${totalHours}h (1.0: ${rate1Hours}h, 1.5: ${rate1_5Hours}h, 2.0: ${rate2Hours}h)`);
+      
+      return {
+        totalHours: parseFloat(totalHours.toFixed(1)),
+        rate1Hours: parseFloat(rate1Hours.toFixed(1)),
+        rate1_5Hours: parseFloat(rate1_5Hours.toFixed(1)),
+        rate2Hours: parseFloat(rate2Hours.toFixed(1)),
+        activities: overtimeActivities
+      };
     }
 
     function calculateAbsenceStats(schedule, userId, businessUnitId) {
@@ -782,44 +842,31 @@
       };
     }
 
-    function getWeekKey(date) {
-      const year = date.getFullYear();
-      const week = getWeekNumber(date);
-      return `${year}-W${week.toString().padStart(2, '0')}`;
-    }
-
-    function getWeekNumber(date) {
-      const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-      const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
-      return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-    }
-
-    function calculateOvertimeRate(hours) {
-      // Simplified logic - in a real app, you'd use company policy
-      if (hours > 50) return '2.0';
-      if (hours > 40) return '1.5';
-      return '1.0';
-    }
-
     // ===== Rendering Functions =====
-    function renderOvertimeResults(data, thresholdHours) {
+    function renderOvertimeResults(data, startDate, endDate) {
       const container = document.getElementById('overtimeResults');
       container.style.display = 'block';
       
       if (data.length === 0) {
-        container.innerHTML = `<div class="info-message">No overtime detected for the selected period (threshold: ${thresholdHours} hours/week).</div>`;
+        container.innerHTML = `<div class="info-message">No overtime activities found for the selected period.</div>`;
         return;
       }
       
-      // Calculate metrics for overtime rates
-      const rateMetrics = calculateOvertimeRateMetrics(data);
+      // Sort by total overtime hours (descending)
+      data.sort((a, b) => b.totalHours - a.totalHours);
+      
+      // Calculate overall metrics
+      const totalOvertime = data.reduce((sum, item) => sum + item.totalHours, 0);
+      const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
+      const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
+      const totalRate2 = data.reduce((sum, item) => sum + item.rate2Hours, 0);
       
       let html = `
         <h3 class="section-title">Overtime Report</h3>
         <div class="schedule-meta">
-          <span class="pill">Threshold: ${thresholdHours} hours/week</span>
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
           &nbsp;
-          <span class="pill">Total Cases: ${data.length}</span>
+          <span class="pill">Total Agents: ${data.length}</span>
         </div>
         
         <!-- Overtime Metrics -->
@@ -830,68 +877,85 @@
           </div>
           <div class="overtime-metric-card">
             <div class="metric-label">Total Overtime</div>
-            <div class="metric-value">${data.reduce((sum, item) => sum + item.overtimeHours, 0).toFixed(1)}h</div>
+            <div class="metric-value">${totalOvertime.toFixed(1)}h</div>
           </div>
           <div class="overtime-metric-card">
             <div class="metric-label">1.0 Rate</div>
-            <div class="metric-value">${rateMetrics.rate1.toFixed(1)}h</div>
+            <div class="metric-value">${totalRate1.toFixed(1)}h</div>
           </div>
           <div class="overtime-metric-card">
             <div class="metric-label">1.5 Rate</div>
-            <div class="metric-value">${rateMetrics.rate1_5.toFixed(1)}h</div>
+            <div class="metric-value">${totalRate1_5.toFixed(1)}h</div>
           </div>
           <div class="overtime-metric-card">
             <div class="metric-label">2.0 Rate</div>
-            <div class="metric-value">${rateMetrics.rate2.toFixed(1)}h</div>
+            <div class="metric-value">${totalRate2.toFixed(1)}h</div>
           </div>
         </div>
         
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th>Agent</th>
-              <th>Week</th>
-              <th>Total Hours</th>
-              <th>Overtime Hours</th>
-              <th>Days Worked</th>
-            </tr>
-          </thead>
-          <tbody>
+        <!-- Subtabs for Summary and Details -->
+        <div class="subtabs">
+          <div class="subtab active" data-subtab="summary">Summary</div>
+          <div class="subtab" data-subtab="details">Details</div>
+        </div>
+        
+        <!-- Summary View -->
+        <div id="overtime-summary" class="subtab-content active">
+          <table class="schedule-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Total Overtime</th>
+                <th>1.0 Rate</th>
+                <th>1.5 Rate</th>
+                <th>2.0 Rate</th>
+              </tr>
+            </thead>
+            <tbody>
       `;
       
       data.forEach(item => {
         html += `
           <tr>
             <td>${escapeHtml(item.user)}</td>
-            <td>${escapeHtml(item.week)}</td>
             <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
-            <td><span class="overtime-badge">+${item.overtimeHours.toFixed(1)}h</span></td>
-            <td>${item.days.size}</td>
+            <td>${item.rate1Hours.toFixed(1)}h</td>
+            <td>${item.rate1_5Hours.toFixed(1)}h</td>
+            <td>${item.rate2Hours.toFixed(1)}h</td>
           </tr>
         `;
-        
-        // Add overtime activities details
-        if (item.overtimeActivities && item.overtimeActivities.length > 0) {
-          html += `
-            <tr>
-              <td colspan="5">
-                <div class="absence-details">
-                  <strong>Overtime Activities:</strong>
-                  ${item.overtimeActivities.map(activity => `
-                    <div class="absence-day">
-                      <span class="absence-date">${activity.date} - ${activity.activity}</span>
-                      <span class="absence-duration">${activity.startTime} - ${activity.endTime} (${activity.duration}) - Rate: ${activity.rate}</span>
-                    </div>
-                  `).join('')}
-                </div>
-              </td>
-            </tr>
-          `;
-        }
       });
       
-      html += `</tbody></table>`;
+      html += `
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Details View -->
+        <div id="overtime-details" class="subtab-content">
+      `;
+      
+      data.forEach(item => {
+        html += `
+          <div style="margin-bottom: 20px;">
+            <h4>${escapeHtml(item.user)} - ${item.totalHours.toFixed(1)}h Total Overtime</h4>
+            <div class="overtime-details">
+              ${item.activities.map(activity => `
+                <div class="overtime-activity">
+                  <span class="overtime-date">${activity.date} - ${activity.activity}</span>
+                  <span class="overtime-duration">${activity.startTime} - ${activity.endTime} (${activity.duration}) - Rate: ${activity.rate}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
       container.innerHTML = html;
+      
+      // Initialize subtabs
+      initializeSubtabs();
     }
 
     function renderAbsenceResults(data, thresholdHours, startDate, endDate) {
@@ -992,23 +1056,19 @@
       container.innerHTML = html;
     }
 
-    function calculateOvertimeRateMetrics(overtimeData) {
-      const metrics = {
-        rate1: 0,
-        rate1_5: 0,
-        rate2: 0
-      };
-      
-      overtimeData.forEach(item => {
-        item.overtimeActivities.forEach(activity => {
-          const hours = parseFloat(activity.duration.split('h')[0]) || 0;
-          if (activity.rate === '1.0') metrics.rate1 += hours;
-          else if (activity.rate === '1.5') metrics.rate1_5 += hours;
-          else if (activity.rate === '2.0') metrics.rate2 += hours;
+    function initializeSubtabs() {
+      document.querySelectorAll('.subtab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          // Remove active class from all subtabs and contents
+          document.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
+          
+          // Add active class to clicked subtab and corresponding content
+          tab.classList.add('active');
+          const subtabId = tab.getAttribute('data-subtab');
+          document.getElementById(`overtime-${subtabId}`).classList.add('active');
         });
       });
-      
-      return metrics;
     }
 
     function getCurrentMonth() {
