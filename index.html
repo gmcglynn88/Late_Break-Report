@@ -257,13 +257,13 @@
           </div>
 
           <div>
-            <label for="teamSelect">Team</label>
+            <label>Team</label>
             <div id="teamDropdown" class="checkbox-dropdown"></div>
             <div class="muted">Optional – narrows users by team</div>
           </div>
 
           <div>
-            <label for="userSelect">User</label>
+            <label>User</label>
             <div id="userDropdown" class="checkbox-dropdown"></div>
             <div class="muted">Required – schedule shown for this user</div>
           </div>
@@ -309,7 +309,7 @@
             </select>
           </div>
           <div>
-            <label for="overtimeTeamSelect">Team</label>
+            <label>Team</label>
             <div id="overtimeTeamDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
@@ -350,7 +350,7 @@
             </select>
           </div>
           <div>
-            <label for="absenceTeamSelect">Team</label>
+            <label>Team</label>
             <div id="absenceTeamDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
@@ -461,15 +461,19 @@
     }
 
     function initializeApplication() {
+      console.log('Initializing application...');
       document.getElementById('auth-message').textContent = 'Authenticated successfully!';
       document.getElementById('authCard').style.display = 'none';
       document.getElementById('appContent').style.display = 'block';
 
       initializeTabs();
+      initializeDropdowns();
       initializeScheduleApp();
       initializeAnalytics();
       initializeExportButtons();
-      initializeDropdowns();
+      
+      // Load initial data
+      populateInitialData();
     }
 
     function authorizedFetch(url, options = {}) {
@@ -513,6 +517,11 @@
     // ===== Checkbox Dropdown Implementation =====
     function createCheckboxDropdown(containerId, { placeholder, searchPlaceholder }){
       const root = document.getElementById(containerId);
+      if (!root) {
+        console.error(`Container ${containerId} not found`);
+        return null;
+      }
+      
       root.innerHTML = '';
 
       const trigger = document.createElement('div');
@@ -603,6 +612,7 @@
     }
 
     function initializeDropdowns() {
+      console.log('Initializing dropdowns...');
       // Create checkbox dropdowns
       dropdowns.team = createCheckboxDropdown('teamDropdown', { 
         placeholder: 'Select teams', 
@@ -623,6 +633,8 @@
         placeholder: 'Select teams', 
         searchPlaceholder: 'Search teams...' 
       });
+      
+      console.log('Dropdowns initialized:', dropdowns);
     }
 
     // ===== Schedule View Functions =====
@@ -630,35 +642,35 @@
       document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
       document.getElementById('businessUnitSelect').addEventListener('change', handleBusinessUnitChange);
       document.getElementById('managementUnitSelect').addEventListener('change', handleManagementUnitChange);
+    }
 
+    async function populateInitialData() {
       try {
-        await Promise.all([populateInitialData()]);
+        console.log('Loading initial data...');
+        const [users, businessUnitsResponse, teams] = await Promise.all([
+          fetchAllPages(`${apiBase}/api/v2/users`),
+          authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
+          fetchAllPages(`${apiBase}/api/v2/teams`)
+        ]);
+
+        allUsers = (users || []).filter(u => !u.deleted);
+        usersById = {};
+        allUsers.forEach(u => { usersById[u.id] = u; });
+        businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
+        allTeams = teams || [];
+
+        populateUserDropdown(allUsers);
+        populateBusinessUnitSelect(businessUnits);
+        populateTeamDropdown(allTeams);
+        
+        // Also populate analytics dropdowns
+        populateAnalyticsDropdowns();
+        
         showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
       } catch (err) {
         console.error('Error initialising app:', err);
         showMessage(`Error loading initial data: ${err.message}`, 'error');
       }
-    }
-
-    async function populateInitialData() {
-      const [users, businessUnitsResponse, teams] = await Promise.all([
-        fetchAllPages(`${apiBase}/api/v2/users`),
-        authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
-        fetchAllPages(`${apiBase}/api/v2/teams`)
-      ]);
-
-      allUsers = (users || []).filter(u => !u.deleted);
-      usersById = {};
-      allUsers.forEach(u => { usersById[u.id] = u; });
-      businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
-      allTeams = teams || [];
-
-      populateUserDropdown(allUsers);
-      populateBusinessUnitSelect(businessUnits);
-      populateTeamDropdown(allTeams);
-      
-      // Also populate analytics dropdowns
-      populateAnalyticsDropdowns();
     }
 
     function populateUserDropdown(users) {
@@ -667,7 +679,9 @@
         .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
         .sort((a,b)=>a.label.localeCompare(b.label));
       
-      dropdowns.user.setOptions(validUsers);
+      if (dropdowns.user) {
+        dropdowns.user.setOptions(validUsers);
+      }
     }
 
     function populateBusinessUnitSelect(businessUnits) {
@@ -686,9 +700,9 @@
         .map(t => ({ value: t.id, label: t.name }))
         .sort((a,b)=>a.label.localeCompare(b.label));
       
-      dropdowns.team.setOptions(teamOpts);
-      dropdowns.overtimeTeam.setOptions(teamOpts);
-      dropdowns.absenceTeam.setOptions(teamOpts);
+      if (dropdowns.team) dropdowns.team.setOptions(teamOpts);
+      if (dropdowns.overtimeTeam) dropdowns.overtimeTeam.setOptions(teamOpts);
+      if (dropdowns.absenceTeam) dropdowns.absenceTeam.setOptions(teamOpts);
     }
 
     // ===== Analytics Functions =====
@@ -708,6 +722,8 @@
 
     function populateSelect(selectId, items) {
       const select = document.getElementById(selectId);
+      if (!select) return;
+      
       select.innerHTML = '<option value="">Select business unit</option>';
       
       const sorted = [...items].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -759,7 +775,7 @@
     async function analyzeOvertime() {
       const buId = document.getElementById('overtimeBuSelect').value;
       const muId = document.getElementById('overtimeMuSelect').value;
-      const teamIds = dropdowns.overtimeTeam.getSelectedValues();
+      const teamIds = dropdowns.overtimeTeam ? dropdowns.overtimeTeam.getSelectedValues() : [];
       const startDate = document.getElementById('overtimeStartDate').value;
       const endDate = document.getElementById('overtimeEndDate').value;
 
@@ -916,7 +932,7 @@
     async function analyzeAbsence() {
       const buId = document.getElementById('absenceBuSelect').value;
       const muId = document.getElementById('absenceMuSelect').value;
-      const teamIds = dropdowns.absenceTeam.getSelectedValues();
+      const teamIds = dropdowns.absenceTeam ? dropdowns.absenceTeam.getSelectedValues() : [];
       const startDate = document.getElementById('absenceStartDate').value;
       const endDate = document.getElementById('absenceEndDate').value;
       const thresholdHours = parseFloat(document.getElementById('absenceThreshold').value) || 16;
@@ -1662,7 +1678,7 @@
 
       const buId = document.getElementById('businessUnitSelect').value;
       const muId = document.getElementById('managementUnitSelect').value;
-      const userIds = dropdowns.user.getSelectedValues();
+      const userIds = dropdowns.user ? dropdowns.user.getSelectedValues() : [];
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
 
