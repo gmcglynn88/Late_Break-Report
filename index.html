@@ -212,6 +212,20 @@
     .cd-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #f1f3f5}
     .cd-item label{display:flex;align-items:center;gap:10px;cursor:pointer;width:100%}
     .cd-footer{padding:8px 12px;background:#fafafa;border-top:1px solid var(--border-color);font-size:12px;color:var(--text-light);display:flex;justify-content:space-between}
+    
+    /* Filter by activity */
+    .filter-activity-container {
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--light-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+    .filter-activity-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--secondary-color);
+    }
   </style>
 </head>
 <body>
@@ -242,17 +256,13 @@
         <div class="controls">
           <div>
             <label for="businessUnitSelect">Business Unit</label>
-            <select id="businessUnitSelect">
-              <option value="">Select business unit</option>
-            </select>
+            <div id="businessUnitDropdown" class="checkbox-dropdown"></div>
             <div class="muted">Required</div>
           </div>
 
           <div>
             <label for="managementUnitSelect">Management Unit</label>
-            <select id="managementUnitSelect" disabled>
-              <option value="">Select management unit</option>
-            </select>
+            <div id="managementUnitDropdown" class="checkbox-dropdown"></div>
             <div class="muted">Required for schedule search</div>
           </div>
 
@@ -285,6 +295,10 @@
       </div>
 
       <div id="results" class="card" style="display:none;">
+        <div class="filter-activity-container">
+          <div class="filter-activity-title">Filter by Activity</div>
+          <div id="activityFilterDropdown" class="checkbox-dropdown"></div>
+        </div>
         <div class="export-buttons">
           <button id="exportScheduleBtn" class="export-btn">Export to CSV</button>
         </div>
@@ -298,15 +312,11 @@
         <div class="controls">
           <div>
             <label for="overtimeBuSelect">Business Unit</label>
-            <select id="overtimeBuSelect">
-              <option value="">Select business unit</option>
-            </select>
+            <div id="overtimeBuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
             <label for="overtimeMuSelect">Management Unit</label>
-            <select id="overtimeMuSelect" disabled>
-              <option value="">Select management unit</option>
-            </select>
+            <div id="overtimeMuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
             <label>Team</label>
@@ -325,6 +335,10 @@
       </div>
 
       <div id="overtimeResults" class="card" style="display:none;">
+        <div class="filter-activity-container">
+          <div class="filter-activity-title">Filter by Activity</div>
+          <div id="overtimeActivityFilterDropdown" class="checkbox-dropdown"></div>
+        </div>
         <div class="export-buttons">
           <button id="exportOvertimeSummaryBtn" class="export-btn">Export Summary to CSV</button>
           <button id="exportOvertimeDetailsBtn" class="export-btn">Export Details to CSV</button>
@@ -339,15 +353,11 @@
         <div class="controls">
           <div>
             <label for="absenceBuSelect">Business Unit</label>
-            <select id="absenceBuSelect">
-              <option value="">Select business unit</option>
-            </select>
+            <div id="absenceBuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
             <label for="absenceMuSelect">Management Unit</label>
-            <select id="absenceMuSelect" disabled>
-              <option value="">Select management unit</option>
-            </select>
+            <div id="absenceMuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
             <label>Team</label>
@@ -370,6 +380,10 @@
       </div>
 
       <div id="absenceResults" class="card" style="display:none;">
+        <div class="filter-activity-container">
+          <div class="filter-activity-title">Filter by Activity</div>
+          <div id="absenceActivityFilterDropdown" class="checkbox-dropdown"></div>
+        </div>
         <div class="export-buttons">
           <button id="exportAbsenceBtn" class="export-btn">Export to CSV</button>
         </div>
@@ -390,6 +404,7 @@
     let allTeams = [];
     let activityCodesByBuId = {};
     let businessUnits = [];
+    let managementUnits = [];
     
     // Data storage for exports
     let currentScheduleData = [];
@@ -398,10 +413,19 @@
     
     // Checkbox dropdown instances
     const dropdowns = {
+      businessUnit: null,
+      managementUnit: null,
       team: null,
       user: null,
+      overtimeBu: null,
+      overtimeMu: null,
       overtimeTeam: null,
-      absenceTeam: null
+      absenceBu: null,
+      absenceMu: null,
+      absenceTeam: null,
+      activityFilter: null,
+      overtimeActivityFilter: null,
+      absenceActivityFilter: null
     };
 
     // ===== Tab Management =====
@@ -613,7 +637,17 @@
 
     function initializeDropdowns() {
       console.log('Initializing dropdowns...');
-      // Create checkbox dropdowns
+      // Create checkbox dropdowns for all dropdowns
+      dropdowns.businessUnit = createCheckboxDropdown('businessUnitDropdown', { 
+        placeholder: 'Select business units', 
+        searchPlaceholder: 'Search business units...' 
+      });
+      
+      dropdowns.managementUnit = createCheckboxDropdown('managementUnitDropdown', { 
+        placeholder: 'Select management units', 
+        searchPlaceholder: 'Search management units...' 
+      });
+      
       dropdowns.team = createCheckboxDropdown('teamDropdown', { 
         placeholder: 'Select teams', 
         searchPlaceholder: 'Search teams...' 
@@ -624,14 +658,52 @@
         searchPlaceholder: 'Search users...' 
       });
       
+      // Overtime tab dropdowns
+      dropdowns.overtimeBu = createCheckboxDropdown('overtimeBuDropdown', { 
+        placeholder: 'Select business units', 
+        searchPlaceholder: 'Search business units...' 
+      });
+      
+      dropdowns.overtimeMu = createCheckboxDropdown('overtimeMuDropdown', { 
+        placeholder: 'Select management units', 
+        searchPlaceholder: 'Search management units...' 
+      });
+      
       dropdowns.overtimeTeam = createCheckboxDropdown('overtimeTeamDropdown', { 
         placeholder: 'Select teams', 
         searchPlaceholder: 'Search teams...' 
       });
       
+      // Absence tab dropdowns
+      dropdowns.absenceBu = createCheckboxDropdown('absenceBuDropdown', { 
+        placeholder: 'Select business units', 
+        searchPlaceholder: 'Search business units...' 
+      });
+      
+      dropdowns.absenceMu = createCheckboxDropdown('absenceMuDropdown', { 
+        placeholder: 'Select management units', 
+        searchPlaceholder: 'Search management units...' 
+      });
+      
       dropdowns.absenceTeam = createCheckboxDropdown('absenceTeamDropdown', { 
         placeholder: 'Select teams', 
         searchPlaceholder: 'Search teams...' 
+      });
+      
+      // Activity filter dropdowns
+      dropdowns.activityFilter = createCheckboxDropdown('activityFilterDropdown', { 
+        placeholder: 'Filter by activity type', 
+        searchPlaceholder: 'Search activities...' 
+      });
+      
+      dropdowns.overtimeActivityFilter = createCheckboxDropdown('overtimeActivityFilterDropdown', { 
+        placeholder: 'Filter by activity type', 
+        searchPlaceholder: 'Search activities...' 
+      });
+      
+      dropdowns.absenceActivityFilter = createCheckboxDropdown('absenceActivityFilterDropdown', { 
+        placeholder: 'Filter by activity type', 
+        searchPlaceholder: 'Search activities...' 
       });
       
       console.log('Dropdowns initialized:', dropdowns);
@@ -640,8 +712,16 @@
     // ===== Schedule View Functions =====
     async function initializeScheduleApp() {
       document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
-      document.getElementById('businessUnitSelect').addEventListener('change', handleBusinessUnitChange);
-      document.getElementById('managementUnitSelect').addEventListener('change', handleManagementUnitChange);
+      
+      // Add event listeners for dropdown changes
+      if (dropdowns.businessUnit) {
+        // We'll handle this in the populateInitialData function
+      }
+      
+      // Add activity filter change handler
+      if (dropdowns.activityFilter) {
+        // We'll handle this when data is loaded
+      }
     }
 
     async function populateInitialData() {
@@ -660,7 +740,7 @@
         allTeams = teams || [];
 
         populateUserDropdown(allUsers);
-        populateBusinessUnitSelect(businessUnits);
+        populateBusinessUnitDropdown(businessUnits);
         populateTeamDropdown(allTeams);
         
         // Also populate analytics dropdowns
@@ -684,15 +764,14 @@
       }
     }
 
-    function populateBusinessUnitSelect(businessUnits) {
-      const buSelect = document.getElementById('businessUnitSelect');
-      buSelect.innerHTML = '<option value="">Select business unit</option>';
-      businessUnits.forEach(bu => {
-        const opt = document.createElement('option');
-        opt.value = bu.id;
-        opt.text = bu.name || bu.id;
-        buSelect.add(opt);
-      });
+    function populateBusinessUnitDropdown(businessUnits) {
+      const buOpts = businessUnits
+        .map(bu => ({ value: bu.id, label: bu.name || bu.id }))
+        .sort((a,b)=>a.label.localeCompare(b.label));
+      
+      if (dropdowns.businessUnit) dropdowns.businessUnit.setOptions(buOpts);
+      if (dropdowns.overtimeBu) dropdowns.overtimeBu.setOptions(buOpts);
+      if (dropdowns.absenceBu) dropdowns.absenceBu.setOptions(buOpts);
     }
 
     function populateTeamDropdown(teams) {
@@ -707,10 +786,6 @@
 
     // ===== Analytics Functions =====
     function populateAnalyticsDropdowns() {
-      // Populate business unit dropdowns for analytics
-      populateSelect('overtimeBuSelect', businessUnits);
-      populateSelect('absenceBuSelect', businessUnits);
-      
       // Set default dates for analytics
       const today = new Date();
       const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
@@ -720,66 +795,23 @@
       document.getElementById('absenceEndDate').value = today.toISOString().split('T')[0];
     }
 
-    function populateSelect(selectId, items) {
-      const select = document.getElementById(selectId);
-      if (!select) return;
-      
-      select.innerHTML = '<option value="">Select business unit</option>';
-      
-      const sorted = [...items].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      sorted.forEach(item => {
-        const opt = document.createElement('option');
-        opt.value = item.id;
-        opt.text = item.name || item.id;
-        select.add(opt);
-      });
-    }
-
     function initializeAnalytics() {
       // Overtime analysis
       document.getElementById('analyzeOvertimeBtn').addEventListener('click', analyzeOvertime);
-      document.getElementById('overtimeBuSelect').addEventListener('change', (e) => handleAnalyticsBuChange(e, 'overtime'));
       
       // Absence analysis
       document.getElementById('analyzeAbsenceBtn').addEventListener('click', analyzeAbsence);
-      document.getElementById('absenceBuSelect').addEventListener('change', (e) => handleAnalyticsBuChange(e, 'absence'));
-    }
-
-    async function handleAnalyticsBuChange(event, tabType) {
-      const buId = event.target.value;
-      const muSelect = document.getElementById(`${tabType}MuSelect`);
-      muSelect.innerHTML = '<option value="">Select management unit</option>';
-      muSelect.disabled = true;
-
-      if (!buId) return;
-
-      try {
-        const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
-        );
-        const list = muResponse.entities || muResponse.managementUnits || [];
-        list.forEach(mu => {
-          const opt = document.createElement('option');
-          opt.value = mu.id;
-          opt.text = mu.name || mu.id;
-          muSelect.add(opt);
-        });
-        muSelect.disabled = false;
-      } catch (err) {
-        console.error('Error loading management units:', err);
-        showMessage(`Error loading management units: ${err.message}`, 'error');
-      }
     }
 
     // ===== Overtime Analysis =====
     async function analyzeOvertime() {
-      const buId = document.getElementById('overtimeBuSelect').value;
-      const muId = document.getElementById('overtimeMuSelect').value;
+      const buIds = dropdowns.overtimeBu ? dropdowns.overtimeBu.getSelectedValues() : [];
+      const muIds = dropdowns.overtimeMu ? dropdowns.overtimeMu.getSelectedValues() : [];
       const teamIds = dropdowns.overtimeTeam ? dropdowns.overtimeTeam.getSelectedValues() : [];
       const startDate = document.getElementById('overtimeStartDate').value;
       const endDate = document.getElementById('overtimeEndDate').value;
 
-      if (!buId || !muId || !startDate || !endDate) {
+      if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
         showMessage('Please select business unit, management unit, and date range', 'error');
         return;
       }
@@ -791,10 +823,10 @@
 
       try {
         // Load activity codes first
-        await loadActivityCodes(buId);
+        await loadActivityCodes(buIds[0]);
         
         // Get users based on filters
-        let users = await getUsersForAnalytics(muId, teamIds);
+        let users = await getUsersForAnalytics(muIds[0], teamIds);
         
         const overtimeData = [];
         const startDateIso = `${startDate}T00:00:00.000Z`;
@@ -806,8 +838,8 @@
         for (const user of users) {
           try {
             console.log(`Checking user: ${user.name}`);
-            const schedule = await searchSchedules(muId, user.id, startDateIso, endDateIso, true);
-            const userOvertime = extractOvertimeActivities(schedule, user.id, buId);
+            const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
+            const userOvertime = extractOvertimeActivities(schedule, user.id, buIds[0]);
             
             if (userOvertime.totalHours > 0) {
               console.log(`Found overtime for ${user.name}: ${userOvertime.totalHours}h`);
@@ -930,14 +962,14 @@
 
     // ===== Absence Analysis =====
     async function analyzeAbsence() {
-      const buId = document.getElementById('absenceBuSelect').value;
-      const muId = document.getElementById('absenceMuSelect').value;
+      const buIds = dropdowns.absenceBu ? dropdowns.absenceBu.getSelectedValues() : [];
+      const muIds = dropdowns.absenceMu ? dropdowns.absenceMu.getSelectedValues() : [];
       const teamIds = dropdowns.absenceTeam ? dropdowns.absenceTeam.getSelectedValues() : [];
       const startDate = document.getElementById('absenceStartDate').value;
       const endDate = document.getElementById('absenceEndDate').value;
       const thresholdHours = parseFloat(document.getElementById('absenceThreshold').value) || 16;
 
-      if (!buId || !muId || !startDate || !endDate) {
+      if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
         showMessage('Please select business unit, management unit, and date range', 'error');
         return;
       }
@@ -949,17 +981,17 @@
 
       try {
         // Load activity codes for absence types
-        await loadActivityCodes(buId);
+        await loadActivityCodes(buIds[0]);
         
-        let users = await getUsersForAnalytics(muId, teamIds);
+        let users = await getUsersForAnalytics(muIds[0], teamIds);
         const absenceData = [];
         const startDateIso = `${startDate}T00:00:00.000Z`;
         const endDateIso = `${endDate}T00:00:00.000Z`;
 
         for (const user of users) {
           try {
-            const schedule = await searchSchedules(muId, user.id, startDateIso, endDateIso, true);
-            const absenceStats = calculateAbsenceStats(schedule, user.id, buId);
+            const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
+            const absenceStats = calculateAbsenceStats(schedule, user.id, buIds[0]);
             
             if (absenceStats.totalHours > 0) {
               absenceData.push({
@@ -1227,6 +1259,9 @@
       
       // Initialize subtabs
       initializeSubtabs();
+      
+      // Populate activity filter dropdown
+      populateActivityFilterDropdown('overtime');
     }
 
     function renderAbsenceResults(data, thresholdHours, startDate, endDate) {
@@ -1325,6 +1360,9 @@
       
       html += `</div></div>`;
       container.innerHTML = html;
+      
+      // Populate activity filter dropdown
+      populateActivityFilterDropdown('absence');
     }
 
     function initializeSubtabs() {
@@ -1401,8 +1439,18 @@
         return;
       }
 
-      const csvData = currentScheduleData.map(activity => ({
+      // Apply activity filter if any
+      let exportData = currentScheduleData;
+      const selectedActivities = dropdowns.activityFilter ? dropdowns.activityFilter.getSelectedValues() : [];
+      if (selectedActivities.length > 0) {
+        exportData = currentScheduleData.filter(activity => 
+          selectedActivities.includes(activity.activityLabel)
+        );
+      }
+
+      const csvData = exportData.map(activity => ({
         Date: activity.date,
+        User: activity.userName,
         Activity: activity.activityLabel,
         Start: formatTime(activity.start),
         End: formatTime(activity.end),
@@ -1496,28 +1544,28 @@
 
     // ===== Existing Schedule Functions =====
     async function handleBusinessUnitChange() {
-      const buId = document.getElementById('businessUnitSelect').value;
-      const muSelect = document.getElementById('managementUnitSelect');
-      muSelect.innerHTML = '<option value="">Select management unit</option>';
-      muSelect.disabled = true;
+      const buIds = dropdowns.businessUnit ? dropdowns.businessUnit.getSelectedValues() : [];
+      const muDropdown = dropdowns.managementUnit;
+      
+      if (muDropdown) {
+        muDropdown.setOptions([]);
+      }
 
-      if (!buId) return;
+      if (buIds.length === 0) return;
 
       try {
         // Load activity codes for this business unit
-        await loadActivityCodes(buId);
+        await loadActivityCodes(buIds[0]);
         
         const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buIds[0])}`
         );
         const list = muResponse.entities || muResponse.managementUnits || [];
-        list.forEach(mu => {
-          const opt = document.createElement('option');
-          opt.value = mu.id;
-          opt.text = mu.name || mu.id;
-          muSelect.add(opt);
-        });
-        muSelect.disabled = false;
+        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
+        
+        if (muDropdown) {
+          muDropdown.setOptions(muOpts);
+        }
       } catch (err) {
         console.error('Error loading management units:', err);
         showMessage(`Error loading management units: ${err.message}`, 'error');
@@ -1651,15 +1699,15 @@
     }
 
     async function handleManagementUnitChange() {
-      const muId = document.getElementById('managementUnitSelect').value;
-      if (!muId) {
+      const muIds = dropdowns.managementUnit ? dropdowns.managementUnit.getSelectedValues() : [];
+      if (muIds.length === 0) {
         populateUserDropdown(allUsers);
         return;
       }
 
       try {
         const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muIds[0])}/users`
         );
         const list = muUsersResponse.entities || muUsersResponse.users || [];
         const enriched = list.map(uRef => usersById[uRef.id] || uRef);
@@ -1676,17 +1724,17 @@
       resultsDiv.style.display = 'block';
       resultsDiv.innerHTML = '';
 
-      const buId = document.getElementById('businessUnitSelect').value;
-      const muId = document.getElementById('managementUnitSelect').value;
+      const buIds = dropdowns.businessUnit ? dropdowns.businessUnit.getSelectedValues() : [];
+      const muIds = dropdowns.managementUnit ? dropdowns.managementUnit.getSelectedValues() : [];
       const userIds = dropdowns.user ? dropdowns.user.getSelectedValues() : [];
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
 
-      if (!buId) {
+      if (buIds.length === 0) {
         resultsDiv.innerHTML = `<div class="error-message">Please select a business unit.</div>`;
         return;
       }
-      if (!muId) {
+      if (muIds.length === 0) {
         resultsDiv.innerHTML = `<div class="error-message">Please select a management unit.</div>`;
         return;
       }
@@ -1716,9 +1764,9 @@
         let allActivities = [];
         for (const userId of userIds) {
           try {
-            const searchResult = await searchSchedules(muId, userId, startDateIso, endDateIso, true);
+            const searchResult = await searchSchedules(muIds[0], userId, startDateIso, endDateIso, true);
             console.log('Raw WFM search result:', searchResult);
-            const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buId);
+            const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
             console.log(`Extracted ${activities.length} activities for user ${userId}`);
             allActivities = allActivities.concat(activities);
           } catch (err) {
@@ -1930,6 +1978,41 @@
       }
 
       container.innerHTML = html;
+      
+      // Populate activity filter dropdown
+      populateActivityFilterDropdown('schedule');
+    }
+    
+    // ===== Activity Filter Functions =====
+    function populateActivityFilterDropdown(tabType) {
+      let activities = [];
+      let dropdown = null;
+      
+      // Get the appropriate data and dropdown based on tab type
+      switch(tabType) {
+        case 'schedule':
+          activities = [...new Set(currentScheduleData.map(a => a.activityLabel))].sort();
+          dropdown = dropdowns.activityFilter;
+          break;
+        case 'overtime':
+          activities = [...new Set(currentOvertimeData.flatMap(u => u.activities.map(a => a.activity)))].sort();
+          dropdown = dropdowns.overtimeActivityFilter;
+          break;
+        case 'absence':
+          activities = [...new Set(currentAbsenceData.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
+          dropdown = dropdowns.absenceActivityFilter;
+          break;
+      }
+      
+      if (dropdown && activities.length > 0) {
+        const activityOpts = activities.map(a => ({ value: a, label: a }));
+        dropdown.setOptions(activityOpts);
+        
+        // Add event listener for filtering
+        dropdown.getSelectedValues = function() {
+          return Array.from(this.selected || []);
+        };
+      }
     }
   </script>
 </body>
