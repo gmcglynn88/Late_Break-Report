@@ -323,6 +323,27 @@
       font-size: 11px;
       margin-left: 8px;
     }
+
+    /* Toggle buttons for detailed view */
+    .view-toggle {
+      display: flex;
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .view-toggle-btn {
+      background: var(--light-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .view-toggle-btn.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
   </style>
 </head>
 <body>
@@ -508,8 +529,9 @@
             <input type="date" id="absenceEndDate" />
           </div>
           <div>
-            <label for="absenceThreshold">Alert Threshold (hours)</label>
-            <input type="number" id="absenceThreshold" value="16" min="0" step="1" />
+            <label for="absenceThreshold">Alert Threshold (days)</label>
+            <input type="number" id="absenceThreshold" value="2" min="0" step="0.5" />
+            <div class="muted">Threshold in days (e.g., 2 = 2 days)</div>
           </div>
         </div>
         <button id="analyzeAbsenceBtn" class="full-width-btn">Analyze Absence</button>
@@ -540,6 +562,12 @@
         <div class="export-buttons">
           <button id="exportAbsenceBtn" class="export-btn">Export Summary to CSV</button>
           <button id="exportAbsenceDetailsBtn" class="export-btn">Export Details to CSV</button>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" data-view="summary">Summary View</button>
+          <button class="view-toggle-btn" data-view="detailed">Detailed Table</button>
         </div>
         
         <div id="absenceResultsContent"></div>
@@ -577,6 +605,9 @@
       type: null,
       filter: null
     };
+    
+    // View state
+    let currentAbsenceView = 'summary';
     
     // Checkbox dropdown instances
     const dropdowns = {
@@ -677,6 +708,7 @@
       initializeAnalytics();
       initializeExportButtons();
       initializeSorting();
+      initializeViewToggle();
       
       // Load initial data
       populateInitialData();
@@ -921,6 +953,29 @@
       console.log('Dropdowns initialized:', dropdowns);
     }
 
+    // ===== View Toggle =====
+    function initializeViewToggle() {
+      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          // Remove active class from all buttons
+          document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          // Add active class to clicked button
+          this.classList.add('active');
+          
+          currentAbsenceView = this.getAttribute('data-view');
+          
+          // Re-render absence results with new view
+          const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
+          const startDate = document.getElementById('absenceStartDate').value;
+          const endDate = document.getElementById('absenceEndDate').value;
+          
+          if (currentAbsenceData.length > 0) {
+            renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
+          }
+        });
+      });
+    }
+
     // ===== Schedule View Functions =====
     async function initializeScheduleApp() {
       document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
@@ -1086,10 +1141,10 @@
             document.getElementById('overtimeEndDate').value);
           break;
         case 'absence':
-          renderAbsenceResults(sortedData, 
-            parseFloat(document.getElementById('absenceThreshold').value) || 16,
-            document.getElementById('absenceStartDate').value,
-            document.getElementById('absenceEndDate').value);
+          const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
+          const startDate = document.getElementById('absenceStartDate').value;
+          const endDate = document.getElementById('absenceEndDate').value;
+          renderAbsenceResults(sortedData, thresholdDays, startDate, endDate);
           break;
       }
     }
@@ -1326,7 +1381,7 @@
       const teamIds = dropdowns.absenceTeam ? dropdowns.absenceTeam.getSelectedValues() : [];
       const startDate = document.getElementById('absenceStartDate').value;
       const endDate = document.getElementById('absenceEndDate').value;
-      const thresholdHours = parseFloat(document.getElementById('absenceThreshold').value) || 16;
+      const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
 
       if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
         showMessage('Please select business unit, management unit, and date range', 'error');
@@ -1353,6 +1408,8 @@
             const absenceStats = calculateAbsenceStats(schedule, user.id, buIds[0]);
             
             if (absenceStats.totalHours > 0) {
+              // Convert threshold from days to hours (assuming 8-hour work day)
+              const thresholdHours = thresholdDays * 8;
               absenceData.push({
                 user: user.name,
                 totalHours: absenceStats.totalHours,
@@ -1370,7 +1427,7 @@
 
         currentAbsenceData = absenceData; // Store for export
         currentDisplayedData.absence = [...absenceData];
-        renderAbsenceResults(absenceData, thresholdHours, startDate, endDate);
+        renderAbsenceResults(absenceData, thresholdDays, startDate, endDate);
       } catch (err) {
         console.error('Error analyzing absence:', err);
         showMessage(`Error analyzing absence: ${err.message}`, 'error');
@@ -1436,8 +1493,8 @@
       };
     }
 
-    // ===== Enhanced Rendering Functions =====
-    function renderAbsenceResults(data, thresholdHours, startDate, endDate) {
+    // ===== Enhanced Absence Results Rendering =====
+    function renderAbsenceResults(data, thresholdDays, startDate, endDate) {
       const container = document.getElementById('absenceResults');
       const contentContainer = document.getElementById('absenceResultsContent');
       container.style.display = 'block';
@@ -1456,22 +1513,33 @@
       // Sort by absence hours (descending) by default
       filteredData.sort((a, b) => b.totalHours - a.totalHours);
       
+      if (currentAbsenceView === 'detailed') {
+        renderDetailedAbsenceTable(filteredData, thresholdDays, startDate, endDate);
+      } else {
+        renderAbsenceSummary(filteredData, thresholdDays, startDate, endDate);
+      }
+    }
+
+    function renderAbsenceSummary(data, thresholdDays, startDate, endDate) {
+      const contentContainer = document.getElementById('absenceResultsContent');
+      
       // Calculate enhanced analytics
       const usersAboveThreshold = data.filter(item => item.exceedsThreshold).length;
-      const totalAbsenceHours = filteredData.reduce((sum, item) => sum + item.totalHours, 0);
-      const totalAbsenceDays = filteredData.reduce((sum, item) => sum + item.absenceDays, 0);
-      const totalInstances = filteredData.reduce((sum, item) => sum + item.instances, 0);
-      const avgHoursPerUser = totalAbsenceHours / filteredData.length;
-      const mostCommonType = findMostCommonAbsenceType(filteredData);
+      const totalAbsenceHours = data.reduce((sum, item) => sum + item.totalHours, 0);
+      const totalAbsenceDays = data.reduce((sum, item) => sum + item.absenceDays, 0);
+      const totalInstances = data.reduce((sum, item) => sum + item.instances, 0);
+      const avgHoursPerUser = totalAbsenceHours / data.length;
+      const avgDaysPerUser = totalAbsenceDays / data.length;
+      const mostCommonType = findMostCommonAbsenceType(data);
       
       let html = `
         <h3 class="section-title">Absence Analytics</h3>
         <div class="schedule-meta">
           <span class="pill">Period: ${startDate} to ${endDate}</span>
           &nbsp;
-          <span class="pill">Alert Threshold: ${thresholdHours} hours</span>
+          <span class="pill">Alert Threshold: ${thresholdDays} days</span>
           &nbsp;
-          <span class="pill">Total Agents: ${filteredData.length}</span>
+          <span class="pill">Total Agents: ${data.length}</span>
           ${currentDrillDown.type ? `<span class="pill drilldown-badge">Filtered View</span>` : ''}
         </div>
         
@@ -1482,15 +1550,15 @@
             <div class="chart-wrapper">
               <h4>Absence Hours Distribution</h4>
               <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
-                Showing top ${Math.min(10, filteredData.length)} users by absence hours
+                Showing top ${Math.min(10, data.length)} users by absence hours
               </div>
       `;
       
-      // Create chart for top 10 users
-      const topUsers = filteredData.slice(0, 10);
-      const maxHours = Math.max(...topUsers.map(u => u.totalHours), 1); // Ensure at least 1 to avoid division by zero
+      // Create chart for top 10 users by hours
+      const topUsersByHours = data.slice(0, 10);
+      const maxHours = Math.max(...topUsersByHours.map(u => u.totalHours), 1);
       
-      topUsers.forEach(user => {
+      topUsersByHours.forEach(user => {
         const percentage = (user.totalHours / maxHours) * 100;
         html += `
           <div class="chart-bar">
@@ -1507,8 +1575,38 @@
       
       html += `</div>`;
       
+      // NEW: Days Absence Chart
+      html += `
+        <div class="chart-wrapper">
+          <h4>Absence Days Distribution</h4>
+          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+            Showing top ${Math.min(10, data.length)} users by absence days
+          </div>
+      `;
+      
+      // Create chart for top 10 users by days
+      const topUsersByDays = [...data].sort((a, b) => b.absenceDays - a.absenceDays).slice(0, 10);
+      const maxDays = Math.max(...topUsersByDays.map(u => u.absenceDays), 1);
+      
+      topUsersByDays.forEach(user => {
+        const percentage = (user.absenceDays / maxDays) * 100;
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #ea580c, #c2410c);">
+                ${user.absenceDays}d
+              </div>
+            </div>
+            <div class="chart-bar-value">${user.absenceDays}d</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`; // Close days chart
+      
       // Absence Types Chart
-      const chartAbsenceTypes = getAbsenceTypeDistribution(filteredData);
+      const chartAbsenceTypes = getAbsenceTypeDistribution(data);
       if (chartAbsenceTypes.length > 0) {
         html += `
           <div class="chart-wrapper">
@@ -1523,7 +1621,7 @@
             <div class="chart-bar">
               <div class="chart-bar-label">${escapeHtml(type.name)}</div>
               <div class="chart-bar-container">
-                <div class="chart-bar-fill" style="width: ${percentage}%">
+                <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #8b5cf6, #7c3aed);">
                   ${type.count}
                 </div>
               </div>
@@ -1545,7 +1643,7 @@
             <div style="display: grid; gap: 12px;">
               <div class="metric-card ${currentDrillDown.type ? 'drilldown-active' : ''}" onclick="clearDrillDown()" style="cursor: pointer;">
                 <div class="metric-label">Total Agents</div>
-                <div class="metric-value">${filteredData.length}</div>
+                <div class="metric-value">${data.length}</div>
               </div>
               <div class="metric-card">
                 <div class="metric-label">Total Absence Hours</div>
@@ -1560,8 +1658,12 @@
                 <div class="metric-value">${totalInstances}</div>
               </div>
               <div class="metric-card">
-                <div class="metric-label">Average per User</div>
+                <div class="metric-label">Avg Hours per User</div>
                 <div class="metric-value">${avgHoursPerUser.toFixed(1)}h</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Avg Days per User</div>
+                <div class="metric-value">${avgDaysPerUser.toFixed(1)}</div>
               </div>
               <div class="metric-card clickable ${currentDrillDown.type === 'aboveThreshold' ? 'drilldown-active' : ''}" onclick="drillDownToAboveThreshold()">
                 <div class="metric-label">Users Above Threshold</div>
@@ -1578,7 +1680,7 @@
       
       html += `</div>`; // Close analytics-grid
       
-      // Detailed Table
+      // Summary Table
       html += `
         <table class="schedule-table">
           <thead>
@@ -1594,9 +1696,12 @@
           <tbody>
       `;
       
-      filteredData.forEach(item => {
-        const rowClass = item.exceedsThreshold ? 'warning-row' : '';
-        const status = item.exceedsThreshold ? 
+      data.forEach(item => {
+        // Convert threshold from days to hours for comparison (assuming 8-hour days)
+        const thresholdHours = thresholdDays * 8;
+        const exceedsThreshold = item.totalHours >= thresholdHours;
+        const rowClass = exceedsThreshold ? 'warning-row' : '';
+        const status = exceedsThreshold ? 
           `<span class="absence-badge">Above Threshold</span>` : 
           '<span style="color: var(--success-text)">Within Limits</span>';
         
@@ -1636,11 +1741,70 @@
       contentContainer.innerHTML = html;
       
       // Populate absence activity filter dropdown
-      const filterAbsenceTypes = [...new Set(filteredData.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
+      const filterAbsenceTypes = [...new Set(data.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
       if (dropdowns.absenceActivityFilter && filterAbsenceTypes.length > 0) {
         const activityOpts = filterAbsenceTypes.map(a => ({ value: a, label: a }));
         dropdowns.absenceActivityFilter.setOptions(activityOpts);
       }
+    }
+
+    function renderDetailedAbsenceTable(data, thresholdDays, startDate, endDate) {
+      const contentContainer = document.getElementById('absenceResultsContent');
+      
+      // Convert data to detailed format (similar to export)
+      const detailedData = [];
+      data.forEach(item => {
+        item.absenceDetails.forEach(detail => {
+          detailedData.push({
+            agent: item.user,
+            date: detail.date,
+            type: detail.type,
+            duration: detail.duration,
+            hours: detail.hours
+          });
+        });
+      });
+      
+      let html = `
+        <h3 class="section-title">Detailed Absence Records</h3>
+        <div class="schedule-meta">
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
+          &nbsp;
+          <span class="pill">Alert Threshold: ${thresholdDays} days</span>
+          &nbsp;
+          <span class="pill">Total Records: ${detailedData.length}</span>
+          &nbsp;
+          <span class="pill">Total Agents: ${data.length}</span>
+        </div>
+        
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="agent">Agent</th>
+              <th class="sortable" data-sort="date">Date</th>
+              <th class="sortable" data-sort="type">Absence Type</th>
+              <th class="sortable" data-sort="duration">Duration</th>
+              <th class="sortable" data-sort="hours">Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      detailedData.forEach(record => {
+        html += `
+          <tr>
+            <td>${escapeHtml(record.agent)}</td>
+            <td>${escapeHtml(record.date)}</td>
+            <td>${escapeHtml(record.type)}</td>
+            <td>${escapeHtml(record.duration)}</td>
+            <td>${escapeHtml(record.hours)}h</td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      
+      contentContainer.innerHTML = html;
     }
 
     // ===== Drill Down Functions =====
@@ -1651,11 +1815,11 @@
       };
       
       // Re-render the absence results with the filtered data
-      const thresholdHours = parseFloat(document.getElementById('absenceThreshold').value) || 16;
+      const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
       const startDate = document.getElementById('absenceStartDate').value;
       const endDate = document.getElementById('absenceEndDate').value;
       
-      renderAbsenceResults(currentAbsenceData, thresholdHours, startDate, endDate);
+      renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
     }
 
     function clearDrillDown() {
@@ -1665,11 +1829,11 @@
       };
       
       // Re-render the absence results with all data
-      const thresholdHours = parseFloat(document.getElementById('absenceThreshold').value) || 16;
+      const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
       const startDate = document.getElementById('absenceStartDate').value;
       const endDate = document.getElementById('absenceEndDate').value;
       
-      renderAbsenceResults(currentAbsenceData, thresholdHours, startDate, endDate);
+      renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
     }
 
     // ===== Helper Functions for Enhanced Analytics =====
