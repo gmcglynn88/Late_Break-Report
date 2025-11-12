@@ -89,9 +89,16 @@
       background:white;border:1px solid var(--border-color);border-radius:8px;padding:16px;margin-top:16px
     }
     .metric-card{
-      background:white;border:1px solid var(--border-color);border-radius:8px;padding:16px;text-align:center
+      background:white;border:1px solid var(--border-color);border-radius:8px;padding:16px;text-align:center;
+      cursor:pointer;transition:all 0.2s ease;
     }
-    .metric-value{font-size:24px;font-weight:bold;color:var(--primary-color);margin:8px 0}
+    .metric-card:hover{
+      transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.1);
+    }
+    .metric-card.clickable .metric-value{
+      color:var(--primary-color);text-decoration:underline;
+    }
+    .metric-value{font-size:24px;font-weight:bold;color:var(--primary-color);margin:8px 0;transition:color 0.2s}
     .metric-label{font-size:12px;color:var(--text-light);text-transform:uppercase}
     
     details pre{
@@ -301,6 +308,20 @@
       display: flex;
       gap: 10px;
       align-items: center;
+    }
+
+    /* Drill down styles */
+    .drilldown-active {
+      background: var(--light-bg) !important;
+      border: 2px solid var(--primary-color) !important;
+    }
+    .drilldown-badge {
+      background: var(--primary-color);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      margin-left: 8px;
     }
   </style>
 </head>
@@ -517,7 +538,8 @@
         </div>
         
         <div class="export-buttons">
-          <button id="exportAbsenceBtn" class="export-btn">Export to CSV</button>
+          <button id="exportAbsenceBtn" class="export-btn">Export Summary to CSV</button>
+          <button id="exportAbsenceDetailsBtn" class="export-btn">Export Details to CSV</button>
         </div>
         
         <div id="absenceResultsContent"></div>
@@ -548,6 +570,12 @@
       schedule: [],
       overtime: [],
       absence: []
+    };
+    
+    // Drill-down state
+    let currentDrillDown = {
+      type: null,
+      filter: null
     };
     
     // Checkbox dropdown instances
@@ -1409,157 +1437,6 @@
     }
 
     // ===== Enhanced Rendering Functions =====
-    function renderOvertimeResults(data, startDate, endDate) {
-      const container = document.getElementById('overtimeResults');
-      const contentContainer = document.getElementById('overtimeResultsContent');
-      container.style.display = 'block';
-      
-      if (data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No overtime activities found for the selected period.
-            <br><br>
-            <details>
-              <summary>Debug Information</summary>
-              <div style="margin-top: 10px;">
-                <strong>Common reasons:</strong>
-                <ul>
-                  <li>No activities with "overtime" in the name were found</li>
-                  <li>Activity codes may use different naming conventions</li>
-                  <li>Check that your activity codes include "Overtime" in their names</li>
-                  <li>Verify the date range covers periods when overtime was scheduled</li>
-                </ul>
-                <br>
-                <strong>Expected activity code names:</strong>
-                <ul>
-                  <li>Overtime 1.0</li>
-                  <li>Overtime 1.5</li>
-                  <li>Overtime 2.0</li>
-                  <li>Or any activity containing "overtime"</li>
-                </ul>
-              </div>
-            </details>
-          </div>
-        `;
-        return;
-      }
-      
-      // Sort by total overtime hours (descending) by default
-      data.sort((a, b) => b.totalHours - a.totalHours);
-      
-      // Calculate overall metrics
-      const totalOvertime = data.reduce((sum, item) => sum + item.totalHours, 0);
-      const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
-      const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
-      const totalRate2 = data.reduce((sum, item) => sum + item.rate2Hours, 0);
-      const avgOvertimePerUser = totalOvertime / data.length;
-      
-      let html = `
-        <h3 class="section-title">Overtime Report</h3>
-        <div class="schedule-meta">
-          <span class="pill">Period: ${startDate} to ${endDate}</span>
-          &nbsp;
-          <span class="pill">Total Agents: ${data.length}</span>
-          &nbsp;
-          <span class="pill">Total Overtime: ${totalOvertime.toFixed(1)}h</span>
-        </div>
-        
-        <!-- Overtime Metrics -->
-        <div class="overtime-metrics">
-          <div class="overtime-metric-card">
-            <div class="metric-label">Total Overtime</div>
-            <div class="metric-value">${totalOvertime.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">1.0 Rate</div>
-            <div class="metric-value">${totalRate1.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">1.5 Rate</div>
-            <div class="metric-value">${totalRate1_5.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">2.0 Rate</div>
-            <div class="metric-value">${totalRate2.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">Avg per User</div>
-            <div class="metric-value">${avgOvertimePerUser.toFixed(1)}h</div>
-          </div>
-        </div>
-        
-        <!-- Overtime Chart -->
-        <div class="chart-wrapper">
-          <h4>Overtime Distribution</h4>
-          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
-            Showing top ${Math.min(10, data.length)} users by overtime hours
-          </div>
-      `;
-      
-      // Create chart for top 10 users
-      const topUsers = data.slice(0, 10);
-      const maxHours = Math.max(...topUsers.map(u => u.totalHours));
-      
-      topUsers.forEach(user => {
-        const percentage = (user.totalHours / maxHours) * 100;
-        html += `
-          <div class="chart-bar">
-            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
-            <div class="chart-bar-container">
-              <div class="chart-bar-fill" style="width: ${percentage}%">
-                ${user.totalHours.toFixed(1)}h
-              </div>
-            </div>
-            <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
-          </div>
-        `;
-      });
-      
-      html += `</div>`;
-      
-      // Summary Table
-      html += `
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="user">Agent</th>
-              <th class="sortable" data-sort="totalHours">Total Overtime</th>
-              <th class="sortable" data-sort="rate1Hours">1.0 Rate</th>
-              <th class="sortable" data-sort="rate1_5Hours">1.5 Rate</th>
-              <th class="sortable" data-sort="rate2Hours">2.0 Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(item => {
-        html += `
-          <tr>
-            <td>${escapeHtml(item.user)}</td>
-            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
-            <td>${item.rate1Hours.toFixed(1)}h</td>
-            <td>${item.rate1_5Hours.toFixed(1)}h</td>
-            <td>${item.rate2Hours.toFixed(1)}h</td>
-          </tr>
-        `;
-      });
-      
-      html += `
-            </tbody>
-          </table>
-        </div>
-      `;
-      
-      contentContainer.innerHTML = html;
-      
-      // Populate overtime activity filter dropdown
-      const overtimeActivities = [...new Set(data.flatMap(u => u.activities.map(a => a.activity)))].sort();
-      if (dropdowns.overtimeActivityFilter && overtimeActivities.length > 0) {
-        const activityOpts = overtimeActivities.map(a => ({ value: a, label: a }));
-        dropdowns.overtimeActivityFilter.setOptions(activityOpts);
-      }
-    }
-
     function renderAbsenceResults(data, thresholdHours, startDate, endDate) {
       const container = document.getElementById('absenceResults');
       const contentContainer = document.getElementById('absenceResultsContent');
@@ -1570,16 +1447,22 @@
         return;
       }
       
+      // Apply drill-down filter if active
+      let filteredData = [...data];
+      if (currentDrillDown.type === 'aboveThreshold') {
+        filteredData = data.filter(item => item.exceedsThreshold);
+      }
+      
       // Sort by absence hours (descending) by default
-      data.sort((a, b) => b.totalHours - a.totalHours);
+      filteredData.sort((a, b) => b.totalHours - a.totalHours);
       
       // Calculate enhanced analytics
-      const totalAbsenceHours = data.reduce((sum, item) => sum + item.totalHours, 0);
-      const totalAbsenceDays = data.reduce((sum, item) => sum + item.absenceDays, 0);
-      const totalInstances = data.reduce((sum, item) => sum + item.instances, 0);
-      const avgHoursPerUser = totalAbsenceHours / data.length;
+      const totalAbsenceHours = filteredData.reduce((sum, item) => sum + item.totalHours, 0);
+      const totalAbsenceDays = filteredData.reduce((sum, item) => sum + item.absenceDays, 0);
+      const totalInstances = filteredData.reduce((sum, item) => sum + item.instances, 0);
+      const avgHoursPerUser = totalAbsenceHours / filteredData.length;
       const usersAboveThreshold = data.filter(item => item.exceedsThreshold).length;
-      const mostCommonType = findMostCommonAbsenceType(data);
+      const mostCommonType = findMostCommonAbsenceType(filteredData);
       
       let html = `
         <h3 class="section-title">Absence Analytics</h3>
@@ -1588,9 +1471,8 @@
           &nbsp;
           <span class="pill">Alert Threshold: ${thresholdHours} hours</span>
           &nbsp;
-          <span class="pill">Total Agents: ${data.length}</span>
-          &nbsp;
-          <span class="pill">Above Threshold: ${usersAboveThreshold}</span>
+          <span class="pill">Total Agents: ${filteredData.length}</span>
+          ${currentDrillDown.type ? `<span class="pill drilldown-badge">Filtered View</span>` : ''}
         </div>
         
         <div class="analytics-grid">
@@ -1600,13 +1482,13 @@
             <div class="chart-wrapper">
               <h4>Absence Hours Distribution</h4>
               <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
-                Showing top ${Math.min(10, data.length)} users by absence hours
+                Showing top ${Math.min(10, filteredData.length)} users by absence hours
               </div>
       `;
       
       // Create chart for top 10 users
-      const topUsers = data.slice(0, 10);
-      const maxHours = Math.max(...topUsers.map(u => u.totalHours));
+      const topUsers = filteredData.slice(0, 10);
+      const maxHours = Math.max(...topUsers.map(u => u.totalHours), 1); // Ensure at least 1 to avoid division by zero
       
       topUsers.forEach(user => {
         const percentage = (user.totalHours / maxHours) * 100;
@@ -1625,15 +1507,15 @@
       
       html += `</div>`;
       
-      // Absence Types Chart - FIXED: Renamed variable to avoid conflict
-      const chartAbsenceTypes = getAbsenceTypeDistribution(data);
+      // Absence Types Chart
+      const chartAbsenceTypes = getAbsenceTypeDistribution(filteredData);
       if (chartAbsenceTypes.length > 0) {
         html += `
           <div class="chart-wrapper">
             <h4>Absence Types</h4>
         `;
         
-        const maxTypeCount = Math.max(...chartAbsenceTypes.map(t => t.count));
+        const maxTypeCount = Math.max(...chartAbsenceTypes.map(t => t.count), 1);
         
         chartAbsenceTypes.forEach(type => {
           const percentage = (type.count / maxTypeCount) * 100;
@@ -1659,8 +1541,12 @@
       html += `
         <div>
           <div class="chart-wrapper">
-            <h4>Summary Metrics</h4>
+            <h4>Summary Metrics ${currentDrillDown.type ? '<span class="drilldown-badge">Filtered</span>' : ''}</h4>
             <div style="display: grid; gap: 12px;">
+              <div class="metric-card ${currentDrillDown.type ? 'drilldown-active' : ''}" onclick="clearDrillDown()" style="cursor: pointer;">
+                <div class="metric-label">Total Agents</div>
+                <div class="metric-value">${filteredData.length}</div>
+              </div>
               <div class="metric-card">
                 <div class="metric-label">Total Absence Hours</div>
                 <div class="metric-value">${totalAbsenceHours.toFixed(1)}h</div>
@@ -1677,7 +1563,7 @@
                 <div class="metric-label">Average per User</div>
                 <div class="metric-value">${avgHoursPerUser.toFixed(1)}h</div>
               </div>
-              <div class="metric-card">
+              <div class="metric-card clickable ${currentDrillDown.type === 'aboveThreshold' ? 'drilldown-active' : ''}" onclick="drillDownToAboveThreshold()">
                 <div class="metric-label">Users Above Threshold</div>
                 <div class="metric-value">${usersAboveThreshold}</div>
               </div>
@@ -1708,7 +1594,7 @@
           <tbody>
       `;
       
-      data.forEach(item => {
+      filteredData.forEach(item => {
         const rowClass = item.exceedsThreshold ? 'warning-row' : '';
         const status = item.exceedsThreshold ? 
           `<span class="absence-badge">Above Threshold</span>` : 
@@ -1749,12 +1635,41 @@
       
       contentContainer.innerHTML = html;
       
-      // Populate absence activity filter dropdown - FIXED: Renamed variable
-      const filterAbsenceTypes = [...new Set(data.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
+      // Populate absence activity filter dropdown
+      const filterAbsenceTypes = [...new Set(filteredData.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
       if (dropdowns.absenceActivityFilter && filterAbsenceTypes.length > 0) {
         const activityOpts = filterAbsenceTypes.map(a => ({ value: a, label: a }));
         dropdowns.absenceActivityFilter.setOptions(activityOpts);
       }
+    }
+
+    // ===== Drill Down Functions =====
+    function drillDownToAboveThreshold() {
+      currentDrillDown = {
+        type: 'aboveThreshold',
+        filter: 'Users above threshold'
+      };
+      
+      // Re-render the absence results with the filtered data
+      const thresholdHours = parseFloat(document.getElementById('absenceThreshold').value) || 16;
+      const startDate = document.getElementById('absenceStartDate').value;
+      const endDate = document.getElementById('absenceEndDate').value;
+      
+      renderAbsenceResults(currentAbsenceData, thresholdHours, startDate, endDate);
+    }
+
+    function clearDrillDown() {
+      currentDrillDown = {
+        type: null,
+        filter: null
+      };
+      
+      // Re-render the absence results with all data
+      const thresholdHours = parseFloat(document.getElementById('absenceThreshold').value) || 16;
+      const startDate = document.getElementById('absenceStartDate').value;
+      const endDate = document.getElementById('absenceEndDate').value;
+      
+      renderAbsenceResults(currentAbsenceData, thresholdHours, startDate, endDate);
     }
 
     // ===== Helper Functions for Enhanced Analytics =====
@@ -1802,8 +1717,9 @@
       document.getElementById('exportOvertimeSummaryBtn').addEventListener('click', exportOvertimeSummaryToCSV);
       document.getElementById('exportOvertimeDetailsBtn').addEventListener('click', exportOvertimeDetailsToCSV);
       
-      // Absence export
+      // Absence exports
       document.getElementById('exportAbsenceBtn').addEventListener('click', exportAbsenceToCSV);
+      document.getElementById('exportAbsenceDetailsBtn').addEventListener('click', exportAbsenceDetailsToCSV);
     }
 
     function exportToCSV(data, filename) {
@@ -1929,48 +1845,53 @@
       }
 
       // Apply activity filter if any
+      let exportData = currentDisplayedData.absence;
+      const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
+      if (selectedActivities.length > 0) {
+        exportData = currentDisplayedData.absence.filter(user => 
+          user.absenceDetails.some(detail => selectedActivities.includes(detail.type))
+        );
+      }
+
+      const csvData = exportData.map(item => ({
+        Agent: item.user,
+        'Total Absence Hours': item.totalHours,
+        'Absence Days': item.absenceDays,
+        Instances: item.instances,
+        'Average Hours per Instance': item.averageHoursPerInstance,
+        Status: item.exceedsThreshold ? 'Above Threshold' : 'Within Limits'
+      }));
+
+      exportToCSV(csvData, `absence_summary_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+
+    function exportAbsenceDetailsToCSV() {
+      if (currentAbsenceData.length === 0) {
+        showMessage('No absence data to export', 'error');
+        return;
+      }
+
+      // Apply activity filter if any
       let exportData = [];
       const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
       
-      currentDisplayedData.absence.forEach(item => {
+      currentAbsenceData.forEach(item => {
         const filteredDetails = selectedActivities.length > 0 
           ? item.absenceDetails.filter(detail => selectedActivities.includes(detail.type))
           : item.absenceDetails;
           
-        if (filteredDetails.length > 0) {
-          // Add summary row
+        filteredDetails.forEach(detail => {
           exportData.push({
             Agent: item.user,
-            'Total Absence Hours': item.totalHours,
-            'Absence Days': item.absenceDays,
-            Instances: item.instances,
-            'Average Hours per Instance': item.averageHoursPerInstance,
-            Status: item.exceedsThreshold ? 'Above Threshold' : 'Within Limits',
-            Date: '',
-            'Absence Type': '',
-            Duration: '',
-            Hours: ''
+            Date: detail.date,
+            'Absence Type': detail.type,
+            Duration: detail.duration,
+            Hours: detail.hours
           });
-
-          // Add detail rows
-          filteredDetails.forEach(detail => {
-            exportData.push({
-              Agent: '',
-              'Total Absence Hours': '',
-              'Absence Days': '',
-              Instances: '',
-              'Average Hours per Instance': '',
-              Status: '',
-              Date: detail.date,
-              'Absence Type': detail.type,
-              Duration: detail.duration,
-              Hours: detail.hours
-            });
-          });
-        }
+        });
       });
 
-      exportToCSV(exportData, `absence_${new Date().toISOString().split('T')[0]}.csv`);
+      exportToCSV(exportData, `absence_details_${new Date().toISOString().split('T')[0]}.csv`);
     }
 
     // ===== Existing Functions (shortened for brevity) =====
@@ -2439,6 +2360,137 @@
       html += `</tbody></table>`;
       
       contentContainer.querySelector('table').outerHTML = html;
+    }
+
+    // ===== Overtime Results Rendering (simplified) =====
+    function renderOvertimeResults(data, startDate, endDate) {
+      const container = document.getElementById('overtimeResults');
+      const contentContainer = document.getElementById('overtimeResultsContent');
+      container.style.display = 'block';
+      
+      if (data.length === 0) {
+        contentContainer.innerHTML = `
+          <div class="info-message">
+            No overtime activities found for the selected period.
+          </div>
+        `;
+        return;
+      }
+      
+      // Sort by total overtime hours (descending) by default
+      data.sort((a, b) => b.totalHours - a.totalHours);
+      
+      // Calculate overall metrics
+      const totalOvertime = data.reduce((sum, item) => sum + item.totalHours, 0);
+      const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
+      const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
+      const totalRate2 = data.reduce((sum, item) => sum + item.rate2Hours, 0);
+      const avgOvertimePerUser = totalOvertime / data.length;
+      
+      let html = `
+        <h3 class="section-title">Overtime Report</h3>
+        <div class="schedule-meta">
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
+          &nbsp;
+          <span class="pill">Total Agents: ${data.length}</span>
+          &nbsp;
+          <span class="pill">Total Overtime: ${totalOvertime.toFixed(1)}h</span>
+        </div>
+        
+        <!-- Overtime Metrics -->
+        <div class="overtime-metrics">
+          <div class="overtime-metric-card">
+            <div class="metric-label">Total Overtime</div>
+            <div class="metric-value">${totalOvertime.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">1.0 Rate</div>
+            <div class="metric-value">${totalRate1.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">1.5 Rate</div>
+            <div class="metric-value">${totalRate1_5.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">2.0 Rate</div>
+            <div class="metric-value">${totalRate2.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">Avg per User</div>
+            <div class="metric-value">${avgOvertimePerUser.toFixed(1)}h</div>
+          </div>
+        </div>
+        
+        <!-- Overtime Chart -->
+        <div class="chart-wrapper">
+          <h4>Overtime Distribution</h4>
+          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+            Showing top ${Math.min(10, data.length)} users by overtime hours
+          </div>
+      `;
+      
+      // Create chart for top 10 users
+      const topUsers = data.slice(0, 10);
+      const maxHours = Math.max(...topUsers.map(u => u.totalHours), 1);
+      
+      topUsers.forEach(user => {
+        const percentage = (user.totalHours / maxHours) * 100;
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%">
+                ${user.totalHours.toFixed(1)}h
+              </div>
+            </div>
+            <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
+      
+      // Summary Table
+      html += `
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="user">Agent</th>
+              <th class="sortable" data-sort="totalHours">Total Overtime</th>
+              <th class="sortable" data-sort="rate1Hours">1.0 Rate</th>
+              <th class="sortable" data-sort="rate1_5Hours">1.5 Rate</th>
+              <th class="sortable" data-sort="rate2Hours">2.0 Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      data.forEach(item => {
+        html += `
+          <tr>
+            <td>${escapeHtml(item.user)}</td>
+            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
+            <td>${item.rate1Hours.toFixed(1)}h</td>
+            <td>${item.rate1_5Hours.toFixed(1)}h</td>
+            <td>${item.rate2Hours.toFixed(1)}h</td>
+          </tr>
+        `;
+      });
+      
+      html += `
+            </tbody>
+          </table>
+        </div>
+      `;
+      
+      contentContainer.innerHTML = html;
+      
+      // Populate overtime activity filter dropdown
+      const overtimeActivities = [...new Set(data.flatMap(u => u.activities.map(a => a.activity)))].sort();
+      if (dropdowns.overtimeActivityFilter && overtimeActivities.length > 0) {
+        const activityOpts = overtimeActivities.map(a => ({ value: a, label: a }));
+        dropdowns.overtimeActivityFilter.setOptions(activityOpts);
+      }
     }
   </script>
 </body>
