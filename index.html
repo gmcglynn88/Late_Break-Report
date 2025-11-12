@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Schedule Analytics Dashboard</title>
+  <title>WFM Helper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <style>
     :root{
@@ -65,7 +65,9 @@
     .schedule-table th,.schedule-table td{
       border:1px solid var(--border-color);padding:8px;font-size:13px
     }
-    .schedule-table th{background:var(--light-bg);text-align:left}
+    .schedule-table th{background:var(--light-bg);text-align:left;cursor:pointer;position:relative}
+    .schedule-table th.sortable:hover{background:#e9ecef}
+    .schedule-table th .sort-indicator{margin-left:4px;font-size:10px}
     .pill{
       display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;
       background:var(--pill);font-size:11px;color:var(--secondary-color)
@@ -189,6 +191,7 @@
       gap: 10px;
       margin: 16px 0;
       justify-content: flex-start;
+      flex-wrap: wrap;
     }
     .export-btn {
       background: var(--secondary-color);
@@ -226,6 +229,79 @@
       margin-bottom: 8px;
       color: var(--secondary-color);
     }
+    
+    /* Chart styles */
+    .chart-wrapper {
+      margin: 20px 0;
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      border: 1px solid var(--border-color);
+    }
+    .chart-bar {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .chart-bar-label {
+      width: 150px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .chart-bar-container {
+      flex: 1;
+      height: 24px;
+      background: #f1f5f9;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .chart-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+      border-radius: 12px;
+      transition: width 0.5s ease;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 8px;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .chart-bar-value {
+      width: 80px;
+      text-align: right;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    /* Enhanced absence analytics */
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 20px 0;
+    }
+    @media (max-width: 768px) {
+      .analytics-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    /* Table controls */
+    .table-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 16px 0;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .sort-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
@@ -233,7 +309,7 @@
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
 
-  <h1>Schedule Analytics Dashboard</h1>
+  <h1>WFM Helper</h1>
 
   <div id="authCard" class="card">
     <div id="auth-message" class="info-message">Authenticating with Genesys Cloud...</div>
@@ -295,13 +371,32 @@
       </div>
 
       <div id="results" class="card" style="display:none;">
+        <div class="table-controls">
+          <div class="sort-controls">
+            <label for="scheduleSort">Sort by:</label>
+            <select id="scheduleSort">
+              <option value="date">Date</option>
+              <option value="user">User</option>
+              <option value="activity">Activity</option>
+              <option value="duration">Duration</option>
+            </select>
+            <select id="scheduleSortOrder">
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </div>
+        </div>
+        
         <div class="filter-activity-container">
           <div class="filter-activity-title">Filter by Activity</div>
           <div id="activityFilterDropdown" class="checkbox-dropdown"></div>
         </div>
+        
         <div class="export-buttons">
-          <button id="exportScheduleBtn" class="export-btn">Export to CSV</button>
+          <button id="exportScheduleBtn" class="export-btn">Export Schedule to CSV</button>
         </div>
+        
+        <div id="scheduleResultsContent"></div>
       </div>
     </div>
 
@@ -335,14 +430,34 @@
       </div>
 
       <div id="overtimeResults" class="card" style="display:none;">
+        <div class="table-controls">
+          <div class="sort-controls">
+            <label for="overtimeSort">Sort by:</label>
+            <select id="overtimeSort">
+              <option value="user">User</option>
+              <option value="totalHours">Total Hours</option>
+              <option value="rate1Hours">1.0 Rate Hours</option>
+              <option value="rate1_5Hours">1.5 Rate Hours</option>
+              <option value="rate2Hours">2.0 Rate Hours</option>
+            </select>
+            <select id="overtimeSortOrder">
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
+        </div>
+        
         <div class="filter-activity-container">
-          <div class="filter-activity-title">Filter by Activity</div>
+          <div class="filter-activity-title">Filter by Overtime Activity</div>
           <div id="overtimeActivityFilterDropdown" class="checkbox-dropdown"></div>
         </div>
+        
         <div class="export-buttons">
           <button id="exportOvertimeSummaryBtn" class="export-btn">Export Summary to CSV</button>
           <button id="exportOvertimeDetailsBtn" class="export-btn">Export Details to CSV</button>
         </div>
+        
+        <div id="overtimeResultsContent"></div>
       </div>
     </div>
 
@@ -380,13 +495,32 @@
       </div>
 
       <div id="absenceResults" class="card" style="display:none;">
+        <div class="table-controls">
+          <div class="sort-controls">
+            <label for="absenceSort">Sort by:</label>
+            <select id="absenceSort">
+              <option value="user">User</option>
+              <option value="totalHours">Total Hours</option>
+              <option value="absenceDays">Absence Days</option>
+              <option value="instances">Instances</option>
+            </select>
+            <select id="absenceSortOrder">
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
+        </div>
+        
         <div class="filter-activity-container">
-          <div class="filter-activity-title">Filter by Activity</div>
+          <div class="filter-activity-title">Filter by Absence Type</div>
           <div id="absenceActivityFilterDropdown" class="checkbox-dropdown"></div>
         </div>
+        
         <div class="export-buttons">
           <button id="exportAbsenceBtn" class="export-btn">Export to CSV</button>
         </div>
+        
+        <div id="absenceResultsContent"></div>
       </div>
     </div>
   </div>
@@ -406,10 +540,15 @@
     let businessUnits = [];
     let managementUnits = [];
     
-    // Data storage for exports
+    // Data storage for exports and sorting
     let currentScheduleData = [];
     let currentOvertimeData = [];
     let currentAbsenceData = [];
+    let currentDisplayedData = {
+      schedule: [],
+      overtime: [],
+      absence: []
+    };
     
     // Checkbox dropdown instances
     const dropdowns = {
@@ -427,6 +566,20 @@
       overtimeActivityFilter: null,
       absenceActivityFilter: null
     };
+
+    // ===== Initialize with current week dates =====
+    function getCurrentWeekDates() {
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); // Monday
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+      
+      return {
+        start: startOfWeek.toISOString().split('T')[0],
+        end: endOfWeek.toISOString().split('T')[0]
+      };
+    }
 
     // ===== Tab Management =====
     function initializeTabs() {
@@ -495,6 +648,7 @@
       initializeScheduleApp();
       initializeAnalytics();
       initializeExportButtons();
+      initializeSorting();
       
       // Load initial data
       populateInitialData();
@@ -727,13 +881,13 @@
       });
       
       dropdowns.overtimeActivityFilter = createCheckboxDropdown('overtimeActivityFilterDropdown', { 
-        placeholder: 'Filter by activity type', 
-        searchPlaceholder: 'Search activities...' 
+        placeholder: 'Filter by overtime activity', 
+        searchPlaceholder: 'Search overtime activities...' 
       });
       
       dropdowns.absenceActivityFilter = createCheckboxDropdown('absenceActivityFilterDropdown', { 
-        placeholder: 'Filter by activity type', 
-        searchPlaceholder: 'Search activities...' 
+        placeholder: 'Filter by absence type', 
+        searchPlaceholder: 'Search absence types...' 
       });
       
       console.log('Dropdowns initialized:', dropdowns);
@@ -806,13 +960,15 @@
 
     // ===== Analytics Functions =====
     function populateAnalyticsDropdowns() {
-      // Set default dates for analytics
-      const today = new Date();
-      const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
-      document.getElementById('overtimeStartDate').value = twoWeeksAgo.toISOString().split('T')[0];
-      document.getElementById('overtimeEndDate').value = today.toISOString().split('T')[0];
-      document.getElementById('absenceStartDate').value = twoWeeksAgo.toISOString().split('T')[0];
-      document.getElementById('absenceEndDate').value = today.toISOString().split('T')[0];
+      // Set default dates for all tabs to current week
+      const currentWeek = getCurrentWeekDates();
+      
+      document.getElementById('startDate').value = currentWeek.start;
+      document.getElementById('endDate').value = currentWeek.end;
+      document.getElementById('overtimeStartDate').value = currentWeek.start;
+      document.getElementById('overtimeEndDate').value = currentWeek.end;
+      document.getElementById('absenceStartDate').value = currentWeek.start;
+      document.getElementById('absenceEndDate').value = currentWeek.end;
     }
 
     function initializeAnalytics() {
@@ -821,6 +977,93 @@
       
       // Absence analysis
       document.getElementById('analyzeAbsenceBtn').addEventListener('click', analyzeAbsence);
+    }
+
+    // ===== Initialize Sorting =====
+    function initializeSorting() {
+      // Schedule tab sorting
+      document.getElementById('scheduleSort').addEventListener('change', () => applySorting('schedule'));
+      document.getElementById('scheduleSortOrder').addEventListener('change', () => applySorting('schedule'));
+      
+      // Overtime tab sorting
+      document.getElementById('overtimeSort').addEventListener('change', () => applySorting('overtime'));
+      document.getElementById('overtimeSortOrder').addEventListener('change', () => applySorting('overtime'));
+      
+      // Absence tab sorting
+      document.getElementById('absenceSort').addEventListener('change', () => applySorting('absence'));
+      document.getElementById('absenceSortOrder').addEventListener('change', () => applySorting('absence'));
+    }
+
+    function applySorting(tabType) {
+      let data, sortField, sortOrder;
+      
+      switch(tabType) {
+        case 'schedule':
+          data = currentDisplayedData.schedule;
+          sortField = document.getElementById('scheduleSort').value;
+          sortOrder = document.getElementById('scheduleSortOrder').value;
+          break;
+        case 'overtime':
+          data = currentDisplayedData.overtime;
+          sortField = document.getElementById('overtimeSort').value;
+          sortOrder = document.getElementById('overtimeSortOrder').value;
+          break;
+        case 'absence':
+          data = currentDisplayedData.absence;
+          sortField = document.getElementById('absenceSort').value;
+          sortOrder = document.getElementById('absenceSortOrder').value;
+          break;
+      }
+      
+      if (!data || data.length === 0) return;
+      
+      const sortedData = [...data].sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(tabType) {
+          case 'schedule':
+            switch(sortField) {
+              case 'date': aVal = a.date; bVal = b.date; break;
+              case 'user': aVal = a.userName; bVal = b.userName; break;
+              case 'activity': aVal = a.activityLabel; bVal = b.activityLabel; break;
+              case 'duration': aVal = a.durationMinutes; bVal = b.durationMinutes; break;
+            }
+            break;
+          case 'overtime':
+            aVal = a[sortField]; bVal = b[sortField]; break;
+          case 'absence':
+            aVal = a[sortField]; bVal = b[sortField]; break;
+        }
+        
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+        
+        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      currentDisplayedData[tabType] = sortedData;
+      
+      // Re-render the table
+      switch(tabType) {
+        case 'schedule':
+          renderScheduleTable(sortedData);
+          break;
+        case 'overtime':
+          renderOvertimeResults(sortedData, 
+            document.getElementById('overtimeStartDate').value,
+            document.getElementById('overtimeEndDate').value);
+          break;
+        case 'absence':
+          renderAbsenceResults(sortedData, 
+            parseFloat(document.getElementById('absenceThreshold').value) || 16,
+            document.getElementById('absenceStartDate').value,
+            document.getElementById('absenceEndDate').value);
+          break;
+      }
     }
 
     // ===== Fixed Business Unit Change Handler =====
@@ -972,6 +1215,7 @@
 
         console.log(`Overtime analysis complete. Found ${overtimeData.length} users with overtime`);
         currentOvertimeData = overtimeData; // Store for export
+        currentDisplayedData.overtime = [...overtimeData];
         renderOvertimeResults(overtimeData, startDate, endDate);
       } catch (err) {
         console.error('Error analyzing overtime:', err);
@@ -998,13 +1242,10 @@
         
         console.log(`Activity: "${activityName}", Category: "${activityCategory}", Duration: ${activity.durationMinutes}min`);
         
-        // Check if it's overtime based on name or category
+        // Check if it's overtime based on name or category - ONLY include overtime activities
         const isOvertime = activityName.toLowerCase().includes('overtime') || 
                           activityCategory.toLowerCase().includes('overtime') ||
-                          // Fallback: check if it's outside normal hours or has specific patterns
-                          activityName.toLowerCase().includes('ot') ||
-                          // Include any activity that might be overtime based on timing
-                          (activity.countsAsPaidTime && isPotentialOvertime(activity));
+                          activityName.toLowerCase().includes('ot ');
         
         if (isOvertime) {
           const hours = activity.durationMinutes / 60;
@@ -1050,27 +1291,6 @@
       };
     }
 
-    // Helper function to identify potential overtime based on timing
-    function isPotentialOvertime(activity) {
-      // Check if activity is outside normal business hours (e.g., evening, weekend)
-      if (activity.start) {
-        const start = new Date(activity.start);
-        const hour = start.getHours();
-        const day = start.getDay(); // 0 = Sunday, 6 = Saturday
-        
-        // Evening hours (after 6 PM) or weekend
-        if (hour >= 18 || day === 0 || day === 6) {
-          return true;
-        }
-        
-        // Early morning (before 6 AM)
-        if (hour < 6) {
-          return true;
-        }
-      }
-      return false;
-    }
-
     // ===== Absence Analysis =====
     async function analyzeAbsence() {
       const buIds = dropdowns.absenceBu ? dropdowns.absenceBu.getSelectedValues() : [];
@@ -1111,7 +1331,8 @@
                 absenceDays: absenceStats.days,
                 instances: absenceStats.instances,
                 exceedsThreshold: absenceStats.totalHours >= thresholdHours,
-                absenceDetails: absenceStats.details
+                absenceDetails: absenceStats.details,
+                averageHoursPerInstance: parseFloat((absenceStats.totalHours / absenceStats.instances).toFixed(1))
               });
             }
           } catch (err) {
@@ -1120,6 +1341,7 @@
         }
 
         currentAbsenceData = absenceData; // Store for export
+        currentDisplayedData.absence = [...absenceData];
         renderAbsenceResults(absenceData, thresholdHours, startDate, endDate);
       } catch (err) {
         console.error('Error analyzing absence:', err);
@@ -1130,45 +1352,13 @@
       }
     }
 
-    // ===== Helper Functions =====
-    async function getUsersForAnalytics(muId, teamIds) {
-      let users = [];
-      
-      // Handle team selection
-      if (teamIds && teamIds.length > 0) {
-        const teamMembersArrays = await Promise.all(
-          teamIds.map(teamId => getTeamMembers(teamId))
-        );
-        users = teamMembersArrays.flat();
-      } else {
-        // Get all users from management unit
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
-        );
-        users = muUsersResponse.entities || muUsersResponse.users || [];
-      }
-      
-      return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
-    }
-
-    async function getTeamMembers(teamId) {
-      try {
-        const teamMembersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
-        );
-        return teamMembersResponse.entities || teamMembersResponse.members || [];
-      } catch (err) {
-        console.error(`Error fetching team members for team ${teamId}:`, err);
-        return [];
-      }
-    }
-
     function calculateAbsenceStats(schedule, userId, businessUnitId) {
       const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
       let totalHours = 0;
       const absenceDays = new Set();
       let instances = 0;
       const absenceDetails = [];
+      const absenceTypes = new Set();
       
       console.log('Analyzing activities for absence:', activities);
       
@@ -1178,20 +1368,22 @@
         
         console.log(`Activity: ${activityName}, Category: ${activityCategory}, Code: ${activity.activityCodeId}, Duration: ${activity.durationMinutes}min`);
         
-        // Check if it's absence based on category or name
-        const isAbsence = activity.type === 'fullDayOff' || 
+        // Check if it's absence based on category or name, but EXCLUDE Holiday and TOIL
+        const isAbsence = (activity.type === 'fullDayOff' || 
                          activityCategory === 'TimeOff' ||
                          activityName.includes('Time Off') || 
                          activityName.includes('Sick') || 
                          activityName.includes('Absence') || 
                          activityName.includes('Vacation') ||
-                         activityName.includes('Holiday') ||
-                         activityName.includes('Leave');
+                         activityName.includes('Leave')) &&
+                         !activityName.includes('Holiday') &&
+                         !activityName.includes('TOIL');
         
         if (isAbsence) {
           totalHours += activity.durationMinutes / 60;
           absenceDays.add(activity.date);
           instances++;
+          absenceTypes.add(activityName);
           
           // Store details for each absence
           absenceDetails.push({
@@ -1211,18 +1403,19 @@
         totalHours: parseFloat(totalHours.toFixed(1)),
         days: absenceDays.size,
         instances: instances,
-        details: absenceDetails
+        details: absenceDetails,
+        types: Array.from(absenceTypes)
       };
     }
 
-    // ===== Rendering Functions =====
+    // ===== Enhanced Rendering Functions =====
     function renderOvertimeResults(data, startDate, endDate) {
       const container = document.getElementById('overtimeResults');
+      const contentContainer = document.getElementById('overtimeResultsContent');
       container.style.display = 'block';
       
       if (data.length === 0) {
-        // Show debug information when no overtime is found
-        container.innerHTML = `
+        contentContainer.innerHTML = `
           <div class="info-message">
             No overtime activities found for the selected period.
             <br><br>
@@ -1251,7 +1444,7 @@
         return;
       }
       
-      // Sort by total overtime hours (descending)
+      // Sort by total overtime hours (descending) by default
       data.sort((a, b) => b.totalHours - a.totalHours);
       
       // Calculate overall metrics
@@ -1259,6 +1452,7 @@
       const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
       const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
       const totalRate2 = data.reduce((sum, item) => sum + item.rate2Hours, 0);
+      const avgOvertimePerUser = totalOvertime / data.length;
       
       let html = `
         <h3 class="section-title">Overtime Report</h3>
@@ -1266,14 +1460,12 @@
           <span class="pill">Period: ${startDate} to ${endDate}</span>
           &nbsp;
           <span class="pill">Total Agents: ${data.length}</span>
+          &nbsp;
+          <span class="pill">Total Overtime: ${totalOvertime.toFixed(1)}h</span>
         </div>
         
         <!-- Overtime Metrics -->
         <div class="overtime-metrics">
-          <div class="overtime-metric-card">
-            <div class="metric-label">Month</div>
-            <div class="metric-value">${getCurrentMonth()}</div>
-          </div>
           <div class="overtime-metric-card">
             <div class="metric-label">Total Overtime</div>
             <div class="metric-value">${totalOvertime.toFixed(1)}h</div>
@@ -1290,27 +1482,54 @@
             <div class="metric-label">2.0 Rate</div>
             <div class="metric-value">${totalRate2.toFixed(1)}h</div>
           </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">Avg per User</div>
+            <div class="metric-value">${avgOvertimePerUser.toFixed(1)}h</div>
+          </div>
         </div>
         
-        <!-- Subtabs for Summary and Details -->
-        <div class="subtabs">
-          <div class="subtab active" data-subtab="summary">Summary</div>
-          <div class="subtab" data-subtab="details">Details</div>
-        </div>
-        
-        <!-- Summary View -->
-        <div id="overtime-summary" class="subtab-content active">
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Total Overtime</th>
-                <th>1.0 Rate</th>
-                <th>1.5 Rate</th>
-                <th>2.0 Rate</th>
-              </tr>
-            </thead>
-            <tbody>
+        <!-- Overtime Chart -->
+        <div class="chart-wrapper">
+          <h4>Overtime Distribution</h4>
+          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+            Showing top ${Math.min(10, data.length)} users by overtime hours
+          </div>
+      `;
+      
+      // Create chart for top 10 users
+      const topUsers = data.slice(0, 10);
+      const maxHours = Math.max(...topUsers.map(u => u.totalHours));
+      
+      topUsers.forEach(user => {
+        const percentage = (user.totalHours / maxHours) * 100;
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%">
+                ${user.totalHours.toFixed(1)}h
+              </div>
+            </div>
+            <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
+      
+      // Summary Table
+      html += `
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="user">Agent</th>
+              <th class="sortable" data-sort="totalHours">Total Overtime</th>
+              <th class="sortable" data-sort="rate1Hours">1.0 Rate</th>
+              <th class="sortable" data-sort="rate1_5Hours">1.5 Rate</th>
+              <th class="sortable" data-sort="rate2Hours">2.0 Rate</th>
+            </tr>
+          </thead>
+          <tbody>
       `;
       
       data.forEach(item => {
@@ -1329,63 +1548,38 @@
             </tbody>
           </table>
         </div>
-        
-        <!-- Details View -->
-        <div id="overtime-details" class="subtab-content">
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Date</th>
-                <th>Start Time</th>
-                <th>End Time</th>
-                <th>Duration</th>
-                <th>Rate</th>
-              </tr>
-            </thead>
-            <tbody>
       `;
       
-      data.forEach(item => {
-        item.activities.forEach(activity => {
-          html += `
-            <tr>
-              <td>${escapeHtml(item.user)}</td>
-              <td>${activity.date}</td>
-              <td>${activity.startTime}</td>
-              <td>${activity.endTime}</td>
-              <td>${activity.duration}</td>
-              <td>${activity.rate}</td>
-            </tr>
-          `;
-        });
-      });
+      contentContainer.innerHTML = html;
       
-      html += `
-            </tbody>
-          </table>
-        </div>
-      `;
-      container.innerHTML = html;
-      
-      // Initialize subtabs
-      initializeSubtabs();
-      
-      // Populate activity filter dropdown
-      populateActivityFilterDropdown('overtime');
+      // Populate overtime activity filter dropdown
+      const overtimeActivities = [...new Set(data.flatMap(u => u.activities.map(a => a.activity)))].sort();
+      if (dropdowns.overtimeActivityFilter && overtimeActivities.length > 0) {
+        const activityOpts = overtimeActivities.map(a => ({ value: a, label: a }));
+        dropdowns.overtimeActivityFilter.setOptions(activityOpts);
+      }
     }
 
     function renderAbsenceResults(data, thresholdHours, startDate, endDate) {
       const container = document.getElementById('absenceResults');
+      const contentContainer = document.getElementById('absenceResultsContent');
       container.style.display = 'block';
       
       if (data.length === 0) {
-        container.innerHTML = `<div class="info-message">No absence recorded for the selected period.</div>`;
+        contentContainer.innerHTML = `<div class="info-message">No absence recorded for the selected period.</div>`;
         return;
       }
       
-      // Sort by absence hours (descending)
+      // Sort by absence hours (descending) by default
       data.sort((a, b) => b.totalHours - a.totalHours);
+      
+      // Calculate enhanced analytics
+      const totalAbsenceHours = data.reduce((sum, item) => sum + item.totalHours, 0);
+      const totalAbsenceDays = data.reduce((sum, item) => sum + item.absenceDays, 0);
+      const totalInstances = data.reduce((sum, item) => sum + item.instances, 0);
+      const avgHoursPerUser = totalAbsenceHours / data.length;
+      const usersAboveThreshold = data.filter(item => item.exceedsThreshold).length;
+      const mostCommonType = findMostCommonAbsenceType(data);
       
       let html = `
         <h3 class="section-title">Absence Analytics</h3>
@@ -1395,14 +1589,119 @@
           <span class="pill">Alert Threshold: ${thresholdHours} hours</span>
           &nbsp;
           <span class="pill">Total Agents: ${data.length}</span>
+          &nbsp;
+          <span class="pill">Above Threshold: ${usersAboveThreshold}</span>
         </div>
+        
+        <div class="analytics-grid">
+          <!-- Left column: Charts -->
+          <div>
+            <!-- Absence Hours Chart -->
+            <div class="chart-wrapper">
+              <h4>Absence Hours Distribution</h4>
+              <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+                Showing top ${Math.min(10, data.length)} users by absence hours
+              </div>
+      `;
+      
+      // Create chart for top 10 users
+      const topUsers = data.slice(0, 10);
+      const maxHours = Math.max(...topUsers.map(u => u.totalHours));
+      
+      topUsers.forEach(user => {
+        const percentage = (user.totalHours / maxHours) * 100;
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%">
+                ${user.totalHours.toFixed(1)}h
+              </div>
+            </div>
+            <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
+      
+      // Absence Types Chart
+      const absenceTypes = getAbsenceTypeDistribution(data);
+      if (absenceTypes.length > 0) {
+        html += `
+          <div class="chart-wrapper">
+            <h4>Absence Types</h4>
+        `;
+        
+        const maxTypeCount = Math.max(...absenceTypes.map(t => t.count));
+        
+        absenceTypes.forEach(type => {
+          const percentage = (type.count / maxTypeCount) * 100;
+          html += `
+            <div class="chart-bar">
+              <div class="chart-bar-label">${escapeHtml(type.name)}</div>
+              <div class="chart-bar-container">
+                <div class="chart-bar-fill" style="width: ${percentage}%">
+                  ${type.count}
+                </div>
+              </div>
+              <div class="chart-bar-value">${type.count}</div>
+            </div>
+          `;
+        });
+        
+        html += `</div>`;
+      }
+      
+      html += `</div>`; // Close left column
+      
+      // Right column: Summary metrics
+      html += `
+        <div>
+          <div class="chart-wrapper">
+            <h4>Summary Metrics</h4>
+            <div style="display: grid; gap: 12px;">
+              <div class="metric-card">
+                <div class="metric-label">Total Absence Hours</div>
+                <div class="metric-value">${totalAbsenceHours.toFixed(1)}h</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Total Absence Days</div>
+                <div class="metric-value">${totalAbsenceDays}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Total Instances</div>
+                <div class="metric-value">${totalInstances}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Average per User</div>
+                <div class="metric-value">${avgHoursPerUser.toFixed(1)}h</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Users Above Threshold</div>
+                <div class="metric-value">${usersAboveThreshold}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Most Common Type</div>
+                <div class="metric-value">${mostCommonType || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      html += `</div>`; // Close analytics-grid
+      
+      // Detailed Table
+      html += `
         <table class="schedule-table">
           <thead>
             <tr>
-              <th>Agent</th>
-              <th>Total Absence Hours</th>
-              <th>Absence Days</th>
-              <th>Instances</th>
+              <th class="sortable" data-sort="user">Agent</th>
+              <th class="sortable" data-sort="totalHours">Total Hours</th>
+              <th class="sortable" data-sort="absenceDays">Days</th>
+              <th class="sortable" data-sort="instances">Instances</th>
+              <th class="sortable" data-sort="averageHoursPerInstance">Avg/Instance</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -1421,6 +1720,7 @@
             <td><strong>${item.totalHours}h</strong></td>
             <td>${item.absenceDays}</td>
             <td>${item.instances}</td>
+            <td>${item.averageHoursPerInstance}h</td>
             <td>${status}</td>
           </tr>
         `;
@@ -1429,7 +1729,7 @@
         if (item.absenceDetails && item.absenceDetails.length > 0) {
           html += `
             <tr>
-              <td colspan="5">
+              <td colspan="6">
                 <div class="absence-details">
                   <strong>Absence Details:</strong>
                   ${item.absenceDetails.map(detail => `
@@ -1447,57 +1747,50 @@
       
       html += `</tbody></table>`;
       
-      // Add simple chart visualization
-      html += `
-        <div class="chart-container">
-          <h4>Absence Distribution</h4>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px;">
-      `;
+      contentContainer.innerHTML = html;
       
-      // Top 5 absence cases for chart
-      const topCases = data.slice(0, 5);
-      topCases.forEach(item => {
-        const percentage = (item.totalHours / Math.max(...data.map(d => d.totalHours))) * 100;
-        html += `
-          <div class="metric-card">
-            <div class="metric-label">${escapeHtml(item.user)}</div>
-            <div class="metric-value">${item.totalHours}h</div>
-            <div style="background: #e5e7eb; height: 8px; border-radius: 4px; margin-top: 8px;">
-              <div style="background: var(--primary-color); height: 100%; width: ${percentage}%; border-radius: 4px;"></div>
-            </div>
-          </div>
-        `;
-      });
-      
-      html += `</div></div>`;
-      container.innerHTML = html;
-      
-      // Populate activity filter dropdown
-      populateActivityFilterDropdown('absence');
+      // Populate absence activity filter dropdown
+      const absenceTypes = [...new Set(data.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
+      if (dropdowns.absenceActivityFilter && absenceTypes.length > 0) {
+        const activityOpts = absenceTypes.map(a => ({ value: a, label: a }));
+        dropdowns.absenceActivityFilter.setOptions(activityOpts);
+      }
     }
 
-    function initializeSubtabs() {
-      document.querySelectorAll('.subtab').forEach(tab => {
-        tab.addEventListener('click', () => {
-          // Remove active class from all subtabs and contents
-          document.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
-          
-          // Add active class to clicked subtab and corresponding content
-          tab.classList.add('active');
-          const subtabId = tab.getAttribute('data-subtab');
-          document.getElementById(`overtime-${subtabId}`).classList.add('active');
+    // ===== Helper Functions for Enhanced Analytics =====
+    function findMostCommonAbsenceType(data) {
+      const typeCounts = {};
+      data.forEach(user => {
+        user.absenceDetails.forEach(detail => {
+          typeCounts[detail.type] = (typeCounts[detail.type] || 0) + 1;
         });
       });
+      
+      let mostCommon = null;
+      let maxCount = 0;
+      
+      for (const [type, count] of Object.entries(typeCounts)) {
+        if (count > maxCount) {
+          mostCommon = type;
+          maxCount = count;
+        }
+      }
+      
+      return mostCommon;
     }
 
-    function getCurrentMonth() {
-      const months = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-      ];
-      const now = new Date();
-      return months[now.getMonth()];
+    function getAbsenceTypeDistribution(data) {
+      const typeCounts = {};
+      data.forEach(user => {
+        user.absenceDetails.forEach(detail => {
+          typeCounts[detail.type] = (typeCounts[detail.type] || 0) + 1;
+        });
+      });
+      
+      return Object.entries(typeCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10); // Top 10 types
     }
 
     // ===== Export Functions =====
@@ -1545,16 +1838,16 @@
     }
 
     function exportScheduleToCSV() {
-      if (currentScheduleData.length === 0) {
+      if (currentDisplayedData.schedule.length === 0) {
         showMessage('No schedule data to export', 'error');
         return;
       }
 
       // Apply activity filter if any
-      let exportData = currentScheduleData;
+      let exportData = currentDisplayedData.schedule;
       const selectedActivities = dropdowns.activityFilter ? dropdowns.activityFilter.getSelectedValues() : [];
       if (selectedActivities.length > 0) {
-        exportData = currentScheduleData.filter(activity => 
+        exportData = currentDisplayedData.schedule.filter(activity => 
           selectedActivities.includes(activity.activityLabel)
         );
       }
@@ -1572,12 +1865,21 @@
     }
 
     function exportOvertimeSummaryToCSV() {
-      if (currentOvertimeData.length === 0) {
+      if (currentDisplayedData.overtime.length === 0) {
         showMessage('No overtime data to export', 'error');
         return;
       }
 
-      const csvData = currentOvertimeData.map(item => ({
+      // Apply activity filter if any
+      let exportData = currentDisplayedData.overtime;
+      const selectedActivities = dropdowns.overtimeActivityFilter ? dropdowns.overtimeActivityFilter.getSelectedValues() : [];
+      if (selectedActivities.length > 0) {
+        exportData = currentDisplayedData.overtime.filter(user => 
+          user.activities.some(activity => selectedActivities.includes(activity.activity))
+        );
+      }
+
+      const csvData = exportData.map(item => ({
         Agent: item.user,
         'Total Overtime Hours': item.totalHours,
         '1.0 Rate Hours': item.rate1Hours,
@@ -1594,10 +1896,17 @@
         return;
       }
 
-      const csvData = [];
+      // Apply activity filter if any
+      let exportData = [];
+      const selectedActivities = dropdowns.overtimeActivityFilter ? dropdowns.overtimeActivityFilter.getSelectedValues() : [];
+      
       currentOvertimeData.forEach(item => {
-        item.activities.forEach(activity => {
-          csvData.push({
+        const filteredActivities = selectedActivities.length > 0 
+          ? item.activities.filter(activity => selectedActivities.includes(activity.activity))
+          : item.activities;
+          
+        filteredActivities.forEach(activity => {
+          exportData.push({
             Agent: item.user,
             Date: activity.date,
             'Start Time': activity.startTime,
@@ -1610,47 +1919,91 @@
         });
       });
 
-      exportToCSV(csvData, `overtime_details_${new Date().toISOString().split('T')[0]}.csv`);
+      exportToCSV(exportData, `overtime_details_${new Date().toISOString().split('T')[0]}.csv`);
     }
 
     function exportAbsenceToCSV() {
-      if (currentAbsenceData.length === 0) {
+      if (currentDisplayedData.absence.length === 0) {
         showMessage('No absence data to export', 'error');
         return;
       }
 
-      const csvData = [];
-      currentAbsenceData.forEach(item => {
-        // Add summary row
-        csvData.push({
-          Agent: item.user,
-          'Total Absence Hours': item.totalHours,
-          'Absence Days': item.absenceDays,
-          Instances: item.instances,
-          Status: item.exceedsThreshold ? 'Above Threshold' : 'Within Limits',
-          Date: '',
-          'Absence Type': '',
-          Duration: '',
-          Hours: ''
-        });
-
-        // Add detail rows
-        item.absenceDetails.forEach(detail => {
-          csvData.push({
-            Agent: '',
-            'Total Absence Hours': '',
-            'Absence Days': '',
-            Instances: '',
-            Status: '',
-            Date: detail.date,
-            'Absence Type': detail.type,
-            Duration: detail.duration,
-            Hours: detail.hours
+      // Apply activity filter if any
+      let exportData = [];
+      const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
+      
+      currentDisplayedData.absence.forEach(item => {
+        const filteredDetails = selectedActivities.length > 0 
+          ? item.absenceDetails.filter(detail => selectedActivities.includes(detail.type))
+          : item.absenceDetails;
+          
+        if (filteredDetails.length > 0) {
+          // Add summary row
+          exportData.push({
+            Agent: item.user,
+            'Total Absence Hours': item.totalHours,
+            'Absence Days': item.absenceDays,
+            Instances: item.instances,
+            'Average Hours per Instance': item.averageHoursPerInstance,
+            Status: item.exceedsThreshold ? 'Above Threshold' : 'Within Limits',
+            Date: '',
+            'Absence Type': '',
+            Duration: '',
+            Hours: ''
           });
-        });
+
+          // Add detail rows
+          filteredDetails.forEach(detail => {
+            exportData.push({
+              Agent: '',
+              'Total Absence Hours': '',
+              'Absence Days': '',
+              Instances: '',
+              'Average Hours per Instance': '',
+              Status: '',
+              Date: detail.date,
+              'Absence Type': detail.type,
+              Duration: detail.duration,
+              Hours: detail.hours
+            });
+          });
+        }
       });
 
-      exportToCSV(csvData, `absence_${new Date().toISOString().split('T')[0]}.csv`);
+      exportToCSV(exportData, `absence_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+
+    // ===== Existing Functions (shortened for brevity) =====
+    async function getUsersForAnalytics(muId, teamIds) {
+      let users = [];
+      
+      // Handle team selection
+      if (teamIds && teamIds.length > 0) {
+        const teamMembersArrays = await Promise.all(
+          teamIds.map(teamId => getTeamMembers(teamId))
+        );
+        users = teamMembersArrays.flat();
+      } else {
+        // Get all users from management unit
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
+        );
+        users = muUsersResponse.entities || muUsersResponse.users || [];
+      }
+      
+      return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
+    }
+
+    async function getTeamMembers(teamId) {
+      try {
+        const teamMembersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
+        );
+        return teamMembersResponse.entities || teamMembersResponse.members || [];
+      } catch (err) {
+        console.error(`Error fetching team members for team ${teamId}:`, err);
+        return [];
+      }
     }
 
     // ===== Fixed function to load activity codes from business unit =====
@@ -1783,8 +2136,7 @@
     async function loadSchedule() {
       const resultsDiv = document.getElementById('results');
       resultsDiv.style.display = 'block';
-      resultsDiv.innerHTML = '';
-
+      
       const buIds = dropdowns.businessUnit ? dropdowns.businessUnit.getSelectedValues() : [];
       const muIds = dropdowns.managementUnit ? dropdowns.managementUnit.getSelectedValues() : [];
       const userIds = dropdowns.user ? dropdowns.user.getSelectedValues() : [];
@@ -1836,6 +2188,7 @@
         }
         
         currentScheduleData = allActivities; // Store for export
+        currentDisplayedData.schedule = [...allActivities];
         renderScheduleResults(resultsDiv, allActivities, userIds, startDateIso, endDateIso);
       } catch (err) {
         console.error('Error loading schedule:', err);
@@ -2013,12 +2366,12 @@
           <table class="schedule-table">
             <thead>
               <tr>
-                <th>User</th>
-                <th>Date</th>
-                <th>Activity</th>
+                <th class="sortable" data-sort="userName">User</th>
+                <th class="sortable" data-sort="date">Date</th>
+                <th class="sortable" data-sort="activityLabel">Activity</th>
                 <th>Start</th>
                 <th>End</th>
-                <th>Duration</th>
+                <th class="sortable" data-sort="durationMinutes">Duration</th>
               </tr>
             </thead>
             <tbody>
@@ -2038,42 +2391,54 @@
         html += `</tbody></table>`;
       }
 
-      container.innerHTML = html;
+      const contentContainer = document.getElementById('scheduleResultsContent');
+      contentContainer.innerHTML = html;
       
       // Populate activity filter dropdown
-      populateActivityFilterDropdown('schedule');
+      const allActivities = [...new Set(activities.map(a => a.activityLabel))].sort();
+      if (dropdowns.activityFilter && allActivities.length > 0) {
+        const activityOpts = allActivities.map(a => ({ value: a, label: a }));
+        dropdowns.activityFilter.setOptions(activityOpts);
+      }
+      
+      // Apply initial sorting
+      applySorting('schedule');
     }
-    
-    // ===== Activity Filter Functions =====
-    function populateActivityFilterDropdown(tabType) {
-      let activities = [];
-      let dropdown = null;
+
+    function renderScheduleTable(activities) {
+      const contentContainer = document.getElementById('scheduleResultsContent');
       
-      // Get the appropriate data and dropdown based on tab type
-      switch(tabType) {
-        case 'schedule':
-          activities = [...new Set(currentScheduleData.map(a => a.activityLabel))].sort();
-          dropdown = dropdowns.activityFilter;
-          break;
-        case 'overtime':
-          activities = [...new Set(currentOvertimeData.flatMap(u => u.activities.map(a => a.activity)))].sort();
-          dropdown = dropdowns.overtimeActivityFilter;
-          break;
-        case 'absence':
-          activities = [...new Set(currentAbsenceData.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
-          dropdown = dropdowns.absenceActivityFilter;
-          break;
-      }
+      let html = `
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="date">Date</th>
+              <th class="sortable" data-sort="activityLabel">Activity</th>
+              <th>Start</th>
+              <th>End</th>
+              <th class="sortable" data-sort="durationMinutes">Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
       
-      if (dropdown && activities.length > 0) {
-        const activityOpts = activities.map(a => ({ value: a, label: a }));
-        dropdown.setOptions(activityOpts);
-        
-        // Add event listener for filtering
-        dropdown.getSelectedValues = function() {
-          return Array.from(this.selected || []);
-        };
-      }
+      activities.forEach(row => {
+        html += `
+          <tr>
+            <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.date)}</td>
+            <td>${escapeHtml(row.activityLabel || '')}</td>
+            <td>${escapeHtml(formatTime(row.start))}</td>
+            <td>${escapeHtml(formatTime(row.end))}</td>
+            <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      
+      contentContainer.querySelector('table').outerHTML = html;
     }
   </script>
 </body>
