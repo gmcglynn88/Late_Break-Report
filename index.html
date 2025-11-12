@@ -370,7 +370,7 @@
     <!-- Schedule Tab -->
     <div id="schedule-tab" class="tab-content active">
       <div class="card">
-        <h2 class="section-title">Schedule Viewing</h2>
+        <h2 class="section-title">Filters</h2>
         <div class="controls">
           <div>
             <label for="businessUnitSelect">Business Unit</label>
@@ -399,13 +399,13 @@
           <div>
             <label for="startDate">Start date</label>
             <input type="date" id="startDate" />
-            <div class="muted">e.g. 2025-11-03</div>
+            <div class="muted">e.g. 03-11-2025</div>
           </div>
 
           <div>
             <label for="endDate">End date</label>
             <input type="date" id="endDate" />
-            <div class="muted">e.g. 2025-11-08</div>
+            <div class="muted">e.g. 08-11-2025</div>
           </div>
         </div>
 
@@ -529,9 +529,9 @@
             <input type="date" id="absenceEndDate" />
           </div>
           <div>
-            <label for="absenceThreshold">Sick Alert Threshold (days)</label>
+            <label for="absenceThreshold">Alert Threshold (days)</label>
             <input type="number" id="absenceThreshold" value="2" min="0" step="0.5" />
-            <div class="muted">Number of Sick days <b>only</b> to hit trigger review</div>
+            <div class="muted">Threshold in days (e.g., 2 = 2 days)</div>
           </div>
         </div>
         <button id="analyzeAbsenceBtn" class="full-width-btn">Analyze Absence</button>
@@ -626,6 +626,40 @@
       absenceActivityFilter: null
     };
 
+    // ===== Date Formatting Functions =====
+    function formatDate(dateString) {
+      if (!dateString) return '';
+      
+      // If it's already in dd-mm-yyyy format, return as is
+      if (dateString.match(/^\d{2}-\d{2}-\d{4}$/)) {
+        return dateString;
+      }
+      
+      // Convert from yyyy-mm-dd to dd-mm-yyyy
+      if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const parts = dateString.split('-');
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+      
+      // Handle Date objects
+      if (dateString instanceof Date) {
+        const day = String(dateString.getDate()).padStart(2, '0');
+        const month = String(dateString.getMonth() + 1).padStart(2, '0');
+        const year = dateString.getFullYear();
+        return `${day}-${month}-${year}`;
+      }
+      
+      return dateString;
+    }
+
+    function convertToApiFormat(dateStr) {
+      if (dateStr.match(/^\d{2}-\d{2}-\d{4}$/)) {
+        const parts = dateStr.split('-');
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+      return dateStr;
+    }
+
     // ===== Initialize with current week dates =====
     function getCurrentWeekDates() {
       const today = new Date();
@@ -635,8 +669,8 @@
       endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
       
       return {
-        start: startOfWeek.toISOString().split('T')[0],
-        end: endOfWeek.toISOString().split('T')[0]
+        start: formatDate(startOfWeek.toISOString().split('T')[0]),
+        end: formatDate(endOfWeek.toISOString().split('T')[0])
       };
     }
 
@@ -1248,6 +1282,10 @@
       const startDate = document.getElementById('overtimeStartDate').value;
       const endDate = document.getElementById('overtimeEndDate').value;
 
+      // Convert dd-mm-yyyy to yyyy-mm-dd for API
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+
       if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
         showMessage('Please select business unit, management unit, and date range', 'error');
         return;
@@ -1266,8 +1304,10 @@
         let users = await getUsersForAnalytics(muIds[0], teamIds);
         
         const overtimeData = [];
-        const startDateIso = `${startDate}T00:00:00.000Z`;
-        const endDateIso = `${endDate}T00:00:00.000Z`;
+        
+        // Set end time to 23:59:59 to include the entire end date
+        const startDateIso = `${startDateApi}T00:00:00.000Z`;
+        const endDateIso = `${endDateApi}T23:59:59.999Z`;
 
         console.log(`Analyzing overtime for ${users.length} users from ${startDate} to ${endDate}`);
 
@@ -1348,7 +1388,7 @@
           
           // Store activity details - ONLY overtime activities
           overtimeActivities.push({
-            date: activity.date,
+            date: formatDate(activity.date),
             activity: activityName,
             startTime: formatTime(activity.start),
             endTime: formatTime(activity.end),
@@ -1383,6 +1423,10 @@
       const endDate = document.getElementById('absenceEndDate').value;
       const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
 
+      // Convert dd-mm-yyyy to yyyy-mm-dd for API
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+
       if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
         showMessage('Please select business unit, management unit, and date range', 'error');
         return;
@@ -1399,8 +1443,10 @@
         
         let users = await getUsersForAnalytics(muIds[0], teamIds);
         const absenceData = [];
-        const startDateIso = `${startDate}T00:00:00.000Z`;
-        const endDateIso = `${endDate}T00:00:00.000Z`;
+        
+        // Set end time to 23:59:59 to include the entire end date
+        const startDateIso = `${startDateApi}T00:00:00.000Z`;
+        const endDateIso = `${endDateApi}T23:59:59.999Z`;
 
         for (const user of users) {
           try {
@@ -1466,13 +1512,13 @@
         
         if (isAbsence) {
           totalHours += activity.durationMinutes / 60;
-          absenceDays.add(activity.date);
+          absenceDays.add(formatDate(activity.date));
           instances++;
           absenceTypes.add(activityName);
           
           // Store details for each absence
           absenceDetails.push({
-            date: activity.date,
+            date: formatDate(activity.date),
             type: activityName,
             duration: formatDuration(activity.durationMinutes),
             hours: (activity.durationMinutes / 60).toFixed(1)
@@ -2228,6 +2274,10 @@
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
 
+      // Convert dd-mm-yyyy to yyyy-mm-dd for API
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+
       if (buIds.length === 0) {
         resultsDiv.innerHTML = `<div class="error-message">Please select a business unit.</div>`;
         return;
@@ -2254,8 +2304,9 @@
       button.disabled = true;
       button.textContent = 'Loading schedule...';
 
-      const startDateIso = `${startDate}T00:00:00.000Z`;
-      const endDateIso = `${endDate}T00:00:00.000Z`;
+      // Set end time to 23:59:59 to include the entire end date
+      const startDateIso = `${startDateApi}T00:00:00.000Z`;
+      const endDateIso = `${endDateApi}T23:59:59.999Z`;
 
       try {
         // Get schedules for all selected users
@@ -2328,7 +2379,7 @@
 
         shifts.forEach(shift => {
           const shiftStartDate = shift.startDate ? new Date(shift.startDate) : null;
-          const shiftDateStr = shiftStartDate ? shiftStartDate.toISOString().slice(0, 10) : null;
+          const shiftDateStr = shiftStartDate ? formatDate(shiftStartDate.toISOString().slice(0, 10)) : null;
           
           const activities = Array.isArray(shift.activities) ? shift.activities : [];
           console.log(`Shift ${shift.id} has ${activities.length} activities`, activities);
@@ -2348,7 +2399,7 @@
             // Use the API-based activity name lookup
             const activityLabel = getActivityName(businessUnitId, activity.activityCodeId);
 
-            const dateStr = shiftDateStr || start.toISOString().slice(0, 10);
+            const dateStr = shiftDateStr || formatDate(start.toISOString().slice(0, 10));
 
             rows.push({
               date: dateStr,
@@ -2370,7 +2421,7 @@
         console.log(`Found ${fullDayTimeOffMarkers.length} full day time off markers`, fullDayTimeOffMarkers);
 
         fullDayTimeOffMarkers.forEach(marker => {
-          const dateStr = marker.managementUnitDate;
+          const dateStr = marker.managementUnitDate ? formatDate(marker.managementUnitDate) : null;
           const lengthMin = marker.lengthInMinutes || 480; // Default to 8 hours if not specified
           
           if (!dateStr) {
@@ -2430,8 +2481,9 @@
     }
 
     function renderScheduleResults(container, activities, userIds, startDateIso, endDateIso) {
-      const startDateStr = startDateIso.slice(0, 10);
-      const endDateStr = endDateIso.slice(0, 10);
+      // Convert ISO dates to dd-mm-yyyy for display
+      const startDateStr = formatDate(startDateIso.slice(0, 10));
+      const endDateStr = formatDate(endDateIso.slice(0, 10));
 
       let html = `
         <h2 class="section-title">Schedule for Selected Users</h2>
