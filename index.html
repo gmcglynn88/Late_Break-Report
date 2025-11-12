@@ -24,17 +24,15 @@
     }
     label{display:block;font-weight:600;margin-bottom:6px}
     input,select,button,textarea{
-      padding:10px;border:1px solid var(--border-color);border-radius:6px;background:#fff;font-size:14px;
-      width:100%;box-sizing:border-box
+      padding:10px;border:1px solid var(--border-color);border-radius:6px;background:#fff;font-size:14px
     }
     button{
-      background:var(--primary-color);color:#fff;font-weight:600;cursor:pointer;transition:background .2s;
-      width:auto;padding:12px 24px
+      background:var(--primary-color);color:#fff;font-weight:600;cursor:pointer;transition:background .2s
     }
     button:hover{background:var(--secondary-color)}
     button:disabled{background:var(--text-light);cursor:not-allowed}
     .controls{
-      display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;align-items:end
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:end
     }
     .full-width-btn{width:100%;padding:14px 18px;font-size:16px;margin-top:12px}
     .muted{color:var(--text-light);font-size:12px;margin-top:4px}
@@ -60,7 +58,7 @@
       color:#14532d;background:#dcfce7;border:1px solid:#bbf7d0;padding:10px;border-radius:6px
     }
     .info-message{
-      color:#6b4e16;background:#fff7ed;border:1px solid:#ffedd5;padding:10px;border-radius:6x
+      color:#6b4e16;background:#fff7ed;border:1px solid:#ffedd5;padding:10px;border-radius:6px
     }
 
     .schedule-table{width:100%;border-collapse:collapse;margin-top:16px}
@@ -76,10 +74,7 @@
     
     /* Analytics specific styles */
     .analytics-controls{
-      display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px
-    }
-    .analytics-controls > div {
-      display:flex;flex-direction:column
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px
     }
     .warning-row{background:var(--warning-bg) !important;border-left:4px solid var(--warning-text)}
     .overtime-badge{
@@ -97,38 +92,9 @@
     .metric-value{font-size:24px;font-weight:bold;color:var(--primary-color);margin:8px 0}
     .metric-label{font-size:12px;color:var(--text-light);text-transform:uppercase}
     
-    /* Sub-tabs for overtime */
-    .sub-tabs{display:flex;border-bottom:1px solid var(--border-color);margin:16px 0}
-    .sub-tab{
-      padding:8px 16px;cursor:pointer;border-bottom:2px solid transparent;font-weight:600;
-      transition:all 0.2s;color:var(--text-light);font-size:14px
-    }
-    .sub-tab.active{
-      color:var(--primary-color);border-bottom-color:var(--primary-color)
-    }
-    .sub-tab-content{display:none}
-    .sub-tab-content.active{display:block}
-    
-    /* Time details styling */
-    .time-details{font-size:11px;color:var(--text-light);margin-top:4px}
-    .time-range{display:inline-block;background:#f8f9fa;padding:2px 6px;border-radius:4px;margin-right:8px}
-    
     details pre{
       max-height:250px;overflow:auto;background:#0f172a;color:#e5e7eb;
       padding:10px;border-radius:6px;font-size:11px
-    }
-
-    /* Responsive improvements */
-    @media (max-width: 768px) {
-      .controls, .analytics-controls {
-        grid-template-columns:1fr;
-      }
-      .tabs, .sub-tabs {
-        flex-wrap:wrap;
-      }
-      .tab, .sub-tab {
-        flex:1;min-width:120px;text-align:center
-      }
     }
   </style>
 </head>
@@ -241,12 +207,8 @@
             <input type="date" id="overtimeEndDate" />
           </div>
           <div>
-            <label for="overtimeThreshold">Weekly Threshold (hours)</label>
+            <label for="overtimeThreshold">Overtime Threshold (hours)</label>
             <input type="number" id="overtimeThreshold" value="40" min="0" step="0.5" />
-          </div>
-          <div>
-            <label for="dailyThreshold">Daily Threshold (hours)</label>
-            <input type="number" id="dailyThreshold" value="8" min="0" step="0.5" />
           </div>
         </div>
         <button id="analyzeOvertimeBtn" class="full-width-btn">Analyze Overtime</button>
@@ -311,7 +273,6 @@
     let allTeams = [];
     let activityCodesByBuId = {};
     let businessUnits = [];
-    let managementUnits = [];
 
     // ===== Tab Management =====
     function initializeTabs() {
@@ -399,32 +360,18 @@
     async function fetchAllPages(url) {
       let allItems = [];
       let pageNumber = 1;
-      let pageSize = 100;
       let hasMorePages = true;
 
       while (hasMorePages) {
-        try {
-          const response = await authorizedFetch(`${url}?pageNumber=${pageNumber}&pageSize=${pageSize}`);
-          if (!response.ok) {
-            throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
-          }
-          const data = await response.json();
-          
-          // Handle different response formats
-          const entities = data.entities || data.users || data.members || data.businessUnits || data.managementUnits || data.teams || [];
-          allItems = allItems.concat(entities);
-          
-          if (data.pageCount && data.pageCount > pageNumber) {
-            pageNumber++;
-          } else if (data.pageCount === pageNumber) {
-            hasMorePages = false;
-          } else if (!entities.length || entities.length < pageSize) {
-            hasMorePages = false;
-          } else {
-            pageNumber++;
-          }
-        } catch (err) {
-          console.error('Error in fetchAllPages:', err);
+        const response = await authorizedFetch(`${url}?pageNumber=${pageNumber}&pageSize=100`);
+        if (!response.ok) {
+          throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
+        }
+        const data = await response.json();
+        allItems = allItems.concat(data.entities || []);
+        if (data.pageCount && data.pageCount > pageNumber) {
+          pageNumber++;
+        } else {
           hasMorePages = false;
         }
       }
@@ -439,7 +386,7 @@
       document.getElementById('teamSelect').addEventListener('change', handleTeamChange);
 
       try {
-        await populateInitialData();
+        await Promise.all([populateInitialData()]);
         showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
       } catch (err) {
         console.error('Error initialising app:', err);
@@ -448,56 +395,24 @@
     }
 
     async function populateInitialData() {
-      try {
-        console.log('Starting to populate initial data...');
-        
-        // Fetch all data in parallel
-        const [users, businessUnitsData, teams, managementUnitsData] = await Promise.all([
-          fetchAllPages(`${apiBase}/api/v2/users`),
-          fetchAllPages(`${apiBase}/api/v2/workforcemanagement/businessunits`),
-          fetchAllPages(`${apiBase}/api/v2/teams`),
-          fetchAllPages(`${apiBase}/api/v2/workforcemanagement/managementunits`)
-        ]);
+      const [users, businessUnitsResponse, teams] = await Promise.all([
+        fetchAllPages(`${apiBase}/api/v2/users`),
+        authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
+        fetchAllPages(`${apiBase}/api/v2/teams`)
+      ]);
 
-        console.log('Data fetched:', { 
-          users: users.length, 
-          businessUnits: businessUnitsData.length,
-          teams: teams.length,
-          managementUnits: managementUnitsData.length
-        });
+      allUsers = (users || []).filter(u => !u.deleted);
+      usersById = {};
+      allUsers.forEach(u => { usersById[u.id] = u; });
+      businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
+      allTeams = teams || [];
 
-        // Process users
-        allUsers = (users || []).filter(u => !u.deleted && u.name);
-        usersById = {};
-        allUsers.forEach(u => { 
-          usersById[u.id] = u;
-          // Ensure user has name property
-          if (!u.name && u.username) {
-            u.name = u.username;
-          }
-        });
-
-        // Process business units
-        businessUnits = businessUnitsData || [];
-        
-        // Process management units
-        managementUnits = managementUnitsData || [];
-        
-        // Process teams
-        allTeams = teams || [];
-
-        populateUserSelect(allUsers);
-        populateBusinessUnitSelect(businessUnits);
-        populateTeamSelect(allTeams);
-        
-        // Also populate analytics dropdowns
-        populateAnalyticsDropdowns();
-        
-        console.log('Initial data population completed');
-      } catch (err) {
-        console.error('Error in populateInitialData:', err);
-        throw err;
-      }
+      populateUserSelect(allUsers);
+      populateBusinessUnitSelect(businessUnits);
+      populateTeamSelect(allTeams);
+      
+      // Also populate analytics dropdowns
+      populateAnalyticsDropdowns();
     }
 
     function populateUserSelect(users) {
@@ -515,8 +430,7 @@
     function populateBusinessUnitSelect(businessUnits) {
       const buSelect = document.getElementById('businessUnitSelect');
       buSelect.innerHTML = '<option value="">Select business unit</option>';
-      const sorted = [...businessUnits].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      sorted.forEach(bu => {
+      businessUnits.forEach(bu => {
         const opt = document.createElement('option');
         opt.value = bu.id;
         opt.text = bu.name || bu.id;
@@ -587,12 +501,11 @@
       if (!buId) return;
 
       try {
-        // Filter management units by business unit ID
-        const filteredManagementUnits = managementUnits.filter(mu => 
-          mu.businessUnit && mu.businessUnit.id === buId
+        const muResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
         );
-        
-        filteredManagementUnits.forEach(mu => {
+        const list = muResponse.entities || muResponse.managementUnits || [];
+        list.forEach(mu => {
           const opt = document.createElement('option');
           opt.value = mu.id;
           opt.text = mu.name || mu.id;
@@ -603,410 +516,6 @@
         console.error('Error loading management units:', err);
         showMessage(`Error loading management units: ${err.message}`, 'error');
       }
-    }
-
-    // ===== Business Unit Change Handler =====
-    async function handleBusinessUnitChange(event) {
-      const buId = event.target.value;
-      const muSelect = document.getElementById('managementUnitSelect');
-      const userSelect = document.getElementById('userSelect');
-      
-      // Reset dependent fields
-      muSelect.innerHTML = '<option value="">Select management unit</option>';
-      muSelect.disabled = true;
-      userSelect.innerHTML = '<option value="">Select user</option>';
-      userSelect.disabled = true;
-
-      if (!buId) return;
-
-      try {
-        // Filter management units by business unit ID
-        const filteredManagementUnits = managementUnits.filter(mu => 
-          mu.businessUnit && mu.businessUnit.id === buId
-        );
-        
-        console.log(`Filtered management units for BU ${buId}:`, filteredManagementUnits);
-        
-        filteredManagementUnits.forEach(mu => {
-          const opt = document.createElement('option');
-          opt.value = mu.id;
-          opt.text = mu.name || mu.id;
-          muSelect.add(opt);
-        });
-        muSelect.disabled = false;
-      } catch (err) {
-        console.error('Error loading management units:', err);
-        showMessage(`Error loading management units: ${err.message}`, 'error');
-      }
-    }
-
-    // ===== Management Unit Change Handler =====
-    async function handleManagementUnitChange(event) {
-      const muId = event.target.value;
-      const userSelect = document.getElementById('userSelect');
-      
-      userSelect.innerHTML = '<option value="">Select user</option>';
-      userSelect.disabled = true;
-
-      if (!muId) return;
-
-      try {
-        // Get users for the selected management unit
-        const muUsers = await fetchAllPages(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
-        );
-        
-        console.log(`Users for MU ${muId}:`, muUsers);
-        
-        // Populate user dropdown
-        userSelect.innerHTML = '<option value="">Select user</option>';
-        const sorted = [...muUsers].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        sorted.forEach(user => {
-          const opt = document.createElement('option');
-          opt.value = user.id;
-          // Use the user object from our cached data if available, otherwise use what we got
-          const userObj = usersById[user.id] || user;
-          opt.text = userObj.name || userObj.id;
-          userSelect.add(opt);
-        });
-        userSelect.disabled = false;
-      } catch (err) {
-        console.error('Error loading users for management unit:', err);
-        showMessage(`Error loading users: ${err.message}`, 'error');
-      }
-    }
-
-    // ===== Team Change Handler =====
-    async function handleTeamChange(event) {
-      const teamId = event.target.value;
-      const userSelect = document.getElementById('userSelect');
-      
-      userSelect.innerHTML = '<option value="">Select user</option>';
-      userSelect.disabled = true;
-
-      if (!teamId) return;
-
-      try {
-        // Get team members
-        const teamMembers = await fetchAllPages(
-          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
-        );
-        
-        console.log(`Team members for team ${teamId}:`, teamMembers);
-        
-        // Populate user dropdown with team members
-        userSelect.innerHTML = '<option value="">Select user</option>';
-        const sorted = [...teamMembers].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        sorted.forEach(member => {
-          const opt = document.createElement('option');
-          opt.value = member.id;
-          // Use the user object from our cached data if available, otherwise use what we got
-          const userObj = usersById[member.id] || member;
-          opt.text = userObj.name || userObj.id;
-          userSelect.add(opt);
-        });
-        userSelect.disabled = false;
-      } catch (err) {
-        console.error('Error loading team members:', err);
-        showMessage(`Error loading team members: ${err.message}`, 'error');
-      }
-    }
-
-    // ===== Load Schedule =====
-    async function loadSchedule() {
-      const muId = document.getElementById('managementUnitSelect').value;
-      const userId = document.getElementById('userSelect').value;
-      const startDate = document.getElementById('startDate').value;
-      const endDate = document.getElementById('endDate').value;
-
-      if (!muId || !userId || !startDate || !endDate) {
-        showMessage('Please select management unit, user, and date range', 'error');
-        return;
-      }
-
-      const button = document.getElementById('loadScheduleBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Loading...';
-
-      try {
-        const startDateIso = `${startDate}T00:00:00.000Z`;
-        const endDateIso = `${endDate}T23:59:59.999Z`;
-
-        console.log('Loading schedule with params:', { muId, userId, startDateIso, endDateIso });
-
-        const schedule = await searchSchedules(muId, userId, startDateIso, endDateIso);
-        console.log('Schedule response:', schedule);
-        
-        renderScheduleResults(schedule, userId);
-      } catch (err) {
-        console.error('Error loading schedule:', err);
-        showMessage(`Error loading schedule: ${err.message}`, 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-      }
-    }
-
-    // ===== Search Schedules =====
-    async function searchSchedules(muId, userId, startDate, endDate, includeFullDayTimeOffMarkers = true) {
-      const body = {
-        startDate: startDate,
-        endDate: endDate,
-        userIds: [userId],
-        includeFullDayTimeOffMarkers: includeFullDayTimeOffMarkers
-      };
-
-      console.log('Searching schedules with body:', body);
-
-      const response = await authorizedFetch(
-        `${apiBase}/api/v2/workforcemanagement/managementunits/${muId}/schedules/search`,
-        {
-          method: 'POST',
-          body: JSON.stringify(body)
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Schedule search error:', errorText);
-        throw new Error(`Error searching schedules: ${response.status} ${response.statusText}`);
-      }
-
-      return response.json();
-    }
-
-    // ===== Extract User Activities =====
-    function extractUserActivitiesFromSearchResult(scheduleResult, userId, businessUnitId) {
-      const activities = [];
-      
-      console.log('Extracting activities from schedule result:', scheduleResult);
-      
-      if (!scheduleResult) {
-        console.log('No schedule result found');
-        return activities;
-      }
-
-      // Handle different response formats
-      let userSchedules = [];
-      
-      if (Array.isArray(scheduleResult.userSchedules)) {
-        userSchedules = scheduleResult.userSchedules;
-      } else if (scheduleResult.userSchedules && typeof scheduleResult.userSchedules === 'object') {
-        // If userSchedules is an object with user IDs as keys, convert to array
-        userSchedules = Object.values(scheduleResult.userSchedules);
-        console.log('Converted userSchedules object to array:', userSchedules);
-      } else if (Array.isArray(scheduleResult)) {
-        userSchedules = scheduleResult;
-      } else {
-        console.log('Unexpected schedule result format:', scheduleResult);
-        return activities;
-      }
-
-      console.log('Processed user schedules:', userSchedules);
-
-      // Find the user's schedule - handle different user identification formats
-      const userSchedule = userSchedules.find(us => {
-        // Check if this schedule object has the user ID as a property
-        if (us.user && us.user.id === userId) return true;
-        if (us.userId === userId) return true;
-        
-        // For the object format where keys are user IDs, we need to check if this schedule
-        // belongs to our user by looking at the shifts or other data
-        if (us.shifts && us.shifts.length > 0) {
-          // If we can't match by user object, we'll assume this is the user's schedule
-          // since we're only requesting one user's schedule
-          return true;
-        }
-        
-        return false;
-      });
-      
-      if (!userSchedule) {
-        console.log('No schedule found for user:', userId);
-        console.log('Available user schedules:', userSchedules.map(us => ({
-          hasUser: !!us.user,
-          userId: us.userId,
-          hasShifts: !!(us.shifts && us.shifts.length)
-        })));
-        return activities;
-      }
-
-      console.log('User schedule found:', userSchedule);
-
-      // Process shifts - handle different field names
-      const shifts = userSchedule.shifts || userSchedule.publishedShifts || [];
-      if (shifts && Array.isArray(shifts)) {
-        shifts.forEach(shift => {
-          console.log('Processing shift:', shift);
-          const shiftStart = shift.startDate || shift.startTime;
-          const shiftEnd = shift.endDate || shift.endTime;
-          
-          if (shiftStart) {
-            // Calculate end time if not provided
-            let endTime;
-            if (shiftEnd) {
-              endTime = new Date(shiftEnd);
-            } else if (shift.lengthInMinutes) {
-              endTime = new Date(new Date(shiftStart).getTime() + shift.lengthInMinutes * 60000);
-            } else {
-              console.warn('Shift missing end time and duration:', shift);
-              return; // Skip this shift if we can't determine end time
-            }
-            
-            activities.push({
-              type: 'shift',
-              date: shiftStart.split('T')[0],
-              start: new Date(shiftStart),
-              end: endTime,
-              durationMinutes: shift.lengthInMinutes || (shift.activities ? shift.activities.reduce((total, activity) => total + (activity.lengthMinutes || 0), 0) : 0),
-              countsAsPaidTime: true,
-              activities: shift.activities || []
-            });
-          }
-        });
-      }
-
-      // Process full day time off markers - handle different field names
-      const timeOffMarkers = userSchedule.fullDayTimeOffMarkers || userSchedule.timeOffMarkers || [];
-      if (timeOffMarkers && Array.isArray(timeOffMarkers)) {
-        timeOffMarkers.forEach(marker => {
-          console.log('Processing time off marker:', marker);
-          const markerDate = marker.date || marker.managementUnitDate || marker.startDate;
-          
-          if (markerDate) {
-            activities.push({
-              type: 'fullDayOff',
-              date: markerDate.split('T')[0],
-              start: new Date(markerDate),
-              end: new Date(markerDate),
-              durationMinutes: marker.lengthInMinutes || 480, // Default to 8 hours if not specified
-              countsAsPaidTime: marker.isPaid !== false, // Default to true unless explicitly false
-              activityCodeId: marker.activityCodeId || marker.timeOffCodeId,
-              isFullDayOff: true
-            });
-          }
-        });
-      }
-
-      console.log('Extracted activities:', activities);
-      return activities;
-    }
-
-    // ===== Format Duration =====
-    function formatDuration(minutes) {
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-    }
-
-    // ===== Escape HTML =====
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // ===== Render Schedule Results =====
-    function renderScheduleResults(scheduleResult, userId) {
-      const container = document.getElementById('results');
-      container.style.display = 'block';
-      
-      const businessUnitId = document.getElementById('businessUnitSelect').value;
-      const activities = extractUserActivitiesFromSearchResult(scheduleResult, userId, businessUnitId);
-      
-      console.log('Rendering schedule with activities:', activities);
-      
-      if (activities.length === 0) {
-        container.innerHTML = `
-          <div class="info-message">
-            No schedule found for the selected period. 
-            <details style="margin-top: 10px;">
-              <summary>Debug Information</summary>
-              <pre>${escapeHtml(JSON.stringify(scheduleResult, null, 2))}</pre>
-            </details>
-          </div>`;
-        return;
-      }
-
-      let html = `
-        <h3 class="section-title">Schedule for ${escapeHtml(usersById[userId]?.name || userId)}</h3>
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Start</th>
-              <th>End</th>
-              <th>Duration</th>
-              <th>Activities</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-
-      activities.forEach(activity => {
-        const startTime = formatTime(activity.start);
-        const endTime = formatTime(activity.end);
-        const duration = formatDuration(activity.durationMinutes);
-        
-        let activityDetails = '';
-        if (activity.activities && activity.activities.length > 0) {
-          activityDetails = activity.activities.map(a => {
-            const activityName = getActivityName(businessUnitId, a.activityCodeId);
-            return `${activityName} (${formatDuration(a.lengthMinutes || 0)})`;
-          }).join('<br>');
-        } else if (activity.isFullDayOff) {
-          activityDetails = getActivityName(businessUnitId, activity.activityCodeId) || 'Time Off';
-        } else {
-          activityDetails = 'Work';
-        }
-
-        html += `
-          <tr>
-            <td>${escapeHtml(activity.date)}</td>
-            <td>${escapeHtml(activity.type)}</td>
-            <td>${startTime}</td>
-            <td>${endTime}</td>
-            <td>${duration}</td>
-            <td>${activityDetails}</td>
-          </tr>
-        `;
-      });
-
-      html += `</tbody></table>`;
-      container.innerHTML = html;
-    }
-
-    // ===== Load Activity Codes =====
-    async function loadActivityCodes(businessUnitId) {
-      if (activityCodesByBuId[businessUnitId]) {
-        return activityCodesByBuId[businessUnitId];
-      }
-
-      try {
-        const response = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/businessunits/${businessUnitId}/activitycodes`
-        );
-        activityCodesByBuId[businessUnitId] = response.entities || [];
-        return activityCodesByBuId[businessUnitId];
-      } catch (err) {
-        console.error('Error loading activity codes:', err);
-        return [];
-      }
-    }
-
-    // ===== Get Activity Name =====
-    function getActivityName(businessUnitId, activityCodeId) {
-      const codes = activityCodesByBuId[businessUnitId] || [];
-      const code = codes.find(c => c.id === activityCodeId);
-      return code ? code.name : (activityCodeId || 'Unknown Activity');
-    }
-
-    // ===== Format Time =====
-    function formatTime(d) {
-      if (!d) return '';
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
     // ===== Overtime Analysis =====
@@ -1016,8 +525,7 @@
       const teamId = document.getElementById('overtimeTeamSelect').value;
       const startDate = document.getElementById('overtimeStartDate').value;
       const endDate = document.getElementById('overtimeEndDate').value;
-      const weeklyThreshold = parseFloat(document.getElementById('overtimeThreshold').value) || 40;
-      const dailyThreshold = parseFloat(document.getElementById('dailyThreshold').value) || 8;
+      const thresholdHours = parseFloat(document.getElementById('overtimeThreshold').value) || 40;
 
       if (!buId || !muId || !startDate || !endDate) {
         showMessage('Please select business unit, management unit, and date range', 'error');
@@ -1033,35 +541,33 @@
         // Get users based on filters
         let users = await getUsersForAnalytics(muId, teamId);
         
-        console.log(`Analyzing overtime for ${users.length} users`);
-        
-        const overtimeData = {
-          daily: [],
-          weekly: [],
-          monthly: []
-        };
-        
+        const overtimeData = [];
         const startDateIso = `${startDate}T00:00:00.000Z`;
-        const endDateIso = `${endDate}T23:59:59.999Z`;
+        const endDateIso = `${endDate}T00:00:00.000Z`;
 
         // Analyze each user's schedule
         for (const user of users) {
           try {
-            console.log(`Analyzing user: ${user.name}`);
             const schedule = await searchSchedules(muId, user.id, startDateIso, endDateIso, true);
-            const userOvertime = calculateOvertimeDetails(schedule, user.id, weeklyThreshold, dailyThreshold);
+            const weeklyHours = calculateWeeklyHours(schedule, user.id, startDate, endDate);
             
-            // Add user data to each time period
-            overtimeData.daily.push(...userOvertime.daily);
-            overtimeData.weekly.push(...userOvertime.weekly);
-            overtimeData.monthly.push(...userOvertime.monthly);
-            
+            weeklyHours.forEach(weekData => {
+              if (weekData.totalHours > thresholdHours) {
+                overtimeData.push({
+                  user: user.name,
+                  week: weekData.week,
+                  totalHours: weekData.totalHours,
+                  overtimeHours: weekData.totalHours - thresholdHours,
+                  days: weekData.days
+                });
+              }
+            });
           } catch (err) {
             console.error(`Error analyzing user ${user.name}:`, err);
           }
         }
 
-        renderOvertimeResults(overtimeData, weeklyThreshold, dailyThreshold);
+        renderOvertimeResults(overtimeData, thresholdHours);
       } catch (err) {
         console.error('Error analyzing overtime:', err);
         showMessage(`Error analyzing overtime: ${err.message}`, 'error');
@@ -1097,13 +603,10 @@
         let users = await getUsersForAnalytics(muId, teamId);
         const absenceData = [];
         const startDateIso = `${startDate}T00:00:00.000Z`;
-        const endDateIso = `${endDate}T23:59:59.999Z`;
-
-        console.log(`Analyzing absence for ${users.length} users`);
+        const endDateIso = `${endDate}T00:00:00.000Z`;
 
         for (const user of users) {
           try {
-            console.log(`Analyzing absence for user: ${user.name}`);
             const schedule = await searchSchedules(muId, user.id, startDateIso, endDateIso, true);
             const absenceStats = calculateAbsenceStats(schedule, user.id, buId);
             
@@ -1136,132 +639,43 @@
       let users = [];
       
       if (teamId) {
-        const teamMembers = await fetchAllPages(
+        const teamMembersResponse = await authorizedFetchJson(
           `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
         );
-        users = teamMembers || [];
+        users = teamMembersResponse.entities || teamMembersResponse.members || [];
       } else {
-        const muUsers = await fetchAllPages(
+        const muUsersResponse = await authorizedFetchJson(
           `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
         );
-        users = muUsers || [];
+        users = muUsersResponse.entities || muUsersResponse.users || [];
       }
       
-      // Map to our cached user objects to get proper names
-      return users.map(uRef => {
-        const user = usersById[uRef.id] || uRef;
-        return {
-          id: user.id,
-          name: user.name || user.id
-        };
-      }).filter(u => u && u.name);
+      return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
     }
 
-    function calculateOvertimeDetails(schedule, userId, weeklyThreshold, dailyThreshold) {
+    function calculateWeeklyHours(schedule, userId, startDate, endDate) {
       const activities = extractUserActivitiesFromSearchResult(schedule, userId, document.getElementById('overtimeBuSelect').value);
-      
-      const dailyData = {};
       const weeklyData = {};
-      const monthlyData = {};
       
-      // Group activities by date and calculate work periods
       activities.forEach(activity => {
         if (activity.type === 'shift' && activity.countsAsPaidTime) {
           const date = new Date(activity.date);
-          const dateKey = activity.date;
           const weekKey = getWeekKey(date);
-          const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
           
-          // Initialize data structures
-          if (!dailyData[dateKey]) {
-            dailyData[dateKey] = {
-              date: dateKey,
-              totalHours: 0,
-              workPeriods: [],
-              user: usersById[userId]?.name || userId
-            };
-          }
           if (!weeklyData[weekKey]) {
             weeklyData[weekKey] = {
               week: weekKey,
               totalHours: 0,
-              days: new Set(),
-              user: usersById[userId]?.name || userId
-            };
-          }
-          if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = {
-              month: monthKey,
-              totalHours: 0,
-              user: usersById[userId]?.name || userId
+              days: new Set()
             };
           }
           
-          // Add hours
-          const hours = activity.durationMinutes / 60;
-          dailyData[dateKey].totalHours += hours;
-          weeklyData[weekKey].totalHours += hours;
-          monthlyData[monthKey].totalHours += hours;
-          
-          // Add work period
-          dailyData[dateKey].workPeriods.push({
-            start: activity.start,
-            end: activity.end,
-            hours: hours
-          });
-          
-          // Track days in week
-          weeklyData[weekKey].days.add(dateKey);
+          weeklyData[weekKey].totalHours += activity.durationMinutes / 60;
+          weeklyData[weekKey].days.add(activity.date);
         }
       });
       
-      // Calculate overtime and format results
-      const result = {
-        daily: [],
-        weekly: [],
-        monthly: []
-      };
-      
-      // Daily overtime
-      Object.values(dailyData).forEach(day => {
-        if (day.totalHours > dailyThreshold) {
-          result.daily.push({
-            user: day.user,
-            date: day.date,
-            totalHours: day.totalHours,
-            overtimeHours: day.totalHours - dailyThreshold,
-            workPeriods: day.workPeriods
-          });
-        }
-      });
-      
-      // Weekly overtime
-      Object.values(weeklyData).forEach(week => {
-        if (week.totalHours > weeklyThreshold) {
-          result.weekly.push({
-            user: week.user,
-            period: week.week,
-            totalHours: week.totalHours,
-            overtimeHours: week.totalHours - weeklyThreshold,
-            daysWorked: week.days.size
-          });
-        }
-      });
-      
-      // Monthly overtime (anything over 4x weekly threshold)
-      const monthlyThreshold = weeklyThreshold * 4;
-      Object.values(monthlyData).forEach(month => {
-        if (month.totalHours > monthlyThreshold) {
-          result.monthly.push({
-            user: month.user,
-            period: month.month,
-            totalHours: month.totalHours,
-            overtimeHours: month.totalHours - monthlyThreshold
-          });
-        }
-      });
-      
-      return result;
+      return Object.values(weeklyData);
     }
 
     function calculateAbsenceStats(schedule, userId, businessUnitId) {
@@ -1274,20 +688,25 @@
       
       activities.forEach(activity => {
         const activityName = getActivityName(businessUnitId, activity.activityCodeId);
+        const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
         
-        // Count anything that's NOT work-related
-        const isWorkActivity = activityName === 'On Queue' || 
-                              activityName === 'Off Queue' || 
-                              activityName === 'Break' || 
-                              activityName === 'Meal' ||
-                              activityName === 'Meeting' ||
-                              activityName === 'Training';
+        console.log(`Activity: ${activityName}, Category: ${activityCategory}, Code: ${activity.activityCodeId}, Duration: ${activity.durationMinutes}min`);
         
-        if (!isWorkActivity || activity.type === 'fullDayOff') {
+        // Check if it's absence based on category or name
+        const isAbsence = activity.type === 'fullDayOff' || 
+                         activityCategory === 'TimeOff' ||
+                         activityName.includes('Time Off') || 
+                         activityName.includes('Sick') || 
+                         activityName.includes('Absence') || 
+                         activityName.includes('Vacation') ||
+                         activityName.includes('Holiday') ||
+                         activityName.includes('Leave');
+        
+        if (isAbsence) {
           totalHours += activity.durationMinutes / 60;
           absenceDays.add(activity.date);
           instances++;
-          console.log(`✓ Counted as absence: ${activityName} (${activity.durationMinutes/60}h)`);
+          console.log(`✓ Counted as absence: ${activityName} (${activity.durationMinutes/60}h, Category: ${activityCategory})`);
         }
       });
       
@@ -1313,141 +732,49 @@
     }
 
     // ===== Rendering Functions =====
-    function renderOvertimeResults(data, weeklyThreshold, dailyThreshold) {
+    function renderOvertimeResults(data, thresholdHours) {
       const container = document.getElementById('overtimeResults');
       container.style.display = 'block';
       
-      if (data.daily.length === 0 && data.weekly.length === 0 && data.monthly.length === 0) {
-        container.innerHTML = `<div class="info-message">No overtime detected for the selected period.</div>`;
+      if (data.length === 0) {
+        container.innerHTML = `<div class="info-message">No overtime detected for the selected period (threshold: ${thresholdHours} hours/week).</div>`;
         return;
       }
       
       let html = `
         <h3 class="section-title">Overtime Report</h3>
         <div class="schedule-meta">
-          <span class="pill">Weekly Threshold: ${weeklyThreshold} hours</span>
+          <span class="pill">Threshold: ${thresholdHours} hours/week</span>
           &nbsp;
-          <span class="pill">Daily Threshold: ${dailyThreshold} hours</span>
-          &nbsp;
-          <span class="pill">Cases: ${data.daily.length} daily, ${data.weekly.length} weekly, ${data.monthly.length} monthly</span>
+          <span class="pill">Total Cases: ${data.length}</span>
         </div>
-        
-        <div class="sub-tabs">
-          <div class="sub-tab active" data-subtab="daily">Daily Breakdown</div>
-          <div class="sub-tab" data-subtab="weekly">Weekly Summary</div>
-          <div class="sub-tab" data-subtab="monthly">Monthly Overview</div>
-        </div>
-        
-        <div id="daily-overtime" class="sub-tab-content active">
-          <h4>Daily Overtime (Over ${dailyThreshold}h/day)</h4>
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Date</th>
-                <th>Total Hours</th>
-                <th>Overtime Hours</th>
-                <th>Work Periods</th>
-              </tr>
-            </thead>
-            <tbody>
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Week</th>
+              <th>Total Hours</th>
+              <th>Overtime Hours</th>
+              <th>Days Worked</th>
+            </tr>
+          </thead>
+          <tbody>
       `;
       
-      data.daily.forEach(item => {
-        const timeRanges = item.workPeriods.map(period => 
-          `<span class="time-range">${formatTime(period.start)}-${formatTime(period.end)}</span>`
-        ).join('');
-        
+      data.forEach(item => {
         html += `
           <tr>
             <td>${escapeHtml(item.user)}</td>
-            <td>${escapeHtml(item.date)}</td>
+            <td>${escapeHtml(item.week)}</td>
             <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
             <td><span class="overtime-badge">+${item.overtimeHours.toFixed(1)}h</span></td>
-            <td><div class="time-details">${timeRanges}</div></td>
+            <td>${item.days.size}</td>
           </tr>
         `;
       });
       
-      html += `</tbody></table></div>`;
-      
-      html += `
-        <div id="weekly-overtime" class="sub-tab-content">
-          <h4>Weekly Overtime (Over ${weeklyThreshold}h/week)</h4>
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Week</th>
-                <th>Total Hours</th>
-                <th>Overtime Hours</th>
-                <th>Days Worked</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
-      
-      data.weekly.forEach(item => {
-        html += `
-          <tr>
-            <td>${escapeHtml(item.user)}</td>
-            <td>${escapeHtml(item.period)}</td>
-            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
-            <td><span class="overtime-badge">+${item.overtimeHours.toFixed(1)}h</span></td>
-            <td>${item.daysWorked}</td>
-          </tr>
-        `;
-      });
-      
-      html += `</tbody></table></div>`;
-      
-      html += `
-        <div id="monthly-overtime" class="sub-tab-content">
-          <h4>Monthly Overtime (Over ${weeklyThreshold * 4}h/month)</h4>
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Month</th>
-                <th>Total Hours</th>
-                <th>Overtime Hours</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
-      
-      data.monthly.forEach(item => {
-        html += `
-          <tr>
-            <td>${escapeHtml(item.user)}</td>
-            <td>${escapeHtml(item.period)}</td>
-            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
-            <td><span class="overtime-badge">+${item.overtimeHours.toFixed(1)}h</span></td>
-          </tr>
-        `;
-      });
-      
-      html += `</tbody></table></div>`;
-      
+      html += `</tbody></table>`;
       container.innerHTML = html;
-      
-      // Initialize sub-tabs
-      initializeSubTabs();
-    }
-
-    function initializeSubTabs() {
-      document.querySelectorAll('.sub-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-          // Remove active class from all sub-tabs and contents
-          document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
-          
-          // Add active class to clicked sub-tab and corresponding content
-          tab.classList.add('active');
-          const subtabId = tab.getAttribute('data-subtab');
-          document.getElementById(`${subtabId}-overtime`).classList.add('active');
-        });
-      });
     }
 
     function renderAbsenceResults(data, thresholdHours, startDate, endDate) {
@@ -1455,23 +782,22 @@
       container.style.display = 'block';
       
       if (data.length === 0) {
-        container.innerHTML = `<div class="info-message">No absence detected for the selected period.</div>`;
+        container.innerHTML = `<div class="info-message">No absence recorded for the selected period.</div>`;
         return;
       }
       
-      // Sort by total hours (descending)
+      // Sort by absence hours (descending)
       data.sort((a, b) => b.totalHours - a.totalHours);
       
       let html = `
-        <h3 class="section-title">Absence Report</h3>
+        <h3 class="section-title">Absence Analytics</h3>
         <div class="schedule-meta">
           <span class="pill">Period: ${startDate} to ${endDate}</span>
           &nbsp;
-          <span class="pill">Threshold: ${thresholdHours} hours</span>
+          <span class="pill">Alert Threshold: ${thresholdHours} hours</span>
           &nbsp;
-          <span class="pill">Agents with absence: ${data.length}</span>
+          <span class="pill">Total Agents: ${data.length}</span>
         </div>
-        
         <table class="schedule-table">
           <thead>
             <tr>
@@ -1486,23 +812,501 @@
       `;
       
       data.forEach(item => {
-        const statusClass = item.exceedsThreshold ? 'warning-row' : '';
-        const statusBadge = item.exceedsThreshold 
-          ? `<span class="absence-badge">Above Threshold</span>` 
-          : `<span class="pill">Within Limits</span>`;
+        const rowClass = item.exceedsThreshold ? 'warning-row' : '';
+        const status = item.exceedsThreshold ? 
+          `<span class="absence-badge">Above Threshold</span>` : 
+          '<span style="color: var(--success-text)">Within Limits</span>';
         
         html += `
-          <tr class="${statusClass}">
+          <tr class="${rowClass}">
             <td>${escapeHtml(item.user)}</td>
-            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
+            <td><strong>${item.totalHours}h</strong></td>
             <td>${item.absenceDays}</td>
             <td>${item.instances}</td>
-            <td>${statusBadge}</td>
+            <td>${status}</td>
           </tr>
         `;
       });
       
       html += `</tbody></table>`;
+      
+      // Add simple chart visualization
+      html += `
+        <div class="chart-container">
+          <h4>Absence Distribution</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px;">
+      `;
+      
+      // Top 5 absence cases for chart
+      const topCases = data.slice(0, 5);
+      topCases.forEach(item => {
+        const percentage = (item.totalHours / Math.max(...data.map(d => d.totalHours))) * 100;
+        html += `
+          <div class="metric-card">
+            <div class="metric-label">${escapeHtml(item.user)}</div>
+            <div class="metric-value">${item.totalHours}h</div>
+            <div style="background: #e5e7eb; height: 8px; border-radius: 4px; margin-top: 8px;">
+              <div style="background: var(--primary-color); height: 100%; width: ${percentage}%; border-radius: 4px;"></div>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `</div></div>`;
+      container.innerHTML = html;
+    }
+
+    // ===== Existing Schedule Functions =====
+    async function handleBusinessUnitChange() {
+      const buId = document.getElementById('businessUnitSelect').value;
+      const muSelect = document.getElementById('managementUnitSelect');
+      muSelect.innerHTML = '<option value="">Select management unit</option>';
+      muSelect.disabled = true;
+
+      if (!buId) return;
+
+      try {
+        // Load activity codes for this business unit
+        await loadActivityCodes(buId);
+        
+        const muResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buId)}`
+        );
+        const list = muResponse.entities || muResponse.managementUnits || [];
+        list.forEach(mu => {
+          const opt = document.createElement('option');
+          opt.value = mu.id;
+          opt.text = mu.name || mu.id;
+          muSelect.add(opt);
+        });
+        muSelect.disabled = false;
+      } catch (err) {
+        console.error('Error loading management units:', err);
+        showMessage(`Error loading management units: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== Fixed function to load activity codes from business unit =====
+    async function loadActivityCodes(businessUnitId) {
+      try {
+        console.log(`Loading activity codes for business unit: ${businessUnitId}`);
+        const activityCodesResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(businessUnitId)}/activitycodes`
+        );
+        
+        console.log('Full activity codes API response:', activityCodesResponse);
+        
+        let activityCodes = [];
+        
+        // Try different response structures
+        if (activityCodesResponse.activityCodes && typeof activityCodesResponse.activityCodes === 'object') {
+          console.log('Found activityCodes object, converting to array...');
+          activityCodes = Object.values(activityCodesResponse.activityCodes);
+        } else if (Array.isArray(activityCodesResponse.entities)) {
+          console.log('Found entities array');
+          activityCodes = activityCodesResponse.entities;
+        } else if (Array.isArray(activityCodesResponse)) {
+          console.log('Response is array');
+          activityCodes = activityCodesResponse;
+        } else {
+          console.log('Unknown response structure, trying to extract any arrays...');
+          // Try to find any array in the response
+          for (const key in activityCodesResponse) {
+            if (Array.isArray(activityCodesResponse[key])) {
+              activityCodes = activityCodesResponse[key];
+              console.log(`Found array in key: ${key}`);
+              break;
+            }
+          }
+        }
+        
+        console.log(`Loaded ${activityCodes.length} activity codes:`, activityCodes);
+        
+        // Create a lookup map by ID - now storing both name and category
+        const activityCodeMap = {};
+        activityCodes.forEach(code => {
+          if (code && code.id) {
+            activityCodeMap[code.id] = {
+              name: code.name ? code.name.trim() : code.id,
+              category: code.category || 'Unknown'
+            };
+            console.log(`Mapped: ${code.id} -> "${code.name}" (Category: ${code.category})`);
+          } else {
+            console.log('Skipping invalid activity code:', code);
+          }
+        });
+        
+        // Cache the activity codes for this business unit
+        activityCodesByBuId[businessUnitId] = activityCodeMap;
+        
+        console.log('Final activity code map:', activityCodeMap);
+        return activityCodeMap;
+      } catch (err) {
+        console.error('Error loading activity codes:', err);
+        // Return empty map but don't fail completely
+        activityCodesByBuId[businessUnitId] = {};
+        return {};
+      }
+    }
+
+    // ===== Function to get activity name from code =====
+    function getActivityName(businessUnitId, activityCodeId) {
+      if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
+      
+      // Default system activity codes - hardcoded
+      const systemCodes = {
+        '0': 'On Queue',
+        '1': 'Break', 
+        '2': 'Meal',
+        '3': 'Meeting',
+        '4': 'Off Queue',
+        '5': 'Time Off',
+        '6': 'Training',
+        '7': 'Agent Unavailable'
+      };
+      
+      // First check if it's a system code
+      if (systemCodes[activityCodeId]) {
+        return systemCodes[activityCodeId];
+      }
+      
+      // If it's a UUID, check business unit activity codes
+      const activityCodes = activityCodesByBuId[businessUnitId];
+      
+      if (activityCodes && activityCodes[activityCodeId]) {
+        return activityCodes[activityCodeId].name;
+      }
+      
+      // Return the code ID if not found anywhere
+      return activityCodeId;
+    }
+
+    // ===== Function to get activity category =====
+    function getActivityCategory(businessUnitId, activityCodeId) {
+      if (!businessUnitId || !activityCodeId) return 'Unknown';
+      
+      // System code categories
+      const systemCodeCategories = {
+        '0': 'OnQueueWork',
+        '1': 'Break', 
+        '2': 'Meal',
+        '3': 'Meeting',
+        '4': 'OffQueueWork',
+        '5': 'TimeOff',
+        '6': 'Training',
+        '7': 'Unavailable'
+      };
+      
+      // First check if it's a system code
+      if (systemCodeCategories[activityCodeId]) {
+        return systemCodeCategories[activityCodeId];
+      }
+      
+      // If it's a UUID, check business unit activity codes
+      const activityCodes = activityCodesByBuId[businessUnitId];
+      
+      if (activityCodes && activityCodes[activityCodeId]) {
+        return activityCodes[activityCodeId].category;
+      }
+      
+      return 'Unknown';
+    }
+
+    async function handleManagementUnitChange() {
+      const muId = document.getElementById('managementUnitSelect').value;
+      if (!muId) {
+        populateUserSelect(allUsers);
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
+        );
+        const list = muUsersResponse.entities || muUsersResponse.users || [];
+        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
+        populateUserSelect(enriched);
+      } catch (err) {
+        console.error('Error loading MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleTeamChange() {
+      const teamId = document.getElementById('teamSelect').value;
+      if (!teamId) {
+        const muId = document.getElementById('managementUnitSelect').value;
+        if (!muId) {
+          populateUserSelect(allUsers);
+        }
+        return;
+      }
+
+      try {
+        const teamMembersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
+        );
+        const members = teamMembersResponse.entities || teamMembersResponse.members || [];
+        const enriched = members.map(m => usersById[m.id] || m);
+        populateUserSelect(enriched);
+      } catch (err) {
+        console.error('Error loading team members:', err);
+        showMessage(`Error loading team members: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== Main schedule search using MU schedules/search =====
+    async function loadSchedule() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.style.display = 'block';
+      resultsDiv.innerHTML = '';
+
+      const buId = document.getElementById('businessUnitSelect').value;
+      const muId = document.getElementById('managementUnitSelect').value;
+      const userId = document.getElementById('userSelect').value;
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      if (!buId) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select a business unit.</div>`;
+        return;
+      }
+      if (!muId) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select a management unit.</div>`;
+        return;
+      }
+      if (!userId) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select a user.</div>`;
+        return;
+      }
+      if (!startDate || !endDate) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select both a start and end date.</div>`;
+        return;
+      }
+      if (endDate < startDate) {
+        resultsDiv.innerHTML = `<div class="error-message">End date must be on or after the start date.</div>`;
+        return;
+      }
+
+      const button = document.getElementById('loadScheduleBtn');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Loading schedule...';
+
+      const startDateIso = `${startDate}T00:00:00.000Z`;
+      const endDateIso = `${endDate}T00:00:00.000Z`;
+
+      try {
+        const searchResult = await searchSchedules(muId, userId, startDateIso, endDateIso, true);
+        console.log('Raw WFM search result:', searchResult);
+        const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buId);
+        console.log('Extracted activities count:', activities.length);
+        renderScheduleResults(resultsDiv, activities, userId, startDateIso, endDateIso, searchResult);
+      } catch (err) {
+        console.error('Error loading schedule:', err);
+        resultsDiv.innerHTML = `<div class="error-message">Error loading schedule: ${err.message}</div>`;
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    async function searchSchedules(managementUnitId, userId, startDateIso, endDateIso, loadFullWeeks) {
+      const body = {
+        userIds: [userId],
+        startDate: startDateIso,
+        endDate: endDateIso,
+        loadFullWeeks: loadFullWeeks
+      };
+
+      const url = `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}/schedules/search`;
+
+      return authorizedFetchJson(url, {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+    }
+
+    // ===== Fixed function to extract activities from search result =====
+    function extractUserActivitiesFromSearchResult(response, userId, businessUnitId) {
+      console.log('Full response structure:', response);
+      
+      let userSchedule = null;
+
+      // Handle the nested structure from your sample data
+      if (response && response.userSchedules) {
+        // Your data structure: userSchedules is an object keyed by userId
+        if (response.userSchedules[userId]) {
+          userSchedule = response.userSchedules[userId];
+        } else {
+          // Fallback: take the first user schedule if userId doesn't match key
+          const firstUserId = Object.keys(response.userSchedules)[0];
+          userSchedule = response.userSchedules[firstUserId];
+        }
+      }
+
+      const rows = [];
+
+      // If we found a user schedule, extract shifts and full day time off markers
+      if (userSchedule) {
+        // Process shifts (regular scheduled activities)
+        const shifts = Array.isArray(userSchedule.shifts) ? userSchedule.shifts : [];
+        console.log(`Found ${shifts.length} shifts for user`, shifts);
+
+        shifts.forEach(shift => {
+          const shiftStartDate = shift.startDate ? new Date(shift.startDate) : null;
+          const shiftDateStr = shiftStartDate ? shiftStartDate.toISOString().slice(0, 10) : null;
+          
+          const activities = Array.isArray(shift.activities) ? shift.activities : [];
+          console.log(`Shift ${shift.id} has ${activities.length} activities`, activities);
+
+          activities.forEach(activity => {
+            const startIso = activity.startDate;
+            const lengthMin = activity.lengthInMinutes;
+
+            if (!startIso || lengthMin == null) {
+              console.warn('Skipping activity missing startDate or lengthInMinutes:', activity);
+              return;
+            }
+
+            const start = new Date(startIso);
+            const end = new Date(start.getTime() + lengthMin * 60000);
+
+            // Use the API-based activity name lookup
+            const activityLabel = getActivityName(businessUnitId, activity.activityCodeId);
+
+            const dateStr = shiftDateStr || start.toISOString().slice(0, 10);
+
+            rows.push({
+              date: dateStr,
+              start,
+              end,
+              durationMinutes: lengthMin,
+              activityLabel,
+              countsAsPaidTime: activity.countsAsPaidTime,
+              activityCodeId: activity.activityCodeId,
+              type: 'shift'
+            });
+          });
+        });
+
+        // Process full day time off markers (like Sick days)
+        const fullDayTimeOffMarkers = Array.isArray(userSchedule.fullDayTimeOffMarkers) ? userSchedule.fullDayTimeOffMarkers : [];
+        console.log(`Found ${fullDayTimeOffMarkers.length} full day time off markers`, fullDayTimeOffMarkers);
+
+        fullDayTimeOffMarkers.forEach(marker => {
+          const dateStr = marker.managementUnitDate;
+          const lengthMin = marker.lengthInMinutes || 480; // Default to 8 hours if not specified
+          
+          if (!dateStr) {
+            console.warn('Skipping marker missing managementUnitDate:', marker);
+            return;
+          }
+
+          // Use the API-based activity name lookup
+          const activityLabel = getActivityName(businessUnitId, marker.activityCodeId);
+
+          rows.push({
+            date: dateStr,
+            start: null, // No specific start time for full day off
+            end: null,   // No specific end time for full day off
+            durationMinutes: lengthMin,
+            activityLabel: activityLabel,
+            countsAsPaidTime: marker.isPaid !== false, // Default to true if not specified
+            activityCodeId: marker.activityCodeId,
+            type: 'fullDayOff'
+          });
+        });
+      }
+
+      rows.sort((a, b) => {
+        if (a.date === b.date) {
+          return (a.start || new Date(a.date)) - (b.start || new Date(b.date));
+        }
+        return a.date.localeCompare(b.date);
+      });
+
+      console.log(`Extracted ${rows.length} activities total (${rows.filter(r => r.type === 'shift').length} shifts + ${rows.filter(r => r.type === 'fullDayOff').length} full day off)`);
+      return rows;
+    }
+
+    function formatTime(d) {
+      if (!d) return 'All Day';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatDuration(mins) {
+      if (mins == null || isNaN(mins)) return '';
+      const total = Math.max(0, Math.round(mins));
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      if (h === 0) return `${m}m`;
+      if (m === 0) return `${h}h`;
+      return `${h}h ${m}m`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function renderScheduleResults(container, activities, userId, startDateIso, endDateIso, rawResult) {
+      const user = usersById[userId];
+      const userName = user ? user.name : userId;
+
+      const startDateStr = startDateIso.slice(0, 10);
+      const endDateStr = endDateIso.slice(0, 10);
+
+      let html = `
+        <h2 class="section-title">Schedule for ${escapeHtml(userName)}</h2>
+        <div class="schedule-meta">
+          <span class="pill">From: ${escapeHtml(startDateStr)}</span>
+          &nbsp;
+          <span class="pill">To: ${escapeHtml(endDateStr)}</span>
+          &nbsp;
+          <span class="pill">Source: MU schedules/search</span>
+        </div>
+      `;
+
+      if (!activities.length) {
+        html += `<div class="info-message" style="margin-top:12px;">No activities found for this user in the selected date range.</div>`;
+      } else {
+        html += `
+          <table class="schedule-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Activity</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        activities.forEach(row => {
+          html += `
+            <tr>
+              <td>${escapeHtml(row.date)}</td>
+              <td>${escapeHtml(row.activityLabel || '')}</td>
+              <td>${escapeHtml(formatTime(row.start))}</td>
+              <td>${escapeHtml(formatTime(row.end))}</td>
+              <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
+            </tr>
+          `;
+        });
+        html += `</tbody></table>`;
+      }
+
+      html += `
+        <details style="margin-top:16px;">
+          <summary class="muted">Raw search JSON (debug)</summary>
+          <pre>${escapeHtml(JSON.stringify(rawResult, null, 2))}</pre>
+        </details>
+      `;
+
       container.innerHTML = html;
     }
   </script>
