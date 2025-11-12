@@ -619,6 +619,9 @@
       button.textContent = 'Analyzing...';
 
       try {
+        // Load activity codes first
+        await loadActivityCodes(buId);
+        
         // Get users based on filters
         let users = await getUsersForAnalytics(muId, teamId);
         
@@ -626,13 +629,17 @@
         const startDateIso = `${startDate}T00:00:00.000Z`;
         const endDateIso = `${endDate}T00:00:00.000Z`;
 
+        console.log(`Analyzing overtime for ${users.length} users from ${startDate} to ${endDate}`);
+
         // Analyze each user's schedule for overtime activities
         for (const user of users) {
           try {
+            console.log(`Checking user: ${user.name}`);
             const schedule = await searchSchedules(muId, user.id, startDateIso, endDateIso, true);
             const userOvertime = extractOvertimeActivities(schedule, user.id, buId);
             
             if (userOvertime.totalHours > 0) {
+              console.log(`Found overtime for ${user.name}: ${userOvertime.totalHours}h`);
               overtimeData.push({
                 user: user.name,
                 totalHours: userOvertime.totalHours,
@@ -641,12 +648,15 @@
                 rate2Hours: userOvertime.rate2Hours,
                 activities: userOvertime.activities
               });
+            } else {
+              console.log(`No overtime found for ${user.name}`);
             }
           } catch (err) {
             console.error(`Error analyzing user ${user.name}:`, err);
           }
         }
 
+        console.log(`Overtime analysis complete. Found ${overtimeData.length} users with overtime`);
         renderOvertimeResults(overtimeData, startDate, endDate);
       } catch (err) {
         console.error('Error analyzing overtime:', err);
@@ -655,6 +665,95 @@
         button.disabled = false;
         button.textContent = originalLabel;
       }
+    }
+
+    function extractOvertimeActivities(schedule, userId, businessUnitId) {
+      const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
+      let totalHours = 0;
+      let rate1Hours = 0;
+      let rate1_5Hours = 0;
+      let rate2Hours = 0;
+      const overtimeActivities = [];
+      
+      console.log(`Analyzing ${activities.length} activities for overtime for user ${userId}`);
+      
+      activities.forEach(activity => {
+        const activityName = getActivityName(businessUnitId, activity.activityCodeId);
+        const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
+        
+        console.log(`Activity: "${activityName}", Category: "${activityCategory}", Duration: ${activity.durationMinutes}min`);
+        
+        // Check if it's overtime based on name or category
+        const isOvertime = activityName.toLowerCase().includes('overtime') || 
+                          activityCategory.toLowerCase().includes('overtime') ||
+                          // Fallback: check if it's outside normal hours or has specific patterns
+                          activityName.toLowerCase().includes('ot') ||
+                          // Include any activity that might be overtime based on timing
+                          (activity.countsAsPaidTime && isPotentialOvertime(activity));
+        
+        if (isOvertime) {
+          const hours = activity.durationMinutes / 60;
+          totalHours += hours;
+          
+          // Determine rate based on activity name
+          let rate = '1.0';
+          if (activityName.toLowerCase().includes('1.5') || activityName.toLowerCase().includes('timehalf')) {
+            rate = '1.5';
+            rate1_5Hours += hours;
+          } else if (activityName.toLowerCase().includes('2.0') || activityName.toLowerCase().includes('double')) {
+            rate = '2.0';
+            rate2Hours += hours;
+          } else {
+            rate1Hours += hours;
+          }
+          
+          // Store activity details
+          overtimeActivities.push({
+            date: activity.date,
+            activity: activityName,
+            startTime: formatTime(activity.start),
+            endTime: formatTime(activity.end),
+            duration: formatDuration(activity.durationMinutes),
+            hours: hours.toFixed(1),
+            rate: rate,
+            activityCodeId: activity.activityCodeId,
+            category: activityCategory
+          });
+          
+          console.log(`✓ Counted as overtime: ${activityName} (${hours}h, Rate: ${rate}, Category: ${activityCategory})`);
+        }
+      });
+      
+      console.log(`Total overtime: ${totalHours}h (1.0: ${rate1Hours}h, 1.5: ${rate1_5Hours}h, 2.0: ${rate2Hours}h)`);
+      
+      return {
+        totalHours: parseFloat(totalHours.toFixed(1)),
+        rate1Hours: parseFloat(rate1Hours.toFixed(1)),
+        rate1_5Hours: parseFloat(rate1_5Hours.toFixed(1)),
+        rate2Hours: parseFloat(rate2Hours.toFixed(1)),
+        activities: overtimeActivities
+      };
+    }
+
+    // Helper function to identify potential overtime based on timing
+    function isPotentialOvertime(activity) {
+      // Check if activity is outside normal business hours (e.g., evening, weekend)
+      if (activity.start) {
+        const start = new Date(activity.start);
+        const hour = start.getHours();
+        const day = start.getDay(); // 0 = Sunday, 6 = Saturday
+        
+        // Evening hours (after 6 PM) or weekend
+        if (hour >= 18 || day === 0 || day === 6) {
+          return true;
+        }
+        
+        // Early morning (before 6 AM)
+        if (hour < 6) {
+          return true;
+        }
+      }
+      return false;
     }
 
     // ===== Absence Analysis =====
@@ -734,62 +833,6 @@
       return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
     }
 
-    function extractOvertimeActivities(schedule, userId, businessUnitId) {
-      const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
-      let totalHours = 0;
-      let rate1Hours = 0;
-      let rate1_5Hours = 0;
-      let rate2Hours = 0;
-      const overtimeActivities = [];
-      
-      console.log('Analyzing activities for overtime:', activities);
-      
-      activities.forEach(activity => {
-        const activityName = getActivityName(businessUnitId, activity.activityCodeId);
-        
-        // Only include activities with "overtime" in the name
-        if (activityName.toLowerCase().includes('overtime')) {
-          const hours = activity.durationMinutes / 60;
-          totalHours += hours;
-          
-          // Determine rate based on activity name
-          let rate = '1.0';
-          if (activityName.toLowerCase().includes('1.5')) {
-            rate = '1.5';
-            rate1_5Hours += hours;
-          } else if (activityName.toLowerCase().includes('2.0')) {
-            rate = '2.0';
-            rate2Hours += hours;
-          } else {
-            rate1Hours += hours;
-          }
-          
-          // Store activity details
-          overtimeActivities.push({
-            date: activity.date,
-            activity: activityName,
-            startTime: formatTime(activity.start),
-            endTime: formatTime(activity.end),
-            duration: formatDuration(activity.durationMinutes),
-            hours: hours.toFixed(1),
-            rate: rate
-          });
-          
-          console.log(`✓ Counted as overtime: ${activityName} (${hours}h, Rate: ${rate})`);
-        }
-      });
-      
-      console.log(`Total overtime: ${totalHours}h (1.0: ${rate1Hours}h, 1.5: ${rate1_5Hours}h, 2.0: ${rate2Hours}h)`);
-      
-      return {
-        totalHours: parseFloat(totalHours.toFixed(1)),
-        rate1Hours: parseFloat(rate1Hours.toFixed(1)),
-        rate1_5Hours: parseFloat(rate1_5Hours.toFixed(1)),
-        rate2Hours: parseFloat(rate2Hours.toFixed(1)),
-        activities: overtimeActivities
-      };
-    }
-
     function calculateAbsenceStats(schedule, userId, businessUnitId) {
       const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
       let totalHours = 0;
@@ -848,7 +891,33 @@
       container.style.display = 'block';
       
       if (data.length === 0) {
-        container.innerHTML = `<div class="info-message">No overtime activities found for the selected period.</div>`;
+        // Show debug information when no overtime is found
+        container.innerHTML = `
+          <div class="info-message">
+            No overtime activities found for the selected period.
+            <br><br>
+            <details>
+              <summary>Debug Information</summary>
+              <div style="margin-top: 10px;">
+                <strong>Common reasons:</strong>
+                <ul>
+                  <li>No activities with "overtime" in the name were found</li>
+                  <li>Activity codes may use different naming conventions</li>
+                  <li>Check that your activity codes include "Overtime" in their names</li>
+                  <li>Verify the date range covers periods when overtime was scheduled</li>
+                </ul>
+                <br>
+                <strong>Expected activity code names:</strong>
+                <ul>
+                  <li>Overtime 1.0</li>
+                  <li>Overtime 1.5</li>
+                  <li>Overtime 2.0</li>
+                  <li>Or any activity containing "overtime"</li>
+                </ul>
+              </div>
+            </details>
+          </div>
+        `;
         return;
       }
       
