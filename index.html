@@ -539,7 +539,7 @@
     }
 
     // ===== Checkbox Dropdown Implementation =====
-    function createCheckboxDropdown(containerId, { placeholder, searchPlaceholder }){
+    function createCheckboxDropdown(containerId, { placeholder, searchPlaceholder, onSelectionChange } = {}){
       const root = document.getElementById(containerId);
       if (!root) {
         console.error(`Container ${containerId} not found`);
@@ -601,6 +601,10 @@
           cb.addEventListener('change', ()=>{
             if (cb.checked) selected.add(o.value); else selected.delete(o.value);
             updateSummary(); updateSelectAllState();
+            // Call selection change callback if provided
+            if (onSelectionChange) {
+              onSelectionChange(Array.from(selected));
+            }
           });
           list.appendChild(row);
         });
@@ -618,10 +622,26 @@
       trigger.addEventListener('click', ()=>{ panel.classList.toggle('open'); search.focus(); });
       document.addEventListener('click', (e)=>{ if (!root.contains(e.target)) panel.classList.remove('open'); });
       search.addEventListener('input', ()=> render(search.value));
-      clearBtn.addEventListener('click', ()=>{ selected.clear(); render(search.value); updateSummary(); updateSelectAllState(); });
+      clearBtn.addEventListener('click', ()=>{ 
+        selected.clear(); 
+        render(search.value); 
+        updateSummary(); 
+        updateSelectAllState();
+        if (onSelectionChange) {
+          onSelectionChange([]);
+        }
+      });
       selectAll.addEventListener('change', ()=>{
-        if (selectAll.checked) options.forEach(o=> selected.add(o.value)); else selected.clear();
-        render(search.value); updateSummary();
+        if (selectAll.checked) {
+          options.forEach(o=> selected.add(o.value));
+        } else {
+          selected.clear();
+        }
+        render(search.value); 
+        updateSummary();
+        if (onSelectionChange) {
+          onSelectionChange(Array.from(selected));
+        }
       });
 
       function setOptions(newOptions){
@@ -630,22 +650,30 @@
         render(search.value); updateSummary(); updateSelectAllState();
       }
       function getSelectedValues(){ return Array.from(selected); }
+      function clearSelection() { 
+        selected.clear(); 
+        render(search.value); 
+        updateSummary(); 
+        updateSelectAllState();
+      }
 
       render('');
-      return { setOptions, getSelectedValues };
+      return { setOptions, getSelectedValues, clearSelection };
     }
 
     function initializeDropdowns() {
       console.log('Initializing dropdowns...');
-      // Create checkbox dropdowns for all dropdowns
+      // Create checkbox dropdowns for all dropdowns with selection change handlers
       dropdowns.businessUnit = createCheckboxDropdown('businessUnitDropdown', { 
         placeholder: 'Select business units', 
-        searchPlaceholder: 'Search business units...' 
+        searchPlaceholder: 'Search business units...',
+        onSelectionChange: handleBusinessUnitChange
       });
       
       dropdowns.managementUnit = createCheckboxDropdown('managementUnitDropdown', { 
         placeholder: 'Select management units', 
-        searchPlaceholder: 'Search management units...' 
+        searchPlaceholder: 'Search management units...',
+        onSelectionChange: handleManagementUnitChange
       });
       
       dropdowns.team = createCheckboxDropdown('teamDropdown', { 
@@ -661,7 +689,8 @@
       // Overtime tab dropdowns
       dropdowns.overtimeBu = createCheckboxDropdown('overtimeBuDropdown', { 
         placeholder: 'Select business units', 
-        searchPlaceholder: 'Search business units...' 
+        searchPlaceholder: 'Search business units...',
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'overtime')
       });
       
       dropdowns.overtimeMu = createCheckboxDropdown('overtimeMuDropdown', { 
@@ -677,7 +706,8 @@
       // Absence tab dropdowns
       dropdowns.absenceBu = createCheckboxDropdown('absenceBuDropdown', { 
         placeholder: 'Select business units', 
-        searchPlaceholder: 'Search business units...' 
+        searchPlaceholder: 'Search business units...',
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'absence')
       });
       
       dropdowns.absenceMu = createCheckboxDropdown('absenceMuDropdown', { 
@@ -712,16 +742,6 @@
     // ===== Schedule View Functions =====
     async function initializeScheduleApp() {
       document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
-      
-      // Add event listeners for dropdown changes
-      if (dropdowns.businessUnit) {
-        // We'll handle this in the populateInitialData function
-      }
-      
-      // Add activity filter change handler
-      if (dropdowns.activityFilter) {
-        // We'll handle this when data is loaded
-      }
     }
 
     async function populateInitialData() {
@@ -801,6 +821,97 @@
       
       // Absence analysis
       document.getElementById('analyzeAbsenceBtn').addEventListener('click', analyzeAbsence);
+    }
+
+    // ===== Fixed Business Unit Change Handler =====
+    async function handleBusinessUnitChange(selectedBuIds) {
+      console.log('Business Unit selection changed:', selectedBuIds);
+      
+      // Clear management unit dropdown
+      if (dropdowns.managementUnit) {
+        dropdowns.managementUnit.clearSelection();
+        dropdowns.managementUnit.setOptions([]);
+      }
+
+      if (selectedBuIds.length === 0) return;
+
+      try {
+        // Load activity codes for this business unit
+        await loadActivityCodes(selectedBuIds[0]);
+        
+        // Fetch management units for the selected business unit
+        const muResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(selectedBuIds[0])}`
+        );
+        const list = muResponse.entities || muResponse.managementUnits || [];
+        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
+        
+        console.log(`Loaded ${muOpts.length} management units for business unit ${selectedBuIds[0]}`);
+        
+        if (dropdowns.managementUnit) {
+          dropdowns.managementUnit.setOptions(muOpts);
+        }
+      } catch (err) {
+        console.error('Error loading management units:', err);
+        showMessage(`Error loading management units: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== Fixed Management Unit Change Handler =====
+    async function handleManagementUnitChange(selectedMuIds) {
+      console.log('Management Unit selection changed:', selectedMuIds);
+      
+      if (selectedMuIds.length === 0) {
+        populateUserDropdown(allUsers);
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
+        );
+        const list = muUsersResponse.entities || muUsersResponse.users || [];
+        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
+        console.log(`Loaded ${enriched.length} users for management unit ${selectedMuIds[0]}`);
+        populateUserDropdown(enriched);
+      } catch (err) {
+        console.error('Error loading MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== Fixed Analytics Business Unit Change Handler =====
+    async function handleAnalyticsBuChange(selectedBuIds, tabType) {
+      console.log(`Analytics Business Unit selection changed for ${tabType}:`, selectedBuIds);
+      
+      const muDropdown = tabType === 'overtime' ? dropdowns.overtimeMu : dropdowns.absenceMu;
+      
+      if (muDropdown) {
+        muDropdown.clearSelection();
+        muDropdown.setOptions([]);
+      }
+
+      if (selectedBuIds.length === 0) return;
+
+      try {
+        // Load activity codes for this business unit
+        await loadActivityCodes(selectedBuIds[0]);
+        
+        const muResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(selectedBuIds[0])}`
+        );
+        const list = muResponse.entities || muResponse.managementUnits || [];
+        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
+        
+        console.log(`Loaded ${muOpts.length} management units for analytics ${tabType} tab`);
+        
+        if (muDropdown) {
+          muDropdown.setOptions(muOpts);
+        }
+      } catch (err) {
+        console.error('Error loading management units for analytics:', err);
+        showMessage(`Error loading management units: ${err.message}`, 'error');
+      }
     }
 
     // ===== Overtime Analysis =====
@@ -1542,36 +1653,6 @@
       exportToCSV(csvData, `absence_${new Date().toISOString().split('T')[0]}.csv`);
     }
 
-    // ===== Existing Schedule Functions =====
-    async function handleBusinessUnitChange() {
-      const buIds = dropdowns.businessUnit ? dropdowns.businessUnit.getSelectedValues() : [];
-      const muDropdown = dropdowns.managementUnit;
-      
-      if (muDropdown) {
-        muDropdown.setOptions([]);
-      }
-
-      if (buIds.length === 0) return;
-
-      try {
-        // Load activity codes for this business unit
-        await loadActivityCodes(buIds[0]);
-        
-        const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(buIds[0])}`
-        );
-        const list = muResponse.entities || muResponse.managementUnits || [];
-        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
-        
-        if (muDropdown) {
-          muDropdown.setOptions(muOpts);
-        }
-      } catch (err) {
-        console.error('Error loading management units:', err);
-        showMessage(`Error loading management units: ${err.message}`, 'error');
-      }
-    }
-
     // ===== Fixed function to load activity codes from business unit =====
     async function loadActivityCodes(businessUnitId) {
       try {
@@ -1696,26 +1777,6 @@
       }
       
       return 'Unknown';
-    }
-
-    async function handleManagementUnitChange() {
-      const muIds = dropdowns.managementUnit ? dropdowns.managementUnit.getSelectedValues() : [];
-      if (muIds.length === 0) {
-        populateUserDropdown(allUsers);
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muIds[0])}/users`
-        );
-        const list = muUsersResponse.entities || muUsersResponse.users || [];
-        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
-        populateUserDropdown(enriched);
-      } catch (err) {
-        console.error('Error loading MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
     }
 
     // ===== Main schedule search using MU schedules/search =====
