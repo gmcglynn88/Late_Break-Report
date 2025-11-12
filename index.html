@@ -1625,17 +1625,17 @@
       
       html += `</div>`;
       
-      // Absence Types Chart
-      const absenceTypes = getAbsenceTypeDistribution(data);
-      if (absenceTypes.length > 0) {
+      // Absence Types Chart - FIXED: Renamed variable to avoid conflict
+      const chartAbsenceTypes = getAbsenceTypeDistribution(data);
+      if (chartAbsenceTypes.length > 0) {
         html += `
           <div class="chart-wrapper">
             <h4>Absence Types</h4>
         `;
         
-        const maxTypeCount = Math.max(...absenceTypes.map(t => t.count));
+        const maxTypeCount = Math.max(...chartAbsenceTypes.map(t => t.count));
         
-        absenceTypes.forEach(type => {
+        chartAbsenceTypes.forEach(type => {
           const percentage = (type.count / maxTypeCount) * 100;
           html += `
             <div class="chart-bar">
@@ -1749,10 +1749,10 @@
       
       contentContainer.innerHTML = html;
       
-      // Populate absence activity filter dropdown
-      const absenceTypes = [...new Set(data.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
-      if (dropdowns.absenceActivityFilter && absenceTypes.length > 0) {
-        const activityOpts = absenceTypes.map(a => ({ value: a, label: a }));
+      // Populate absence activity filter dropdown - FIXED: Renamed variable
+      const filterAbsenceTypes = [...new Set(data.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
+      if (dropdowns.absenceActivityFilter && filterAbsenceTypes.length > 0) {
+        const activityOpts = filterAbsenceTypes.map(a => ({ value: a, label: a }));
         dropdowns.absenceActivityFilter.setOptions(activityOpts);
       }
     }
