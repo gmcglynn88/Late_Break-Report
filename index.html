@@ -1295,44 +1295,90 @@
         userIds: userIds
       };
 
+      console.log('Creating historical adherence query with body:', body);
+
       const url = `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}/historicaladherencequery`;
 
-      const response = await authorizedFetchJson(url, {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
+      try {
+        const response = await authorizedFetchJson(url, {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
 
-      if (response && response.id) {
-        return response.id;
-      } else {
-        throw new Error('Failed to create historical adherence query job');
+        console.log('Historical adherence query response:', response);
+
+        if (response && response.id) {
+          console.log(`Historical adherence job created with ID: ${response.id}`);
+          return response.id;
+        } else {
+          throw new Error('Failed to create historical adherence query job - no job ID returned');
+        }
+      } catch (err) {
+        console.error('Error creating historical adherence query:', err);
+        throw new Error(`Failed to create historical adherence query: ${err.message}`);
       }
     }
 
     async function pollHistoricalAdherenceJob(jobId) {
       const url = `${apiBase}/api/v2/workforcemanagement/adherence/historical/jobs/${encodeURIComponent(jobId)}`;
       
+      console.log(`Starting to poll historical adherence job: ${jobId}`);
+      
       return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 60; // 2 minutes maximum (2 seconds * 60)
+        
         const checkJobStatus = async () => {
+          attempts++;
+          
           try {
+            console.log(`Checking job status (attempt ${attempts})...`);
             const response = await authorizedFetchJson(url);
             
-            if (response && response.state) {
-              if (response.state === 'Completed') {
-                resolve(response);
-              } else if (response.state === 'Failed') {
-                reject(new Error('Historical adherence job failed'));
+            console.log('Job status response:', response);
+            
+            if (!response) {
+              reject(new Error('Empty response from job status check'));
+              return;
+            }
+            
+            // Handle different possible response structures
+            const jobState = response.state || response.status;
+            
+            if (jobState === 'Completed' || jobState === 'COMPLETED') {
+              console.log('Job completed successfully');
+              resolve(response);
+            } else if (jobState === 'Failed' || jobState === 'FAILED' || jobState === 'Error' || jobState === 'ERROR') {
+              const errorMessage = response.errorMessage || response.message || 'Historical adherence job failed';
+              console.error('Job failed:', errorMessage);
+              reject(new Error(errorMessage));
+            } else if (jobState === 'Processing' || jobState === 'PROCESSING' || jobState === 'Running' || jobState === 'RUNNING') {
+              // Still processing, check again after delay
+              if (attempts >= maxAttempts) {
+                reject(new Error('Job polling timeout - job took too long to complete'));
               } else {
                 setTimeout(checkJobStatus, 2000);
               }
             } else {
-              reject(new Error('Invalid job status response'));
+              // Unknown state, log and continue polling
+              console.log(`Job in unknown state: ${jobState}, continuing to poll...`);
+              if (attempts >= maxAttempts) {
+                reject(new Error(`Job polling timeout - stuck in state: ${jobState}`));
+              } else {
+                setTimeout(checkJobStatus, 2000);
+              }
             }
           } catch (err) {
-            reject(err);
+            console.error('Error checking job status:', err);
+            if (attempts >= maxAttempts) {
+              reject(new Error(`Job polling failed after ${maxAttempts} attempts: ${err.message}`));
+            } else {
+              setTimeout(checkJobStatus, 2000);
+            }
           }
         };
         
+        // Start polling
         checkJobStatus();
       });
     }
@@ -1340,23 +1386,66 @@
     function processHistoricalAdherenceResults(jobResult, businessUnitId) {
       const actualActivities = [];
       
-      if (!jobResult || !jobResult.results || !Array.isArray(jobResult.results.entities)) {
+      console.log('Processing historical adherence results:', jobResult);
+      
+      if (!jobResult) {
+        console.warn('No job result found');
+        return actualActivities;
+      }
+      
+      // Handle different possible response structures
+      let entities = [];
+      
+      if (jobResult.results && Array.isArray(jobResult.results.entities)) {
+        entities = jobResult.results.entities;
+      } else if (Array.isArray(jobResult.entities)) {
+        entities = jobResult.entities;
+      } else if (jobResult.downloadResult && Array.isArray(jobResult.downloadResult.entities)) {
+        entities = jobResult.downloadResult.entities;
+      } else if (Array.isArray(jobResult)) {
+        entities = jobResult;
+      }
+      
+      if (entities.length === 0) {
         console.warn('No entities found in historical adherence results');
         return actualActivities;
       }
       
-      jobResult.results.entities.forEach(entity => {
-        if (!entity.actuals || !Array.isArray(entity.actuals)) return;
+      console.log(`Processing ${entities.length} entities`);
+      
+      entities.forEach(entity => {
+        if (!entity.actuals || !Array.isArray(entity.actuals)) {
+          console.log('Entity has no actuals array:', entity);
+          return;
+        }
         
         const userId = entity.userId;
         const userName = usersById[userId]?.name || userId;
         
+        console.log(`Processing ${entity.actuals.length} actuals for user ${userName}`);
+        
         entity.actuals.forEach(actual => {
-          if (!actual.activityCodeId || !actual.startTime || !actual.endTime) return;
+          if (!actual.activityCodeId || !actual.startTime || !actual.endTime) {
+            console.log('Skipping incomplete actual:', actual);
+            return;
+          }
           
           const startTime = new Date(actual.startTime);
           const endTime = new Date(actual.endTime);
+          
+          // Validate dates
+          if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+            console.log('Skipping actual with invalid dates:', actual);
+            return;
+          }
+          
           const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
+          
+          // Skip if duration is unreasonable (more than 24 hours)
+          if (durationMinutes > 24 * 60 || durationMinutes < 0) {
+            console.log('Skipping actual with unreasonable duration:', durationMinutes, actual);
+            return;
+          }
           
           const activityName = getActivityName(businessUnitId, actual.activityCodeId);
           
@@ -1373,6 +1462,7 @@
         });
       });
       
+      console.log(`Processed ${actualActivities.length} actual activities`);
       return actualActivities;
     }
 
@@ -1583,6 +1673,42 @@
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+    }
+
+    // ===== Debugging function =====
+    async function debugHistoricalAdherence() {
+      const buIds = dropdowns.actualBu ? dropdowns.actualBu.getSelectedValues() : [];
+      const muIds = dropdowns.actualMu ? dropdowns.actualMu.getSelectedValues() : [];
+      const userIds = dropdowns.actualUser ? dropdowns.actualUser.getSelectedValues() : [];
+      
+      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0) {
+        console.error('Please select BU, MU, and users first');
+        return;
+      }
+      
+      const startDate = document.getElementById('actualStartDate').value;
+      const endDate = document.getElementById('actualEndDate').value;
+      
+      console.log('Debugging historical adherence with:', {
+        businessUnit: buIds[0],
+        managementUnit: muIds[0],
+        users: userIds,
+        startDate,
+        endDate
+      });
+      
+      try {
+        const jobId = await createHistoricalAdherenceQuery(muIds[0], userIds, startDate, endDate);
+        console.log('Job ID:', jobId);
+        
+        // Check job status once to see the structure
+        const statusUrl = `${apiBase}/api/v2/workforcemanagement/adherence/historical/jobs/${encodeURIComponent(jobId)}`;
+        const statusResponse = await authorizedFetchJson(statusUrl);
+        console.log('Job status structure:', statusResponse);
+        
+      } catch (err) {
+        console.error('Debug error:', err);
+      }
     }
   </script>
 </body>
