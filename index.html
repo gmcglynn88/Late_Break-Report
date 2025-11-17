@@ -1,244 +1,41 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Historical Adherence Extractor</title>
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 20px;
-        background: #f5f5f5;
+async function fetchWithCorsProxy(url) {
+  try {
+    // First try direct fetch with credentials (for same-origin URLs)
+    if (url.includes('mypurecloud.ie')) {
+      const directResponse = await authorizedFetch(url);
+      if (directResponse.ok) {
+        return await directResponse.json();
+      }
     }
-    .tabs {
-        display: flex;
-        gap: 15px;
-        margin-bottom: 20px;
-        cursor: pointer;
-    }
-    .tab {
-        padding: 10px 15px;
-        background: #ddd;
-        border-radius: 6px;
-    }
-    .tab.active {
-        background: #4287f5;
-        colour: white;
-    }
-    .tab-content {
-        display: none;
-    }
-    .tab-content.active {
-        display: block;
-    }
-    .card {
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 15px;
-    }
-    th, td {
-        padding: 8px 6px;
-        border-bottom: 1px solid #ccc;
-        text-align: left;
-    }
-    th {
-        background: #eee;
-    }
-    .full-width-btn {
-        width: 100%;
-        padding: 12px;
-        background: #4287f5;
-        colour: white;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 15px;
-    }
-</style>
-</head>
-
-<body>
-
-<!-- Navigation Tabs -->
-<div class="tabs">
-    <div class="tab" data-tab="schedule">Schedule View</div>
-    <div class="tab" data-tab="overtime">Overtime</div>
-    <div class="tab" data-tab="absence">Absence</div>
-
-    <!-- ⭐ Your new tab -->
-    <div class="tab active" data-tab="adherence">Historical Adherence</div>
-</div>
-
-<!-- NEW TAB CONTENT -->
-<div id="adherence-tab" class="tab-content active">
-    <div class="card">
-        <h2>Historical Adherence Extractor</h2>
-        <p>Enter the Job ID from the Analytics job. I’ll fetch everything, promise.</p>
-
-        <label>Job ID</label>
-        <input type="text" id="jobIdInput" style="width:100%;padding:8px;margin-bottom:12px;">
-
-        <button id="loadAdhBtn" class="full-width-btn">Load Historical Adherence</button>
-    </div>
-
-    <div id="adhResults" class="card" style="display:none;">
-        <h3>Results</h3>
-        <div id="adhContent"></div>
-    </div>
-</div>
-
-<script>
-// ---------------- TAB HANDLING ----------------
-document.querySelectorAll(".tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        tab.classList.add("active");
-
-        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-        document.getElementById(tab.dataset.tab + "-tab").classList.add("active");
-    });
-});
-
-// ---------------- SETTINGS ----------------
-const REGION = "ie";   // Change to your Genesys Cloud region
-let token = null;      // You'll replace this with your OAuth token
-
-// -------------- TOKEN PLACEHOLDER --------------
-async function getToken() {
-    if (!token) {
-        alert("⚠️ Add your OAuth token in getToken()");
-    }
-    return token;
-}
-
-// ---------------- MAIN LOADER ----------------
-document.getElementById("loadAdhBtn").addEventListener("click", async () => {
-    const jobId = document.getElementById("jobIdInput").value.trim();
-    const container = document.getElementById("adhContent");
-    const card = document.getElementById("adhResults");
-
-    if (!jobId) {
-        alert("Please enter a Job ID.");
-        return;
-    }
-
-    card.style.display = "block";
-    container.innerHTML = `<div>Fetching job status… hold tight.</div>`;
-
-    try {
-        const t = await getToken();
-
-        // 1️⃣ Fetch the job wrapper
-        const jobRes = await fetch(
-            `https://api.mypurecloud.${REGION}/api/v2/analytics/queues/observations/jobs/${jobId}`,
-            {
-                headers: { "Authorization": `Bearer ${t}` }
-            }
-        );
-
-        const jobJson = await jobRes.json();
-        const urls = jobJson.downloadUrls || [];
-
-        if (!urls.length) {
-            container.innerHTML = `<div>No download URLs found.</div>`;
-            return;
+    
+    // Fallback to CORS proxy for external URLs
+    const proxyUrls = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://cors-anywhere.herokuapp.com/${url}`,
+      `https://corsproxy.io/?${encodeURIComponent(url)}`
+    ];
+    
+    for (const proxyUrl of proxyUrls) {
+      try {
+        const response = await fetch(proxyUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
+        if (response.ok) {
+          return await response.json();
         }
-
-        container.innerHTML = `<div>Found ${urls.length} files. Fetching…</div>`;
-
-        // 2️⃣ Fetch all download URLs
-        let rows = [];
-
-        for (const url of urls) {
-            const dataRes = await fetch(url);
-            const data = await dataRes.json();
-
-            // 3️⃣ Flatten dayMetrics[]
-            for (const record of data.data) {
-                const userId = record.userId;
-                const muId = record.managementUnitId;
-
-                record.dayMetrics.forEach(day => {
-                    rows.push({
-                        userId,
-                        managementUnitId: muId,
-                        date: offsetToDate(record.startDate, day.dayStartOffsetSecs),
-                        adherenceScheduleSecs: day.adherenceScheduleSecs,
-                        conformanceScheduleSecs: day.conformanceScheduleSecs,
-                        conformanceActualSecs: day.conformanceActualSecs,
-                        scheduleLengthSecs: day.scheduleLengthSecs,
-                        actualLengthSecs: day.actualLengthSecs
-                    });
-                });
-            }
-        }
-
-        // 4️⃣ Render
-        container.innerHTML = renderTable(rows);
-
-    } catch (err) {
-        container.innerHTML = `<div style="colour:red;">Error: ${err.message}</div>`;
+      } catch (proxyError) {
+        console.warn(`Proxy ${proxyUrl} failed:`, proxyError);
+        continue;
+      }
     }
-});
-
-// ---------------- HELPERS ----------------
-function offsetToDate(startIso, offsetSecs) {
-    const base = new Date(startIso);
-    base.setSeconds(base.getSeconds() + offsetSecs);
-    return base.toISOString().split("T")[0];
+    
+    throw new Error('All CORS proxies failed');
+  } catch (error) {
+    console.error('All fetch attempts failed:', error);
+    throw error;
+  }
 }
-
-function secondsToHhmm(sec) {
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    return `${h}h ${m}m`;
-}
-
-function renderTable(rows) {
-    if (!rows.length) return `<div>No adherence records found.</div>`;
-
-    let html = `
-        <table>
-            <thead>
-                <tr>
-                    <th>User</th>
-                    <th>MU</th>
-                    <th>Date</th>
-                    <th>Adh Scheduled</th>
-                    <th>Conf Scheduled</th>
-                    <th>Conf Actual</th>
-                    <th>Schedule Length</th>
-                    <th>Actual Length</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-    rows.forEach(r => {
-        html += `
-            <tr>
-                <td>${r.userId}</td>
-                <td>${r.managementUnitId}</td>
-                <td>${r.date}</td>
-                <td>${secondsToHhmm(r.adherenceScheduleSecs)}</td>
-                <td>${secondsToHhmm(r.conformanceScheduleSecs)}</td>
-                <td>${secondsToHhmm(r.conformanceActualSecs)}</td>
-                <td>${secondsToHhmm(r.scheduleLengthSecs)}</td>
-                <td>${secondsToHhmm(r.actualLengthSecs)}</td>
-            </tr>`;
-    });
-
-    html += `</tbody></table>`;
-    return html;
-}
-
-</script>
-</body>
-</html>
