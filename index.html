@@ -5,6 +5,7 @@
   <title>WFM Helper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <style>
+    /* Your existing CSS remains the same */
     :root{
       --primary-color:#63AB8F; --secondary-color:#4A8C7D; --border-color:#DEE2E6;
       --light-bg:#F8F9FA; --card-bg:#FFFFFF; --text-color:#2C3E50; --text-light:#6C757D;
@@ -333,6 +334,13 @@
     .status-adherent {
       background-color: #f0f9ff;
       color: #0c4a6e;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .status-awol {
+      background-color: #f3e8ff;
+      color: #7e22ce;
       padding: 4px 8px;
       border-radius: 4px;
       font-weight: 600;
@@ -3261,14 +3269,14 @@
         );
         
         if (userActualActivities.length === 0) {
-          // No actual data found
+          // No actual data found - label as AWOL
           lateReport.push({
             userId: userId,
             userName: firstScheduledActivity.userName,
             date: date,
             scheduledStart: firstScheduledActivity.start,
             actualStart: null,
-            status: 'No Data',
+            status: 'AWOL',
             durationLate: null,
             scheduledActivity: firstScheduledActivity.activityLabel
           });
@@ -3333,7 +3341,7 @@
       const lateCount = data.filter(item => item.status === 'Late').length;
       const earlyCount = data.filter(item => item.status === 'Early').length;
       const adherentCount = data.filter(item => item.status === 'Adherent').length;
-      const noDataCount = data.filter(item => item.status === 'No Data').length;
+      const awolCount = data.filter(item => item.status === 'AWOL').length;
       
       let html = `
         <h3 class="section-title">Late Report</h3>
@@ -3342,7 +3350,7 @@
           <span class="pill" style="background: #fee2e2; color: #b42318;">Late: ${lateCount}</span>
           <span class="pill" style="background: #fffbeb; color: #b45309;">Early: ${earlyCount}</span>
           <span class="pill" style="background: #f0f9ff; color: #0c4a6e;">Adherent: ${adherentCount}</span>
-          <span class="pill">No Data: ${noDataCount}</span>
+          <span class="pill" style="background: #f3e8ff; color: #7e22ce;">AWOL: ${awolCount}</span>
           <span class="pill">Threshold: ${thresholdSeconds}s</span>
         </div>
         
@@ -3383,9 +3391,9 @@
             statusText = 'On Time';
             durationText = '0m';
             break;
-          case 'No Data':
-            statusClass = '';
-            statusText = 'No Data';
+          case 'AWOL':
+            statusClass = 'status-awol';
+            statusText = 'AWOL';
             durationText = 'N/A';
             break;
         }
