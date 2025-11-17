@@ -1039,7 +1039,8 @@
       
       dropdowns.actualMu = createCheckboxDropdown('actualMuDropdown', { 
         placeholder: 'Select management units', 
-        searchPlaceholder: 'Search management units...' 
+        searchPlaceholder: 'Search management units...',
+        onSelectionChange: (selected) => handleActualManagementUnitChange(selected)
       });
       
       dropdowns.actualTeam = createCheckboxDropdown('actualTeamDropdown', { 
@@ -1655,6 +1656,39 @@
       }
     }
 
+    // ===== NEW: Actual Activity Management Unit Change Handler =====
+    async function handleActualManagementUnitChange(selectedMuIds) {
+      console.log('Actual Activity Management Unit selection changed:', selectedMuIds);
+      
+      if (selectedMuIds.length === 0) {
+        if (dropdowns.actualUser) {
+          dropdowns.actualUser.setOptions([]);
+        }
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
+        );
+        const list = muUsersResponse.entities || muUsersResponse.users || [];
+        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
+        console.log(`Loaded ${enriched.length} users for actual activity management unit ${selectedMuIds[0]}`);
+        
+        const validUsers = enriched
+          .filter(u => u.name && u.name.trim() && u.name !== 'Unknown User')
+          .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
+          .sort((a,b)=>a.label.localeCompare(b.label));
+        
+        if (dropdowns.actualUser) {
+          dropdowns.actualUser.setOptions(validUsers);
+        }
+      } catch (err) {
+        console.error('Error loading actual activity MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
     // ===== Export Functions =====
     function initializeExportButtons() {
       // Schedule export
@@ -1756,10 +1790,6 @@
 
       exportToCSV(csvData, `actual_activity_${new Date().toISOString().split('T')[0]}.csv`);
     }
-
-    // ===== Existing Functions (shortened for brevity) =====
-    // Note: The rest of the functions (overtime, absence, etc.) remain the same
-    // as in the original code, but I've shortened them here for space
 
     // ===== Fixed function to load activity codes from business unit =====
     async function loadActivityCodes(businessUnitId) {
