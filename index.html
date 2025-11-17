@@ -613,6 +613,23 @@
       return response.json();
     }
 
+    // CORS proxy function for downloading data
+    async function fetchWithCorsProxy(url) {
+      // Use a public CORS proxy
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      
+      try {
+        const response = await fetch(proxyUrl);
+        if (!response.ok) {
+          throw new Error(`Proxy fetch failed: ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error('Proxy fetch failed:', error);
+        throw error;
+      }
+    }
+
     async function fetchAllPages(baseUrl) {
       let allItems = [];
       let pageNumber = 1;
@@ -898,17 +915,7 @@
       document.getElementById('loadActualActivityBtn').addEventListener('click', function() {
         loadActualActivity().catch(err => {
           console.error('Historical adherence failed:', err);
-          
-          if (err.message.includes('CORS')) {
-            showMessage(
-              'Unable to download historical adherence data due to CORS restrictions. ' +
-              'This is a browser security limitation. Consider running this application ' +
-              'from a domain that is allowed by Genesys Cloud CORS policy or use a server-side proxy.',
-              'error'
-            );
-          } else {
-            showMessage(`Failed to load actual activity: ${err.message}`, 'error');
-          }
+          showMessage(`Failed to load actual activity: ${err.message}`, 'error');
         });
       });
       document.getElementById('exportActualActivityBtn').addEventListener('click', exportActualActivityToCSV);
@@ -1286,7 +1293,7 @@
         
         const jobId = await createHistoricalAdherenceQuery(muIds[0], userIds, startDateApi, endDateApi);
         const jobResult = await pollHistoricalAdherenceJob(jobId);
-        const actualActivityData = processHistoricalAdherenceResults(jobResult, buIds[0]);
+        const actualActivityData = await processJobResults(jobResult, buIds[0]);
         
         currentActualActivityData = actualActivityData;
         currentDisplayedData.actual = [...actualActivityData];
@@ -1295,7 +1302,7 @@
         showMessage('Actual activity data loaded successfully', 'success');
       } catch (err) {
         console.error('Error loading actual activity:', err);
-        throw err; // Re-throw to allow error handling
+        throw err;
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
@@ -1357,33 +1364,13 @@
               return;
             }
             
-            // Handle different possible response structures - FIXED
             const jobState = response.queryState || response.state || response.status;
             
             console.log(`Detected job state: ${jobState}`);
             
             if (jobState === 'Complete' || jobState === 'COMPLETE' || jobState === 'Completed' || jobState === 'COMPLETED') {
               console.log('Job completed successfully');
-              
-              // If there are download URLs, fetch the actual data from them
-              if (response.downloadUrls && response.downloadUrls.length > 0) {
-                console.log(`Found ${response.downloadUrls.length} download URLs, fetching results...`);
-                try {
-                  const downloadResults = await fetchDownloadUrls(response.downloadUrls);
-                  // Combine the download results with the job response
-                  const finalResult = {
-                    ...response,
-                    downloadedResults: downloadResults
-                  };
-                  resolve(finalResult);
-                } catch (downloadError) {
-                  console.error('Error downloading results:', downloadError);
-                  reject(new Error(`Failed to download results: ${downloadError.message}`));
-                }
-              } else {
-                // No download URLs, just return the response as-is
-                resolve(response);
-              }
+              resolve(response);
             } else if (jobState === 'Failed' || jobState === 'FAILED' || jobState === 'Error' || jobState === 'ERROR') {
               const errorMessage = response.errorMessage || response.message || 'Historical adherence job failed';
               console.error('Job failed:', errorMessage);
@@ -1419,222 +1406,65 @@
       });
     }
 
-    // FIXED: Updated fetchDownloadUrls function with pre-signed URL approach
-    async function fetchDownloadUrls(downloadUrls) {
-      console.log(`Attempting to fetch data from ${downloadUrls.length} download URLs...`);
-      
-      const downloadPromises = downloadUrls.map(async (url, index) => {
-        try {
-          console.log(`Attempting to download from URL ${index + 1}: ${url}`);
-          
-          // Use the same approach as your working transcript code
-          // First, request a pre-signed URL from Genesys Cloud
-          const jobId = url.split('/').pop(); // Extract job ID from URL
-          const presignedUrlResponse = await authorizedFetchJson(
-            `${apiBase}/api/v2/workforcemanagement/adherence/historical/jobs/${jobId}/results/downloadurl`
-          );
-          
-          if (!presignedUrlResponse || !presignedUrlResponse.url) {
-            throw new Error('No pre-signed URL returned from Genesys Cloud');
-          }
-          
-          console.log(`Got pre-signed URL for download ${index + 1}`);
-          
-          // Now fetch from the pre-signed URL (this should avoid CORS issues)
-          const response = await fetch(presignedUrlResponse.url, {
-            method: 'GET',
-            mode: 'cors'
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-          }
-          
-          const data = await response.json();
-          console.log(`Successfully downloaded data from URL ${index + 1}`, data);
-          return data;
-        } catch (error) {
-          console.error(`Error downloading from URL ${index + 1}:`, error);
-          
-          // Fallback: try direct download if the pre-signed URL approach fails
-          try {
-            console.log(`Trying direct download as fallback for URL ${index + 1}`);
-            const directResponse = await authorizedFetch(url);
-            if (!directResponse.ok) {
-              throw new Error(`Direct download failed: ${directResponse.status} ${directResponse.statusText}`);
-            }
-            const data = await directResponse.json();
-            console.log(`Successfully downloaded data via direct method from URL ${index + 1}`);
-            return data;
-          } catch (fallbackError) {
-            console.error(`Fallback download also failed for URL ${index + 1}:`, fallbackError);
-            throw new Error(`Failed to download results after multiple attempts: ${fallbackError.message}`);
-          }
-        }
-      });
-      
-      try {
-        const results = await Promise.all(downloadPromises);
-        console.log(`All ${results.length} downloads completed successfully`);
-        
-        const allEntities = [];
-        results.forEach(result => {
-          if (result && Array.isArray(result.data)) {
-            allEntities.push(...result.data);
-          } else if (result && Array.isArray(result)) {
-            allEntities.push(...result);
-          } else if (result && result.entities && Array.isArray(result.entities)) {
-            allEntities.push(...result.entities);
-          } else {
-            console.warn('Unexpected download result structure:', result);
-          }
-        });
-        
-        console.log(`Combined ${allEntities.length} entities from all downloads`);
-        return allEntities;
-      } catch (error) {
-        console.error('Failed to download results:', error);
-        throw error;
+    async function processJobResults(jobResult, businessUnitId) {
+      if (!jobResult.downloadUrls || jobResult.downloadUrls.length === 0) {
+        throw new Error('No download URLs found in job result');
       }
-    }
 
-    // Updated processHistoricalAdherenceResults to handle the actual data structure
-    function processHistoricalAdherenceResults(jobResult, businessUnitId) {
-      const actualActivities = [];
+      const allActualActivities = [];
       
-      console.log('Processing historical adherence results:', jobResult);
-      
-      if (!jobResult) {
-        console.warn('No job result found');
-        return actualActivities;
-      }
-      
-      // Handle the downloaded results structure
-      let entities = [];
-      
-      if (jobResult.downloadedResults && Array.isArray(jobResult.downloadedResults)) {
-        entities = jobResult.downloadedResults;
-        console.log(`Using ${entities.length} entities from downloaded results`);
-      } else if (jobResult.data && Array.isArray(jobResult.data)) {
-        entities = jobResult.data;
-        console.log(`Using ${entities.length} entities from data array`);
-      } else if (Array.isArray(jobResult)) {
-        entities = jobResult;
-        console.log(`Using ${entities.length} entities from array`);
-      }
-      
-      if (entities.length === 0) {
-        console.warn('No entities found in historical adherence results');
-        console.log('Available keys in jobResult:', Object.keys(jobResult));
-        return actualActivities;
-      }
-      
-      console.log(`Processing ${entities.length} entities`);
-      
-      entities.forEach(entity => {
-        // Extract user information
-        const userId = entity.userId;
-        const userName = usersById[userId]?.name || userId;
-        const startDate = new Date(entity.startDate);
-        
-        console.log(`Processing user ${userName} with ${entity.actuals ? entity.actuals.length : 0} actuals`);
-        
-        // Process actual activities
-        if (entity.actuals && Array.isArray(entity.actuals)) {
-          entity.actuals.forEach(actual => {
-            if (!actual.startOffsetSeconds || !actual.endOffsetSeconds) {
-              console.log('Skipping incomplete actual:', actual);
-              return;
-            }
-            
-            // Calculate actual start and end times based on offsets from the start date
-            const startTime = new Date(startDate.getTime() + (actual.startOffsetSeconds * 1000));
-            const endTime = new Date(startDate.getTime() + (actual.endOffsetSeconds * 1000));
-            
-            // Validate dates
-            if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-              console.log('Skipping actual with invalid dates:', actual);
-              return;
-            }
-            
-            const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
-            
-            // Skip if duration is unreasonable (more than 24 hours) or negative
-            if (durationMinutes > 24 * 60 || durationMinutes <= 0) {
-              console.log('Skipping actual with unreasonable duration:', durationMinutes, actual);
-              return;
-            }
-            
-            // Get activity name - use actualActivityCategory first, then try to map activity codes
-            let activityName = actual.actualActivityCategory || 'Unknown Activity';
-            
-            // If we have an activity code ID, try to get the proper name
-            if (actual.actualActivityCodeId) {
-              const mappedName = getActivityName(businessUnitId, actual.actualActivityCodeId);
-              if (mappedName && mappedName !== actual.actualActivityCodeId) {
-                activityName = mappedName;
+      // Download and process each URL
+      for (const downloadUrl of jobResult.downloadUrls) {
+        try {
+          console.log('Downloading from:', downloadUrl);
+          const data = await fetchWithCorsProxy(downloadUrl);
+          
+          // Process the data from this URL
+          if (data && data.data) {
+            data.data.forEach(userData => {
+              if (userData.actuals && userData.actuals.length > 0) {
+                const userName = usersById[userData.userId]?.name || userData.userId;
+                const startDate = new Date(userData.startDate);
+                
+                userData.actuals.forEach(actual => {
+                  // Calculate actual start and end times
+                  const startTime = new Date(startDate.getTime() + (actual.startOffsetSeconds * 1000));
+                  const endTime = new Date(startDate.getTime() + (actual.endOffsetSeconds * 1000));
+                  
+                  const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
+                  
+                  // Get activity name
+                  let activityName = actual.actualActivityCategory || 'Unknown Activity';
+                  if (actual.actualActivityCodeId) {
+                    const mappedName = getActivityName(businessUnitId, actual.actualActivityCodeId);
+                    if (mappedName && mappedName !== actual.actualActivityCodeId) {
+                      activityName = mappedName;
+                    }
+                  }
+                  
+                  allActualActivities.push({
+                    userId: userData.userId,
+                    userName: userName,
+                    date: formatDate(startTime.toISOString().slice(0, 10)),
+                    startTime: startTime,
+                    endTime: endTime,
+                    durationMinutes: durationMinutes,
+                    activityLabel: activityName,
+                    activityCodeId: actual.actualActivityCodeId,
+                    activityCategory: actual.actualActivityCategory,
+                    systemPresence: actual.systemPresence
+                  });
+                });
               }
-            }
-            
-            actualActivities.push({
-              userId: userId,
-              userName: userName,
-              date: formatDate(startTime.toISOString().slice(0, 10)),
-              startTime: startTime,
-              endTime: endTime,
-              durationMinutes: durationMinutes,
-              activityLabel: activityName,
-              activityCodeId: actual.actualActivityCodeId,
-              activityCategory: actual.actualActivityCategory,
-              systemPresence: actual.systemPresence
             });
-          });
+          }
+        } catch (error) {
+          console.error('Error processing download URL:', error);
+          throw new Error(`Failed to download results: ${error.message}`);
         }
-        
-        // Also process exception info which contains scheduled vs actual comparisons
-        if (entity.exceptionInfo && Array.isArray(entity.exceptionInfo)) {
-          entity.exceptionInfo.forEach(exception => {
-            if (!exception.startOffsetSeconds || !exception.endOffsetSeconds) {
-              return;
-            }
-            
-            const startTime = new Date(startDate.getTime() + (exception.startOffsetSeconds * 1000));
-            const endTime = new Date(startDate.getTime() + (exception.endOffsetSeconds * 1000));
-            
-            if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-              return;
-            }
-            
-            const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
-            
-            if (durationMinutes > 24 * 60 || durationMinutes <= 0) {
-              return;
-            }
-            
-            // For exceptions, we show both scheduled and actual activities
-            const scheduledActivity = getActivityName(businessUnitId, exception.scheduledActivityCodeId) || exception.scheduledActivityCategory;
-            const actualActivity = getActivityName(businessUnitId, exception.actualActivityCodeId) || exception.actualActivityCategory;
-            
-            actualActivities.push({
-              userId: userId,
-              userName: userName,
-              date: formatDate(startTime.toISOString().slice(0, 10)),
-              startTime: startTime,
-              endTime: endTime,
-              durationMinutes: durationMinutes,
-              activityLabel: `${actualActivity} (scheduled: ${scheduledActivity})`,
-              activityCodeId: exception.actualActivityCodeId,
-              activityCategory: exception.actualActivityCategory,
-              systemPresence: exception.systemPresence,
-              impact: exception.impact,
-              isException: true
-            });
-          });
-        }
-      });
+      }
       
-      console.log(`Processed ${actualActivities.length} actual activities`);
-      return actualActivities;
+      return allActualActivities;
     }
 
     function renderActualActivityResults(data, startDateInputFormat, endDateInputFormat) {
@@ -1844,42 +1674,6 @@
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
-    }
-
-    // ===== Debugging function =====
-    async function debugHistoricalAdherence() {
-      const buIds = dropdowns.actualBu ? dropdowns.actualBu.getSelectedValues() : [];
-      const muIds = dropdowns.actualMu ? dropdowns.actualMu.getSelectedValues() : [];
-      const userIds = dropdowns.actualUser ? dropdowns.actualUser.getSelectedValues() : [];
-      
-      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0) {
-        console.error('Please select BU, MU, and users first');
-        return;
-      }
-      
-      const startDate = document.getElementById('actualStartDate').value;
-      const endDate = document.getElementById('actualEndDate').value;
-      
-      console.log('Debugging historical adherence with:', {
-        businessUnit: buIds[0],
-        managementUnit: muIds[0],
-        users: userIds,
-        startDate,
-        endDate
-      });
-      
-      try {
-        const jobId = await createHistoricalAdherenceQuery(muIds[0], userIds, startDate, endDate);
-        console.log('Job ID:', jobId);
-        
-        // Check job status once to see the structure
-        const statusUrl = `${apiBase}/api/v2/workforcemanagement/adherence/historical/jobs/${encodeURIComponent(jobId)}`;
-        const statusResponse = await authorizedFetchJson(statusUrl);
-        console.log('Job status structure:', statusResponse);
-        
-      } catch (err) {
-        console.error('Debug error:', err);
-      }
     }
   </script>
 </body>
