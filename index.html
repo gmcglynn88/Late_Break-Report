@@ -1342,12 +1342,33 @@
               return;
             }
             
-            // Handle different possible response structures
-            const jobState = response.state || response.status;
+            // Handle different possible response structures - FIXED
+            const jobState = response.queryState || response.state || response.status;
             
-            if (jobState === 'Completed' || jobState === 'COMPLETED') {
+            console.log(`Detected job state: ${jobState}`);
+            
+            if (jobState === 'Complete' || jobState === 'COMPLETE' || jobState === 'Completed' || jobState === 'COMPLETED') {
               console.log('Job completed successfully');
-              resolve(response);
+              
+              // If there are download URLs, fetch the actual data from them
+              if (response.downloadUrls && response.downloadUrls.length > 0) {
+                console.log(`Found ${response.downloadUrls.length} download URLs, fetching results...`);
+                try {
+                  const downloadResults = await fetchDownloadUrls(response.downloadUrls);
+                  // Combine the download results with the job response
+                  const finalResult = {
+                    ...response,
+                    downloadedResults: downloadResults
+                  };
+                  resolve(finalResult);
+                } catch (downloadError) {
+                  console.error('Error downloading results:', downloadError);
+                  reject(new Error(`Failed to download results: ${downloadError.message}`));
+                }
+              } else {
+                // No download URLs, just return the response as-is
+                resolve(response);
+              }
             } else if (jobState === 'Failed' || jobState === 'FAILED' || jobState === 'Error' || jobState === 'ERROR') {
               const errorMessage = response.errorMessage || response.message || 'Historical adherence job failed';
               console.error('Job failed:', errorMessage);
@@ -1383,6 +1404,52 @@
       });
     }
 
+    // New function to download results from the URLs
+    async function fetchDownloadUrls(downloadUrls) {
+      console.log(`Fetching data from ${downloadUrls.length} download URLs...`);
+      
+      const downloadPromises = downloadUrls.map(async (url, index) => {
+        try {
+          console.log(`Downloading from URL ${index + 1}: ${url}`);
+          
+          // Use authorizedFetch for download URLs since they might require authentication
+          const response = await authorizedFetch(url);
+          
+          if (!response.ok) {
+            throw new Error(`Download failed for URL ${index + 1}: ${response.status} ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          console.log(`Successfully downloaded data from URL ${index + 1}`, data);
+          return data;
+        } catch (error) {
+          console.error(`Error downloading from URL ${index + 1}:`, error);
+          throw error;
+        }
+      });
+      
+      // Wait for all downloads to complete
+      const results = await Promise.all(downloadPromises);
+      console.log(`All ${results.length} downloads completed successfully`);
+      
+      // Combine all results into a single array of entities
+      const allEntities = [];
+      results.forEach(result => {
+        if (result && Array.isArray(result)) {
+          allEntities.push(...result);
+        } else if (result && Array.isArray(result.entities)) {
+          allEntities.push(...result.entities);
+        } else if (result && Array.isArray(result.results)) {
+          allEntities.push(...result.results);
+        } else {
+          console.warn('Unexpected download result structure:', result);
+        }
+      });
+      
+      console.log(`Combined ${allEntities.length} entities from all downloads`);
+      return allEntities;
+    }
+
     function processHistoricalAdherenceResults(jobResult, businessUnitId) {
       const actualActivities = [];
       
@@ -1396,7 +1463,13 @@
       // Handle different possible response structures
       let entities = [];
       
-      if (jobResult.results && Array.isArray(jobResult.results.entities)) {
+      // First, check if we have downloaded results
+      if (jobResult.downloadedResults && Array.isArray(jobResult.downloadedResults)) {
+        entities = jobResult.downloadedResults;
+        console.log(`Using ${entities.length} entities from downloaded results`);
+      }
+      // If no downloaded results, check the traditional locations
+      else if (jobResult.results && Array.isArray(jobResult.results.entities)) {
         entities = jobResult.results.entities;
       } else if (Array.isArray(jobResult.entities)) {
         entities = jobResult.entities;
@@ -1408,6 +1481,13 @@
       
       if (entities.length === 0) {
         console.warn('No entities found in historical adherence results');
+        console.log('Available keys in jobResult:', Object.keys(jobResult));
+        
+        // If we have download URLs but didn't download them, log that info
+        if (jobResult.downloadUrls && jobResult.downloadUrls.length > 0) {
+          console.warn('Job has download URLs but data was not downloaded. This might be the issue.');
+        }
+        
         return actualActivities;
       }
       
