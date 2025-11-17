@@ -5,7 +5,6 @@
   <title>WFM Helper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <style>
-    /* Your existing CSS remains the same */
     :root{
       --primary-color:#63AB8F; --secondary-color:#4A8C7D; --border-color:#DEE2E6;
       --light-bg:#F8F9FA; --card-bg:#FFFFFF; --text-color:#2C3E50; --text-light:#6C757D;
@@ -2197,6 +2196,11 @@
                 const startDate = new Date(userData.startDate);
                 
                 userData.actuals.forEach(actual => {
+                  // Skip if no start/end offsets
+                  if (actual.startOffsetSeconds == null || actual.endOffsetSeconds == null) {
+                    return;
+                  }
+                  
                   // Calculate actual start and end times
                   const startTime = new Date(startDate.getTime() + (actual.startOffsetSeconds * 1000));
                   const endTime = new Date(startDate.getTime() + (actual.endOffsetSeconds * 1000));
@@ -2234,6 +2238,7 @@
         }
       }
       
+      console.log(`Processed ${allActualActivities.length} actual activities`);
       return allActualActivities;
     }
 
@@ -3178,17 +3183,20 @@
       button.textContent = 'Generating late report...';
 
       try {
-        // Load both schedule and actual data
+        // Load activity codes first
         await loadActivityCodes(buIds[0]);
         
         // Get schedule data
-        const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw);
+        const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+        console.log('Schedule data for late report:', scheduleData);
         
         // Get actual activity data
         const actualData = await getActualActivityDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+        console.log('Actual data for late report:', actualData);
         
         // Generate late report by comparing schedule vs actual
         const lateReportData = generateLateReportData(scheduleData, actualData, thresholdSeconds);
+        console.log('Generated late report data:', lateReportData);
         
         currentDisplayedData.late = [...lateReportData];
         renderLateReportResults(lateReportData);
@@ -3203,8 +3211,8 @@
       }
     }
 
-    // Get schedule data for late report
-    async function getScheduleDataForLateReport(managementUnitId, userIds, startDate, endDate) {
+    // Get schedule data for late report - FIXED
+    async function getScheduleDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
       // Convert dd-mm-yyyy to yyyy-mm-dd for API
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
@@ -3217,7 +3225,9 @@
       for (const userId of userIds) {
         try {
           const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
-          const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
+          console.log(`Schedule search result for user ${userId}:`, searchResult);
+          const activities = extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
+          console.log(`Extracted ${activities.length} activities for user ${userId}:`, activities);
           allActivities = allActivities.concat(activities);
         } catch (err) {
           console.error(`Error loading schedule for user ${userId}:`, err);
@@ -3227,19 +3237,37 @@
       return allActivities;
     }
 
-    // Get actual activity data for late report  
+    // Get actual activity data for late report - FIXED  
     async function getActualActivityDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
 
-      const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
-      const jobResult = await pollHistoricalAdherenceJob(jobId);
-      return await processJobResults(jobResult, businessUnitId);
+      try {
+        const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
+        const jobResult = await pollHistoricalAdherenceJob(jobId);
+        const actualData = await processJobResults(jobResult, businessUnitId);
+        
+        // Filter out 'Unavailable' activities as requested
+        const filteredActualData = actualData.filter(activity => 
+          !activity.activityLabel.toLowerCase().includes('unavailable') &&
+          !activity.activityCategory.toLowerCase().includes('unavailable')
+        );
+        
+        console.log(`Filtered actual data: ${filteredActualData.length} activities (removed ${actualData.length - filteredActualData.length} unavailable activities)`);
+        
+        return filteredActualData;
+      } catch (err) {
+        console.error('Error getting actual activity data for late report:', err);
+        // Return empty array instead of throwing to allow schedule-only data
+        return [];
+      }
     }
 
-    // Generate late report by comparing schedule vs actual
+    // Generate late report by comparing schedule vs actual - FIXED
     function generateLateReportData(scheduleData, actualData, thresholdSeconds) {
       const lateReport = [];
+      
+      console.log(`Generating late report with ${scheduleData.length} schedule items and ${actualData.length} actual items`);
       
       // Group schedule data by user and date to find first activity of each day
       const scheduleByUserDate = {};
@@ -3252,21 +3280,36 @@
         scheduleByUserDate[key].push(scheduleItem);
       });
       
-      // For each user/date combination, find the first scheduled activity
+      console.log(`Grouped schedule into ${Object.keys(scheduleByUserDate).length} user/date combinations`);
+      
+      // Group actual data by user and date for easier lookup
+      const actualByUserDate = {};
+      actualData.forEach(actualItem => {
+        const key = `${actualItem.userId}_${actualItem.date}`;
+        if (!actualByUserDate[key]) {
+          actualByUserDate[key] = [];
+        }
+        actualByUserDate[key].push(actualItem);
+      });
+      
+      // For each user/date combination in schedule, find matching actual data
       Object.keys(scheduleByUserDate).forEach(key => {
         const [userId, date] = key.split('_');
         const userSchedule = scheduleByUserDate[key];
         
-        // Sort by start time and get first activity
-        userSchedule.sort((a, b) => a.start - b.start);
+        // Sort by start time and get first activity of the day
+        userSchedule.sort((a, b) => {
+          const aTime = a.start ? a.start.getTime() : new Date(a.date).getTime();
+          const bTime = b.start ? b.start.getTime() : new Date(b.date).getTime();
+          return aTime - bTime;
+        });
+        
         const firstScheduledActivity = userSchedule[0];
         
         if (!firstScheduledActivity) return;
         
         // Find actual activities for this user/date
-        const userActualActivities = actualData.filter(
-          actual => actual.userId === userId && actual.date === date
-        );
+        const userActualActivities = actualByUserDate[key] || [];
         
         if (userActualActivities.length === 0) {
           // No actual data found - label as AWOL
@@ -3278,7 +3321,8 @@
             actualStart: null,
             status: 'AWOL',
             durationLate: null,
-            scheduledActivity: firstScheduledActivity.activityLabel
+            scheduledActivity: firstScheduledActivity.activityLabel,
+            actualActivity: null
           });
           return;
         }
@@ -3288,6 +3332,11 @@
         const firstActualActivity = userActualActivities[0];
         
         if (!firstActualActivity) return;
+        
+        // Skip if scheduled start time is not available (full day off)
+        if (!firstScheduledActivity.start) {
+          return;
+        }
         
         // Calculate time difference in seconds
         const timeDiffSeconds = Math.round((firstActualActivity.startTime - firstScheduledActivity.start) / 1000);
@@ -3319,6 +3368,7 @@
         });
       });
       
+      console.log(`Generated ${lateReport.length} late report entries`);
       return lateReport;
     }
 
@@ -3717,6 +3767,34 @@
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+    }
+
+    // Temporary debug function - call this in the browser console
+    async function debugLateReport() {
+      const buIds = dropdowns.lateBu ? dropdowns.lateBu.getSelectedValues() : [];
+      const muIds = dropdowns.lateMu ? dropdowns.lateMu.getSelectedValues() : [];
+      const userIds = dropdowns.lateUser ? dropdowns.lateUser.getSelectedValues() : [];
+      
+      console.log('Debug Late Report:');
+      console.log('Business Units:', buIds);
+      console.log('Management Units:', muIds);
+      console.log('Users:', userIds);
+      
+      if (buIds.length > 0 && muIds.length > 0 && userIds.length > 0) {
+        const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, 
+          document.getElementById('lateStartDate').value, 
+          document.getElementById('lateEndDate').value, 
+          buIds[0]
+        );
+        console.log('Schedule Data:', scheduleData);
+        
+        const actualData = await getActualActivityDataForLateReport(muIds[0], userIds,
+          document.getElementById('lateStartDate').value,
+          document.getElementById('lateEndDate').value,
+          buIds[0]
+        );
+        console.log('Actual Data:', actualData);
+      }
     }
   </script>
 </body>
