@@ -895,7 +895,22 @@
       document.getElementById('exportScheduleBtn').addEventListener('click', exportScheduleToCSV);
       
       // Actual Activity tab
-      document.getElementById('loadActualActivityBtn').addEventListener('click', loadActualActivity);
+      document.getElementById('loadActualActivityBtn').addEventListener('click', function() {
+        loadActualActivity().catch(err => {
+          console.error('Historical adherence failed:', err);
+          
+          if (err.message.includes('CORS')) {
+            showMessage(
+              'Unable to download historical adherence data due to CORS restrictions. ' +
+              'This is a browser security limitation. Consider running this application ' +
+              'from a domain that is allowed by Genesys Cloud CORS policy or use a server-side proxy.',
+              'error'
+            );
+          } else {
+            showMessage(`Failed to load actual activity: ${err.message}`, 'error');
+          }
+        });
+      });
       document.getElementById('exportActualActivityBtn').addEventListener('click', exportActualActivityToCSV);
       
       // Overtime tab
@@ -1280,7 +1295,7 @@
         showMessage('Actual activity data loaded successfully', 'success');
       } catch (err) {
         console.error('Error loading actual activity:', err);
-        showMessage(`Error loading actual activity: ${err.message}`, 'error');
+        throw err; // Re-throw to allow error handling
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
@@ -1404,16 +1419,47 @@
       });
     }
 
-    // New function to download results from the URLs
+    // Updated fetchDownloadUrls function with CORS workaround attempt
     async function fetchDownloadUrls(downloadUrls) {
-      console.log(`Fetching data from ${downloadUrls.length} download URLs...`);
+      console.log(`Attempting to fetch data from ${downloadUrls.length} download URLs...`);
       
       const downloadPromises = downloadUrls.map(async (url, index) => {
         try {
-          console.log(`Downloading from URL ${index + 1}: ${url}`);
+          console.log(`Attempting to download from URL ${index + 1}: ${url}`);
           
-          // Use authorizedFetch for download URLs since they might require authentication
-          const response = await authorizedFetch(url);
+          // Try different approaches to handle CORS
+          let response;
+          
+          // Approach 1: Try with credentials
+          try {
+            response = await authorizedFetch(url, {
+              mode: 'cors',
+              credentials: 'include'
+            });
+          } catch (err) {
+            console.log(`Approach 1 failed for URL ${index + 1}:`, err);
+            
+            // Approach 2: Try without credentials
+            try {
+              response = await authorizedFetch(url, {
+                mode: 'cors',
+                credentials: 'omit'
+              });
+            } catch (err2) {
+              console.log(`Approach 2 failed for URL ${index + 1}:`, err2);
+              
+              // Approach 3: Try with no-cors (this will give opaque response)
+              try {
+                response = await authorizedFetch(url, { mode: 'no-cors' });
+                console.log(`URL ${index + 1} returned opaque response (no-cors mode)`);
+                // We can't read the body in no-cors mode, so this won't work
+                throw new Error('CORS policy blocks access to download URL');
+              } catch (err3) {
+                console.log(`All approaches failed for URL ${index + 1}:`, err3);
+                throw new Error(`CORS policy blocks access to download URL: ${err3.message}`);
+              }
+            }
+          }
           
           if (!response.ok) {
             throw new Error(`Download failed for URL ${index + 1}: ${response.status} ${response.statusText}`);
@@ -1424,32 +1470,42 @@
           return data;
         } catch (error) {
           console.error(`Error downloading from URL ${index + 1}:`, error);
+          
+          // If we can't download due to CORS, we might need to use a different approach
+          // For now, we'll throw a more specific error
+          if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+            throw new Error(`CORS policy prevents downloading from Genesys Cloud. Consider using a CORS proxy or server-side solution.`);
+          }
           throw error;
         }
       });
       
-      // Wait for all downloads to complete
-      const results = await Promise.all(downloadPromises);
-      console.log(`All ${results.length} downloads completed successfully`);
-      
-      // Combine all results into a single array of entities
-      const allEntities = [];
-      results.forEach(result => {
-        if (result && Array.isArray(result)) {
-          allEntities.push(...result);
-        } else if (result && Array.isArray(result.entities)) {
-          allEntities.push(...result.entities);
-        } else if (result && Array.isArray(result.results)) {
-          allEntities.push(...result.results);
-        } else {
-          console.warn('Unexpected download result structure:', result);
-        }
-      });
-      
-      console.log(`Combined ${allEntities.length} entities from all downloads`);
-      return allEntities;
+      try {
+        // Wait for all downloads to complete
+        const results = await Promise.all(downloadPromises);
+        console.log(`All ${results.length} downloads completed successfully`);
+        
+        // The downloaded data should be in the format you showed - with a data array
+        const allEntities = [];
+        results.forEach(result => {
+          if (result && Array.isArray(result.data)) {
+            allEntities.push(...result.data);
+          } else if (result && Array.isArray(result)) {
+            allEntities.push(...result);
+          } else {
+            console.warn('Unexpected download result structure:', result);
+          }
+        });
+        
+        console.log(`Combined ${allEntities.length} entities from all downloads`);
+        return allEntities;
+      } catch (error) {
+        console.error('Failed to download results due to CORS:', error);
+        throw error;
+      }
     }
 
+    // Updated processHistoricalAdherenceResults to handle the actual data structure
     function processHistoricalAdherenceResults(jobResult, businessUnitId) {
       const actualActivities = [];
       
@@ -1460,86 +1516,128 @@
         return actualActivities;
       }
       
-      // Handle different possible response structures
+      // Handle the downloaded results structure
       let entities = [];
       
-      // First, check if we have downloaded results
       if (jobResult.downloadedResults && Array.isArray(jobResult.downloadedResults)) {
         entities = jobResult.downloadedResults;
         console.log(`Using ${entities.length} entities from downloaded results`);
-      }
-      // If no downloaded results, check the traditional locations
-      else if (jobResult.results && Array.isArray(jobResult.results.entities)) {
-        entities = jobResult.results.entities;
-      } else if (Array.isArray(jobResult.entities)) {
-        entities = jobResult.entities;
-      } else if (jobResult.downloadResult && Array.isArray(jobResult.downloadResult.entities)) {
-        entities = jobResult.downloadResult.entities;
+      } else if (jobResult.data && Array.isArray(jobResult.data)) {
+        entities = jobResult.data;
+        console.log(`Using ${entities.length} entities from data array`);
       } else if (Array.isArray(jobResult)) {
         entities = jobResult;
+        console.log(`Using ${entities.length} entities from array`);
       }
       
       if (entities.length === 0) {
         console.warn('No entities found in historical adherence results');
         console.log('Available keys in jobResult:', Object.keys(jobResult));
-        
-        // If we have download URLs but didn't download them, log that info
-        if (jobResult.downloadUrls && jobResult.downloadUrls.length > 0) {
-          console.warn('Job has download URLs but data was not downloaded. This might be the issue.');
-        }
-        
         return actualActivities;
       }
       
       console.log(`Processing ${entities.length} entities`);
       
       entities.forEach(entity => {
-        if (!entity.actuals || !Array.isArray(entity.actuals)) {
-          console.log('Entity has no actuals array:', entity);
-          return;
-        }
-        
+        // Extract user information
         const userId = entity.userId;
         const userName = usersById[userId]?.name || userId;
+        const startDate = new Date(entity.startDate);
         
-        console.log(`Processing ${entity.actuals.length} actuals for user ${userName}`);
+        console.log(`Processing user ${userName} with ${entity.actuals ? entity.actuals.length : 0} actuals`);
         
-        entity.actuals.forEach(actual => {
-          if (!actual.activityCodeId || !actual.startTime || !actual.endTime) {
-            console.log('Skipping incomplete actual:', actual);
-            return;
-          }
-          
-          const startTime = new Date(actual.startTime);
-          const endTime = new Date(actual.endTime);
-          
-          // Validate dates
-          if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-            console.log('Skipping actual with invalid dates:', actual);
-            return;
-          }
-          
-          const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
-          
-          // Skip if duration is unreasonable (more than 24 hours)
-          if (durationMinutes > 24 * 60 || durationMinutes < 0) {
-            console.log('Skipping actual with unreasonable duration:', durationMinutes, actual);
-            return;
-          }
-          
-          const activityName = getActivityName(businessUnitId, actual.activityCodeId);
-          
-          actualActivities.push({
-            userId: userId,
-            userName: userName,
-            date: formatDate(startTime.toISOString().slice(0, 10)),
-            startTime: startTime,
-            endTime: endTime,
-            durationMinutes: durationMinutes,
-            activityLabel: activityName,
-            activityCodeId: actual.activityCodeId
+        // Process actual activities
+        if (entity.actuals && Array.isArray(entity.actuals)) {
+          entity.actuals.forEach(actual => {
+            if (!actual.startOffsetSeconds || !actual.endOffsetSeconds) {
+              console.log('Skipping incomplete actual:', actual);
+              return;
+            }
+            
+            // Calculate actual start and end times based on offsets from the start date
+            const startTime = new Date(startDate.getTime() + (actual.startOffsetSeconds * 1000));
+            const endTime = new Date(startDate.getTime() + (actual.endOffsetSeconds * 1000));
+            
+            // Validate dates
+            if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+              console.log('Skipping actual with invalid dates:', actual);
+              return;
+            }
+            
+            const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
+            
+            // Skip if duration is unreasonable (more than 24 hours) or negative
+            if (durationMinutes > 24 * 60 || durationMinutes <= 0) {
+              console.log('Skipping actual with unreasonable duration:', durationMinutes, actual);
+              return;
+            }
+            
+            // Get activity name - use actualActivityCategory first, then try to map activity codes
+            let activityName = actual.actualActivityCategory || 'Unknown Activity';
+            
+            // If we have an activity code ID, try to get the proper name
+            if (actual.actualActivityCodeId) {
+              const mappedName = getActivityName(businessUnitId, actual.actualActivityCodeId);
+              if (mappedName && mappedName !== actual.actualActivityCodeId) {
+                activityName = mappedName;
+              }
+            }
+            
+            actualActivities.push({
+              userId: userId,
+              userName: userName,
+              date: formatDate(startTime.toISOString().slice(0, 10)),
+              startTime: startTime,
+              endTime: endTime,
+              durationMinutes: durationMinutes,
+              activityLabel: activityName,
+              activityCodeId: actual.actualActivityCodeId,
+              activityCategory: actual.actualActivityCategory,
+              systemPresence: actual.systemPresence
+            });
           });
-        });
+        }
+        
+        // Also process exception info which contains scheduled vs actual comparisons
+        if (entity.exceptionInfo && Array.isArray(entity.exceptionInfo)) {
+          entity.exceptionInfo.forEach(exception => {
+            if (!exception.startOffsetSeconds || !exception.endOffsetSeconds) {
+              return;
+            }
+            
+            const startTime = new Date(startDate.getTime() + (exception.startOffsetSeconds * 1000));
+            const endTime = new Date(startDate.getTime() + (exception.endOffsetSeconds * 1000));
+            
+            if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+              return;
+            }
+            
+            const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
+            
+            if (durationMinutes > 24 * 60 || durationMinutes <= 0) {
+              return;
+            }
+            
+            // For exceptions, we show both scheduled and actual activities
+            const scheduledActivity = getActivityName(businessUnitId, exception.scheduledActivityCodeId) || exception.scheduledActivityCategory;
+            const actualActivity = getActivityName(businessUnitId, exception.actualActivityCodeId) || exception.actualActivityCategory;
+            
+            actualActivities.push({
+              userId: userId,
+              userName: userName,
+              date: formatDate(startTime.toISOString().slice(0, 10)),
+              startTime: startTime,
+              endTime: endTime,
+              durationMinutes: durationMinutes,
+              activityLabel: `${actualActivity} (scheduled: ${scheduledActivity})`,
+              activityCodeId: exception.actualActivityCodeId,
+              activityCategory: exception.actualActivityCategory,
+              systemPresence: exception.systemPresence,
+              impact: exception.impact,
+              isException: true
+            });
+          });
+        }
       });
       
       console.log(`Processed ${actualActivities.length} actual activities`);
