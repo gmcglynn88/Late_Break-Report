@@ -715,6 +715,7 @@
     let usersById = {};
     let allTeams = [];
     let teamsById = {};
+    let userTeams = {}; // New: Store team membership for each user
     let activityCodesByBuId = {};
     let businessUnits = [];
     let managementUnits = [];
@@ -1322,6 +1323,7 @@
       }
     }
 
+    // ===== Enhanced User Data Loading =====
     async function populateInitialData() {
       try {
         console.log('Loading initial data...');
@@ -1335,10 +1337,8 @@
         usersById = {};
         allUsers.forEach(u => { 
           usersById[u.id] = u;
-          // Add team information to users
-          if (u.teams && u.teams.length > 0) {
-            u.teamNames = u.teams.map(team => team.name).join(', ');
-          }
+          // Initialize empty team names
+          u.teamNames = 'No Team';
         });
         
         businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
@@ -1346,6 +1346,9 @@
         allTeams = teams || [];
         teamsById = {};
         allTeams.forEach(t => { teamsById[t.id] = t; });
+
+        // Load team membership for all users
+        await loadUserTeamMemberships();
 
         populateUserDropdown(allUsers);
         populateBusinessUnitDropdown(businessUnits);
@@ -1369,6 +1372,77 @@
       } catch (err) {
         console.error('Error initialising app:', err);
         showMessage(`Error loading initial data: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== New Function to Load Team Memberships =====
+    async function loadUserTeamMemberships() {
+      console.log('Loading team memberships for all users...');
+      
+      // We'll process teams in batches to avoid overwhelming the API
+      const batchSize = 10;
+      const teamBatches = [];
+      
+      for (let i = 0; i < allTeams.length; i += batchSize) {
+        teamBatches.push(allTeams.slice(i, i + batchSize));
+      }
+      
+      // Initialize userTeams object
+      userTeams = {};
+      allUsers.forEach(user => {
+        userTeams[user.id] = [];
+      });
+      
+      // Process each batch of teams
+      for (const batch of teamBatches) {
+        await Promise.all(
+          batch.map(async (team) => {
+            try {
+              const members = await getTeamMembers(team.id);
+              console.log(`Team ${team.name} has ${members.length} members`);
+              
+              // Add team to each member's team list
+              members.forEach(member => {
+                if (userTeams[member.id]) {
+                  userTeams[member.id].push(team);
+                }
+              });
+            } catch (err) {
+              console.error(`Error loading members for team ${team.name}:`, err);
+            }
+          })
+        );
+      }
+      
+      // Update user objects with team names
+      allUsers.forEach(user => {
+        const teams = userTeams[user.id] || [];
+        if (teams.length > 0) {
+          user.teamNames = teams.map(team => team.name).join(', ');
+        } else {
+          user.teamNames = 'No Team';
+        }
+      });
+      
+      console.log('Team memberships loaded successfully');
+    }
+
+    // ===== Enhanced getTeamMembers function =====
+    async function getTeamMembers(teamId) {
+      try {
+        const teamMembersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
+        );
+        const members = teamMembersResponse.entities || teamMembersResponse.members || [];
+        
+        // Return member objects with id and name
+        return members.map(member => ({
+          id: member.id,
+          name: member.name
+        }));
+      } catch (err) {
+        console.error(`Error fetching team members for team ${teamId}:`, err);
+        return [];
       }
     }
 
@@ -1466,10 +1540,8 @@
         const list = muUsersResponse.entities || muUsersResponse.users || [];
         const enriched = list.map(uRef => {
           const user = usersById[uRef.id] || uRef;
-          // Add team information
-          if (user.teams && user.teams.length > 0) {
-            user.teamNames = user.teams.map(team => teamsById[team.id]?.name || team.id).join(', ');
-          }
+          // Use the pre-loaded team information
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
           return user;
         });
         console.log(`Loaded ${enriched.length} users for management unit ${selectedMuIds[0]}`);
@@ -1546,10 +1618,8 @@
                     : [];
         const enriched = list.map(uRef => {
           const user = usersById[uRef.id] || uRef;
-          // Add team information
-          if (user.teams && user.teams.length > 0) {
-            user.teamNames = user.teams.map(team => teamsById[team.id]?.name || team.id).join(', ');
-          }
+          // Use the pre-loaded team information
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
           return user;
         });
         console.log(`Loaded ${enriched.length} users for actual activity management unit ${selectedMuIds[0]}`);
@@ -1591,10 +1661,8 @@
                     : [];
         const enriched = list.map(uRef => {
           const user = usersById[uRef.id] || uRef;
-          // Add team information
-          if (user.teams && user.teams.length > 0) {
-            user.teamNames = user.teams.map(team => teamsById[team.id]?.name || team.id).join(', ');
-          }
+          // Use the pre-loaded team information
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
           return user;
         });
         console.log(`Loaded ${enriched.length} users for late report management unit ${selectedMuIds[0]}`);
@@ -1892,7 +1960,7 @@
               type: 'shift',
               userId: userId,
               userName: usersById[userId]?.name || userId,
-              teamNames: usersById[userId]?.teamNames || 'No Team'
+              teamNames: usersById[userId]?.teamNames || 'No Team' // Add team names
             });
           });
         });
@@ -1924,7 +1992,7 @@
             type: 'fullDayOff',
             userId: userId,
             userName: usersById[userId]?.name || userId,
-            teamNames: usersById[userId]?.teamNames || 'No Team'
+            teamNames: usersById[userId]?.teamNames || 'No Team' // Add team names
           });
         });
       }
@@ -2271,7 +2339,7 @@
             data.data.forEach(userData => {
               if (userData.actuals && userData.actuals.length > 0) {
                 const userName = usersById[userData.userId]?.name || userData.userId;
-                const teamNames = usersById[userData.userId]?.teamNames || 'No Team';
+                const teamNames = usersById[userData.userId]?.teamNames || 'No Team'; // Add team names
                 const startDate = new Date(userData.startDate);
                 
                 userData.actuals.forEach(actual => {
@@ -2298,7 +2366,7 @@
                   allActualActivities.push({
                     userId: userData.userId,
                     userName: userName,
-                    teamNames: teamNames,
+                    teamNames: teamNames, // Add team names
                     date: formatDate(startTime.toISOString().slice(0, 10)),
                     startTime: startTime,
                     endTime: endTime,
@@ -2523,34 +2591,29 @@
           teamIds.map(teamId => getTeamMembers(teamId))
         );
         users = teamMembersArrays.flat();
+        
+        // Enrich with full user data and team names
+        users = users.map(member => {
+          const user = usersById[member.id] || member;
+          user.teamNames = usersById[member.id]?.teamNames || 'No Team';
+          return user;
+        });
       } else {
         // Get all users from management unit
         const muUsersResponse = await authorizedFetchJson(
           `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
         );
         users = muUsersResponse.entities || muUsersResponse.users || [];
+        
+        // Enrich with team names
+        users = users.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
+          return user;
+        });
       }
       
-      return users.map(uRef => {
-        const user = usersById[uRef.id] || uRef;
-        // Add team information
-        if (user.teams && user.teams.length > 0) {
-          user.teamNames = user.teams.map(team => teamsById[team.id]?.name || team.id).join(', ');
-        }
-        return user;
-      }).filter(u => u && u.name);
-    }
-
-    async function getTeamMembers(teamId) {
-      try {
-        const teamMembersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
-        );
-        return teamMembersResponse.entities || teamMembersResponse.members || [];
-      } catch (err) {
-        console.error(`Error fetching team members for team ${teamId}:`, err);
-        return [];
-      }
+      return users.filter(u => u && u.name);
     }
 
     function extractOvertimeActivities(schedule, userId, businessUnitId) {
@@ -3579,11 +3642,11 @@
             <td>${escapeHtml(row.teamNames || 'No Team')}</td>
             <td>${escapeHtml(row.date)}</td>
             <td>${row.scheduledStart ? escapeHtml(formatTime(row.scheduledStart)) : 'N/A'}</td>
-            <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'Offline'}</td>
+            <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'N/A'}</td>
             <td><span class="${statusClass}">${statusText}</span></td>
             <td>${durationText}</td>
             <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
-            <td>${escapeHtml(row.actualActivity || 'Offline')}</td>
+            <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
           </tr>
         `;
       });
@@ -3867,13 +3930,13 @@
         User: row.userName,
         Team: row.teamNames || 'No Team',
         'Scheduled Start': row.scheduledStart ? formatTime(row.scheduledStart) : 'N/A',
-        'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'Offline',
+        'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'N/A',
         Status: row.status,
         'Duration Late/Early': row.durationLate !== null ? 
           (row.status === 'Late' ? `+${formatDuration(Math.ceil(row.durationLate / 60))}` : 
            row.status === 'Early' ? `-${formatDuration(Math.ceil(row.durationLate / 60))}` : '0m') : 'N/A',
         'Scheduled Activity': row.scheduledActivity || 'N/A',
-        'Actual Activity': row.actualActivity || 'Offline'
+        'Actual Activity': row.actualActivity || 'N/A'
       }));
 
       exportToCSV(csvData, `late_report_${new Date().toISOString().split('T')[0]}.csv`);
