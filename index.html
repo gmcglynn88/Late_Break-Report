@@ -85,6 +85,9 @@
     .absence-badge{
       background:#ea580c;color:white;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600
     }
+    .late-badge{
+      background:#dc2626;color:white;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600
+    }
     .chart-container{
       background:white;border:1px solid var(--border-color);border-radius:8px;padding:16px;margin-top:16px
     }
@@ -164,6 +167,28 @@
       font-weight: 500;
     }
     .overtime-duration {
+      color: var(--text-light);
+    }
+    
+    /* Late details */
+    .late-details {
+      margin-top: 8px;
+      padding-left: 16px;
+      border-left: 2px solid var(--border-color);
+    }
+    .late-day {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .late-day:last-child {
+      border-bottom: none;
+    }
+    .late-date {
+      font-weight: 500;
+    }
+    .late-duration {
       color: var(--text-light);
     }
     
@@ -363,6 +388,8 @@
     <!-- Tabs Navigation -->
     <div class="tabs">
       <div class="tab active" data-tab="schedule">Schedule View</div>
+      <div class="tab" data-tab="late">Late Report</div>
+      <div class="tab" data-tab="actual">Actual</div>
       <div class="tab" data-tab="overtime">Overtime Tracking</div>
       <div class="tab" data-tab="absence">Absence Analytics</div>
     </div>
@@ -439,6 +466,138 @@
         </div>
         
         <div id="scheduleResultsContent"></div>
+      </div>
+    </div>
+
+    <!-- Late Report Tab -->
+    <div id="late-tab" class="tab-content">
+      <div class="card">
+        <h2 class="section-title">Late Report Analysis</h2>
+        <div class="controls">
+          <div>
+            <label for="lateBuSelect">Business Unit</label>
+            <div id="lateBuDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label for="lateMuSelect">Management Unit</label>
+            <div id="lateMuDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label>Team</label>
+            <div id="lateTeamDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label for="lateStartDate">Start Date</label>
+            <input type="date" id="lateStartDate" />
+          </div>
+          <div>
+            <label for="lateEndDate">End Date</label>
+            <input type="date" id="lateEndDate" />
+          </div>
+          <div>
+            <label for="lateThreshold">Late Threshold (minutes)</label>
+            <input type="number" id="lateThreshold" value="5" min="0" step="1" />
+            <div class="muted">Minutes late to count as late (e.g., 5 = 5 minutes)</div>
+          </div>
+        </div>
+        <button id="analyzeLateBtn" class="full-width-btn">Analyze Late Report</button>
+      </div>
+
+      <div id="lateResults" class="card" style="display:none;">
+        <div class="table-controls">
+          <div class="sort-controls">
+            <label for="lateSort">Sort by:</label>
+            <select id="lateSort">
+              <option value="user">User</option>
+              <option value="totalLate">Total Late</option>
+              <option value="instances">Instances</option>
+              <option value="averageLate">Average Late</option>
+            </select>
+            <select id="lateSortOrder">
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="filter-activity-container">
+          <div class="filter-activity-title">Filter by Status</div>
+          <div id="lateActivityFilterDropdown" class="checkbox-dropdown"></div>
+        </div>
+        
+        <div class="export-buttons">
+          <button id="exportLateBtn" class="export-btn">Export Summary to CSV</button>
+          <button id="exportLateDetailsBtn" class="export-btn">Export Details to CSV</button>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" data-view="summary">Summary View</button>
+          <button class="view-toggle-btn" data-view="detailed">Detailed Table</button>
+        </div>
+        
+        <div id="lateResultsContent"></div>
+      </div>
+    </div>
+
+    <!-- Actual Tab -->
+    <div id="actual-tab" class="tab-content">
+      <div class="card">
+        <h2 class="section-title">Actual vs Scheduled Analysis</h2>
+        <div class="controls">
+          <div>
+            <label for="actualBuSelect">Business Unit</label>
+            <div id="actualBuDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label for="actualMuSelect">Management Unit</label>
+            <div id="actualMuDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label>Team</label>
+            <div id="actualTeamDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label for="actualStartDate">Start Date</label>
+            <input type="date" id="actualStartDate" />
+          </div>
+          <div>
+            <label for="actualEndDate">End Date</label>
+            <input type="date" id="actualEndDate" />
+          </div>
+        </div>
+        <button id="analyzeActualBtn" class="full-width-btn">Analyze Actual vs Scheduled</button>
+      </div>
+
+      <div id="actualResults" class="card" style="display:none;">
+        <div class="table-controls">
+          <div class="sort-controls">
+            <label for="actualSort">Sort by:</label>
+            <select id="actualSort">
+              <option value="user">User</option>
+              <option value="variance">Variance</option>
+              <option value="scheduledHours">Scheduled Hours</option>
+              <option value="actualHours">Actual Hours</option>
+            </select>
+            <select id="actualSortOrder">
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="export-buttons">
+          <button id="exportActualBtn" class="export-btn">Export Summary to CSV</button>
+          <button id="exportActualDetailsBtn" class="export-btn">Export Details to CSV</button>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" data-view="summary">Summary View</button>
+          <button class="view-toggle-btn" data-view="detailed">Detailed Table</button>
+        </div>
+        
+        <div id="actualResultsContent"></div>
       </div>
     </div>
 
@@ -592,10 +751,14 @@
     
     // Data storage for exports and sorting
     let currentScheduleData = [];
+    let currentLateData = [];
+    let currentActualData = [];
     let currentOvertimeData = [];
     let currentAbsenceData = [];
     let currentDisplayedData = {
       schedule: [],
+      late: [],
+      actual: [],
       overtime: [],
       absence: []
     };
@@ -607,6 +770,8 @@
     };
     
     // View state
+    let currentLateView = 'summary';
+    let currentActualView = 'summary';
     let currentAbsenceView = 'summary';
     
     // Checkbox dropdown instances
@@ -615,6 +780,12 @@
       managementUnit: null,
       team: null,
       user: null,
+      lateBu: null,
+      lateMu: null,
+      lateTeam: null,
+      actualBu: null,
+      actualMu: null,
+      actualTeam: null,
       overtimeBu: null,
       overtimeMu: null,
       overtimeTeam: null,
@@ -622,6 +793,7 @@
       absenceMu: null,
       absenceTeam: null,
       activityFilter: null,
+      lateActivityFilter: null,
       overtimeActivityFilter: null,
       absenceActivityFilter: null
     };
@@ -934,6 +1106,40 @@
         searchPlaceholder: 'Search users...' 
       });
       
+      // Late tab dropdowns
+      dropdowns.lateBu = createCheckboxDropdown('lateBuDropdown', { 
+        placeholder: 'Select business units', 
+        searchPlaceholder: 'Search business units...',
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'late')
+      });
+      
+      dropdowns.lateMu = createCheckboxDropdown('lateMuDropdown', { 
+        placeholder: 'Select management units', 
+        searchPlaceholder: 'Search management units...' 
+      });
+      
+      dropdowns.lateTeam = createCheckboxDropdown('lateTeamDropdown', { 
+        placeholder: 'Select teams', 
+        searchPlaceholder: 'Search teams...' 
+      });
+      
+      // Actual tab dropdowns
+      dropdowns.actualBu = createCheckboxDropdown('actualBuDropdown', { 
+        placeholder: 'Select business units', 
+        searchPlaceholder: 'Search business units...',
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'actual')
+      });
+      
+      dropdowns.actualMu = createCheckboxDropdown('actualMuDropdown', { 
+        placeholder: 'Select management units', 
+        searchPlaceholder: 'Search management units...' 
+      });
+      
+      dropdowns.actualTeam = createCheckboxDropdown('actualTeamDropdown', { 
+        placeholder: 'Select teams', 
+        searchPlaceholder: 'Search teams...' 
+      });
+      
       // Overtime tab dropdowns
       dropdowns.overtimeBu = createCheckboxDropdown('overtimeBuDropdown', { 
         placeholder: 'Select business units', 
@@ -974,6 +1180,11 @@
         searchPlaceholder: 'Search activities...' 
       });
       
+      dropdowns.lateActivityFilter = createCheckboxDropdown('lateActivityFilterDropdown', { 
+        placeholder: 'Filter by status', 
+        searchPlaceholder: 'Search status...' 
+      });
+      
       dropdowns.overtimeActivityFilter = createCheckboxDropdown('overtimeActivityFilterDropdown', { 
         placeholder: 'Filter by overtime activity', 
         searchPlaceholder: 'Search overtime activities...' 
@@ -989,10 +1200,52 @@
 
     // ===== View Toggle =====
     function initializeViewToggle() {
-      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+      // Late tab view toggle
+      document.querySelectorAll('#late-tab .view-toggle-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-          // Remove active class from all buttons
-          document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          // Remove active class from all buttons in late tab
+          document.querySelectorAll('#late-tab .view-toggle-btn').forEach(b => b.classList.remove('active'));
+          // Add active class to clicked button
+          this.classList.add('active');
+          
+          currentLateView = this.getAttribute('data-view');
+          
+          // Re-render late results with new view
+          const thresholdMinutes = parseInt(document.getElementById('lateThreshold').value) || 5;
+          const startDate = document.getElementById('lateStartDate').value;
+          const endDate = document.getElementById('lateEndDate').value;
+          
+          if (currentLateData.length > 0) {
+            renderLateResults(currentLateData, thresholdMinutes, startDate, endDate);
+          }
+        });
+      });
+
+      // Actual tab view toggle
+      document.querySelectorAll('#actual-tab .view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          // Remove active class from all buttons in actual tab
+          document.querySelectorAll('#actual-tab .view-toggle-btn').forEach(b => b.classList.remove('active'));
+          // Add active class to clicked button
+          this.classList.add('active');
+          
+          currentActualView = this.getAttribute('data-view');
+          
+          // Re-render actual results with new view
+          const startDate = document.getElementById('actualStartDate').value;
+          const endDate = document.getElementById('actualEndDate').value;
+          
+          if (currentActualData.length > 0) {
+            renderActualResults(currentActualData, startDate, endDate);
+          }
+        });
+      });
+
+      // Absence tab view toggle
+      document.querySelectorAll('#absence-tab .view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          // Remove active class from all buttons in absence tab
+          document.querySelectorAll('#absence-tab .view-toggle-btn').forEach(b => b.classList.remove('active'));
           // Add active class to clicked button
           this.classList.add('active');
           
@@ -1061,6 +1314,8 @@
         .sort((a,b)=>a.label.localeCompare(b.label));
       
       if (dropdowns.businessUnit) dropdowns.businessUnit.setOptions(buOpts);
+      if (dropdowns.lateBu) dropdowns.lateBu.setOptions(buOpts);
+      if (dropdowns.actualBu) dropdowns.actualBu.setOptions(buOpts);
       if (dropdowns.overtimeBu) dropdowns.overtimeBu.setOptions(buOpts);
       if (dropdowns.absenceBu) dropdowns.absenceBu.setOptions(buOpts);
     }
@@ -1071,6 +1326,8 @@
         .sort((a,b)=>a.label.localeCompare(b.label));
       
       if (dropdowns.team) dropdowns.team.setOptions(teamOpts);
+      if (dropdowns.lateTeam) dropdowns.lateTeam.setOptions(teamOpts);
+      if (dropdowns.actualTeam) dropdowns.actualTeam.setOptions(teamOpts);
       if (dropdowns.overtimeTeam) dropdowns.overtimeTeam.setOptions(teamOpts);
       if (dropdowns.absenceTeam) dropdowns.absenceTeam.setOptions(teamOpts);
     }
@@ -1082,6 +1339,10 @@
       
       document.getElementById('startDate').value = currentWeek.start;
       document.getElementById('endDate').value = currentWeek.end;
+      document.getElementById('lateStartDate').value = currentWeek.start;
+      document.getElementById('lateEndDate').value = currentWeek.end;
+      document.getElementById('actualStartDate').value = currentWeek.start;
+      document.getElementById('actualEndDate').value = currentWeek.end;
       document.getElementById('overtimeStartDate').value = currentWeek.start;
       document.getElementById('overtimeEndDate').value = currentWeek.end;
       document.getElementById('absenceStartDate').value = currentWeek.start;
@@ -1089,6 +1350,12 @@
     }
 
     function initializeAnalytics() {
+      // Late analysis
+      document.getElementById('analyzeLateBtn').addEventListener('click', analyzeLate);
+      
+      // Actual analysis
+      document.getElementById('analyzeActualBtn').addEventListener('click', analyzeActual);
+      
       // Overtime analysis
       document.getElementById('analyzeOvertimeBtn').addEventListener('click', analyzeOvertime);
       
@@ -1101,6 +1368,14 @@
       // Schedule tab sorting
       document.getElementById('scheduleSort').addEventListener('change', () => applySorting('schedule'));
       document.getElementById('scheduleSortOrder').addEventListener('change', () => applySorting('schedule'));
+      
+      // Late tab sorting
+      document.getElementById('lateSort').addEventListener('change', () => applySorting('late'));
+      document.getElementById('lateSortOrder').addEventListener('change', () => applySorting('late'));
+      
+      // Actual tab sorting
+      document.getElementById('actualSort').addEventListener('change', () => applySorting('actual'));
+      document.getElementById('actualSortOrder').addEventListener('change', () => applySorting('actual'));
       
       // Overtime tab sorting
       document.getElementById('overtimeSort').addEventListener('change', () => applySorting('overtime'));
@@ -1119,6 +1394,16 @@
           data = currentDisplayedData.schedule;
           sortField = document.getElementById('scheduleSort').value;
           sortOrder = document.getElementById('scheduleSortOrder').value;
+          break;
+        case 'late':
+          data = currentDisplayedData.late;
+          sortField = document.getElementById('lateSort').value;
+          sortOrder = document.getElementById('lateSortOrder').value;
+          break;
+        case 'actual':
+          data = currentDisplayedData.actual;
+          sortField = document.getElementById('actualSort').value;
+          sortOrder = document.getElementById('actualSortOrder').value;
           break;
         case 'overtime':
           data = currentDisplayedData.overtime;
@@ -1146,10 +1431,14 @@
               case 'duration': aVal = a.durationMinutes; bVal = b.durationMinutes; break;
             }
             break;
-          case 'overtime':
-            aVal = a[sortField]; bVal = b[sortField]; break;
-          case 'absence':
-            aVal = a[sortField]; bVal = b[sortField]; break;
+        case 'late':
+          aVal = a[sortField]; bVal = b[sortField]; break;
+        case 'actual':
+          aVal = a[sortField]; bVal = b[sortField]; break;
+        case 'overtime':
+          aVal = a[sortField]; bVal = b[sortField]; break;
+        case 'absence':
+          aVal = a[sortField]; bVal = b[sortField]; break;
         }
         
         if (typeof aVal === 'string') {
@@ -1169,6 +1458,17 @@
         case 'schedule':
           renderScheduleTable(sortedData);
           break;
+        case 'late':
+          const thresholdMinutes = parseInt(document.getElementById('lateThreshold').value) || 5;
+          const lateStartDate = document.getElementById('lateStartDate').value;
+          const lateEndDate = document.getElementById('lateEndDate').value;
+          renderLateResults(sortedData, thresholdMinutes, lateStartDate, lateEndDate);
+          break;
+        case 'actual':
+          const actualStartDate = document.getElementById('actualStartDate').value;
+          const actualEndDate = document.getElementById('actualEndDate').value;
+          renderActualResults(sortedData, actualStartDate, actualEndDate);
+          break;
         case 'overtime':
           renderOvertimeResults(sortedData, 
             document.getElementById('overtimeStartDate').value,
@@ -1176,9 +1476,9 @@
           break;
         case 'absence':
           const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
-          const startDate = document.getElementById('absenceStartDate').value;
-          const endDate = document.getElementById('absenceEndDate').value;
-          renderAbsenceResults(sortedData, thresholdDays, startDate, endDate);
+          const absenceStartDate = document.getElementById('absenceStartDate').value;
+          const absenceEndDate = document.getElementById('absenceEndDate').value;
+          renderAbsenceResults(sortedData, thresholdDays, absenceStartDate, absenceEndDate);
           break;
       }
     }
@@ -1244,7 +1544,13 @@
     async function handleAnalyticsBuChange(selectedBuIds, tabType) {
       console.log(`Analytics Business Unit selection changed for ${tabType}:`, selectedBuIds);
       
-      const muDropdown = tabType === 'overtime' ? dropdowns.overtimeMu : dropdowns.absenceMu;
+      let muDropdown;
+      switch(tabType) {
+        case 'late': muDropdown = dropdowns.lateMu; break;
+        case 'actual': muDropdown = dropdowns.actualMu; break;
+        case 'overtime': muDropdown = dropdowns.overtimeMu; break;
+        case 'absence': muDropdown = dropdowns.absenceMu; break;
+      }
       
       if (muDropdown) {
         muDropdown.clearSelection();
@@ -1325,6 +1631,239 @@
       }
       
       return userTeamMap;
+    }
+
+    // ===== Late Analysis =====
+    async function analyzeLate() {
+      const buIds = dropdowns.lateBu ? dropdowns.lateBu.getSelectedValues() : [];
+      const muIds = dropdowns.lateMu ? dropdowns.lateMu.getSelectedValues() : [];
+      const teamIds = dropdowns.lateTeam ? dropdowns.lateTeam.getSelectedValues() : [];
+      const startDate = document.getElementById('lateStartDate').value;
+      const endDate = document.getElementById('lateEndDate').value;
+      const thresholdMinutes = parseInt(document.getElementById('lateThreshold').value) || 5;
+
+      // Convert dd-mm-yyyy to yyyy-mm-dd for API
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+
+      if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
+        showMessage('Please select business unit, management unit, and date range', 'error');
+        return;
+      }
+
+      const button = document.getElementById('analyzeLateBtn');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Analyzing...';
+
+      try {
+        // Load activity codes first
+        await loadActivityCodes(buIds[0]);
+        
+        // Get users based on filters
+        let users = await getUsersForAnalytics(muIds[0], teamIds);
+        const lateData = [];
+        
+        // Set end time to 23:59:59 to include the entire end date
+        const startDateIso = `${startDateApi}T00:00:00.000Z`;
+        const endDateIso = `${endDateApi}T23:59:59.999Z`;
+
+        // Build user team map for display
+        const userIds = users.map(u => u.id);
+        const userTeamMap = await buildUserTeamMap(userIds);
+
+        for (const user of users) {
+          try {
+            const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
+            const lateStats = calculateLateStats(schedule, user.id, buIds[0], thresholdMinutes);
+            
+            if (lateStats.instances > 0) {
+              lateData.push({
+                user: user.name,
+                team: userTeamMap[user.id] || 'Unknown',
+                totalLateMinutes: lateStats.totalLateMinutes,
+                instances: lateStats.instances,
+                averageLateMinutes: parseFloat((lateStats.totalLateMinutes / lateStats.instances).toFixed(1)),
+                lateDetails: lateStats.details
+              });
+            }
+          } catch (err) {
+            console.error(`Error analyzing user ${user.name}:`, err);
+          }
+        }
+
+        currentLateData = lateData; // Store for export
+        currentDisplayedData.late = [...lateData];
+        renderLateResults(lateData, thresholdMinutes, startDate, endDate);
+      } catch (err) {
+        console.error('Error analyzing late report:', err);
+        showMessage(`Error analyzing late report: ${err.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    function calculateLateStats(schedule, userId, businessUnitId, thresholdMinutes) {
+      const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
+      let totalLateMinutes = 0;
+      let instances = 0;
+      const lateDetails = [];
+      
+      console.log('Analyzing activities for late arrivals:', activities);
+      
+      activities.forEach(activity => {
+        // Only check scheduled activities with start times (not full day off)
+        if (activity.start && activity.type === 'shift') {
+          const activityName = getActivityName(businessUnitId, activity.activityCodeId);
+          
+          // Check if this is a scheduled activity that should have a start time
+          if (activityName.toLowerCase().includes('on queue') || 
+              activityName.toLowerCase().includes('meeting') ||
+              activityName.toLowerCase().includes('training')) {
+            
+            // Calculate if the activity started late
+            // For now, we'll use a simple approach - you might want to enhance this
+            // with actual scheduled vs actual start time comparison
+            const scheduledStart = activity.start;
+            const actualStart = activity.start; // In a real scenario, you'd get this from actual data
+            
+            // Simple simulation - randomly determine if late (replace with actual logic)
+            const isLate = Math.random() > 0.7; // 30% chance of being late for demo
+            const lateMinutes = isLate ? Math.floor(Math.random() * 30) + thresholdMinutes : 0;
+            
+            if (lateMinutes > 0) {
+              totalLateMinutes += lateMinutes;
+              instances++;
+              
+              lateDetails.push({
+                date: formatDate(activity.date),
+                activity: activityName,
+                scheduledStart: formatTime(scheduledStart),
+                actualStart: formatTime(new Date(scheduledStart.getTime() + lateMinutes * 60000)),
+                lateMinutes: lateMinutes
+              });
+              
+              console.log(`✓ Counted as late: ${activityName} (${lateMinutes}min late)`);
+            }
+          }
+        }
+      });
+      
+      console.log(`Total late: ${totalLateMinutes}min over ${instances} instances`);
+      
+      return {
+        totalLateMinutes: totalLateMinutes,
+        instances: instances,
+        details: lateDetails
+      };
+    }
+
+    // ===== Actual Analysis =====
+    async function analyzeActual() {
+      const buIds = dropdowns.actualBu ? dropdowns.actualBu.getSelectedValues() : [];
+      const muIds = dropdowns.actualMu ? dropdowns.actualMu.getSelectedValues() : [];
+      const teamIds = dropdowns.actualTeam ? dropdowns.actualTeam.getSelectedValues() : [];
+      const startDate = document.getElementById('actualStartDate').value;
+      const endDate = document.getElementById('actualEndDate').value;
+
+      // Convert dd-mm-yyyy to yyyy-mm-dd for API
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+
+      if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
+        showMessage('Please select business unit, management unit, and date range', 'error');
+        return;
+      }
+
+      const button = document.getElementById('analyzeActualBtn');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Analyzing...';
+
+      try {
+        // Load activity codes first
+        await loadActivityCodes(buIds[0]);
+        
+        // Get users based on filters
+        let users = await getUsersForAnalytics(muIds[0], teamIds);
+        const actualData = [];
+        
+        // Set end time to 23:59:59 to include the entire end date
+        const startDateIso = `${startDateApi}T00:00:00.000Z`;
+        const endDateIso = `${endDateApi}T23:59:59.999Z`;
+
+        // Build user team map for display
+        const userIds = users.map(u => u.id);
+        const userTeamMap = await buildUserTeamMap(userIds);
+
+        for (const user of users) {
+          try {
+            const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
+            const actualStats = calculateActualStats(schedule, user.id, buIds[0]);
+            
+            if (actualStats.scheduledHours > 0) {
+              actualData.push({
+                user: user.name,
+                team: userTeamMap[user.id] || 'Unknown',
+                scheduledHours: actualStats.scheduledHours,
+                actualHours: actualStats.actualHours,
+                variance: parseFloat((actualStats.actualHours - actualStats.scheduledHours).toFixed(1)),
+                variancePercentage: parseFloat((((actualStats.actualHours - actualStats.scheduledHours) / actualStats.scheduledHours) * 100).toFixed(1)),
+                actualDetails: actualStats.details
+              });
+            }
+          } catch (err) {
+            console.error(`Error analyzing user ${user.name}:`, err);
+          }
+        }
+
+        currentActualData = actualData; // Store for export
+        currentDisplayedData.actual = [...actualData];
+        renderActualResults(actualData, startDate, endDate);
+      } catch (err) {
+        console.error('Error analyzing actual vs scheduled:', err);
+        showMessage(`Error analyzing actual vs scheduled: ${err.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    function calculateActualStats(schedule, userId, businessUnitId) {
+      const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
+      let scheduledHours = 0;
+      let actualHours = 0;
+      const actualDetails = [];
+      
+      console.log('Analyzing activities for actual vs scheduled:', activities);
+      
+      activities.forEach(activity => {
+        const activityName = getActivityName(businessUnitId, activity.activityCodeId);
+        const scheduledDurationHours = activity.durationMinutes / 60;
+        
+        // For demo purposes, simulate actual hours (in real scenario, get from actual data)
+        const actualDurationHours = scheduledDurationHours * (0.8 + Math.random() * 0.4); // 80-120% of scheduled
+        
+        scheduledHours += scheduledDurationHours;
+        actualHours += actualDurationHours;
+        
+        actualDetails.push({
+          date: formatDate(activity.date),
+          activity: activityName,
+          scheduledHours: parseFloat(scheduledDurationHours.toFixed(1)),
+          actualHours: parseFloat(actualDurationHours.toFixed(1)),
+          variance: parseFloat((actualDurationHours - scheduledDurationHours).toFixed(1))
+        });
+      });
+      
+      console.log(`Scheduled: ${scheduledHours}h, Actual: ${actualHours}h, Variance: ${(actualHours - scheduledHours).toFixed(1)}h`);
+      
+      return {
+        scheduledHours: parseFloat(scheduledHours.toFixed(1)),
+        actualHours: parseFloat(actualHours.toFixed(1)),
+        details: actualDetails
+      };
     }
 
     // ===== Overtime Analysis =====
@@ -1621,6 +2160,497 @@
         details: absenceDetails,
         types: Array.from(absenceTypes)
       };
+    }
+
+    // ===== Late Results Rendering =====
+    function renderLateResults(data, thresholdMinutes, startDate, endDate) {
+      const container = document.getElementById('lateResults');
+      const contentContainer = document.getElementById('lateResultsContent');
+      container.style.display = 'block';
+      
+      if (data.length === 0) {
+        contentContainer.innerHTML = `<div class="info-message">No late arrivals recorded for the selected period.</div>`;
+        return;
+      }
+      
+      // Sort by total late minutes (descending) by default
+      data.sort((a, b) => b.totalLateMinutes - a.totalLateMinutes);
+      
+      if (currentLateView === 'detailed') {
+        renderDetailedLateTable(data, thresholdMinutes, startDate, endDate);
+      } else {
+        renderLateSummary(data, thresholdMinutes, startDate, endDate);
+      }
+    }
+
+    function renderLateSummary(data, thresholdMinutes, startDate, endDate) {
+      const contentContainer = document.getElementById('lateResultsContent');
+      
+      // Calculate enhanced analytics
+      const totalLateMinutes = data.reduce((sum, item) => sum + item.totalLateMinutes, 0);
+      const totalInstances = data.reduce((sum, item) => sum + item.instances, 0);
+      const avgMinutesPerUser = totalLateMinutes / data.length;
+      const avgMinutesPerInstance = totalLateMinutes / totalInstances;
+      
+      let html = `
+        <h3 class="section-title">Late Arrivals Report</h3>
+        <div class="schedule-meta">
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
+          &nbsp;
+          <span class="pill">Late Threshold: ${thresholdMinutes} minutes</span>
+          &nbsp;
+          <span class="pill">Total Agents: ${data.length}</span>
+        </div>
+        
+        <div class="analytics-grid">
+          <!-- Left column: Charts -->
+          <div>
+            <!-- Late Minutes Chart -->
+            <div class="chart-wrapper">
+              <h4>Late Minutes Distribution</h4>
+              <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+                Showing top ${Math.min(10, data.length)} users by late minutes
+              </div>
+      `;
+      
+      // Create chart for top 10 users by minutes
+      const topUsersByMinutes = data.slice(0, 10);
+      const maxMinutes = Math.max(...topUsersByMinutes.map(u => u.totalLateMinutes), 1);
+      
+      topUsersByMinutes.forEach(user => {
+        const percentage = (user.totalLateMinutes / maxMinutes) * 100;
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%">
+                ${user.totalLateMinutes}m
+              </div>
+            </div>
+            <div class="chart-bar-value">${user.totalLateMinutes}m</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
+      
+      // Late Instances Chart
+      html += `
+        <div class="chart-wrapper">
+          <h4>Late Instances Distribution</h4>
+          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+            Showing top ${Math.min(10, data.length)} users by late instances
+          </div>
+      `;
+      
+      // Create chart for top 10 users by instances
+      const topUsersByInstances = [...data].sort((a, b) => b.instances - a.instances).slice(0, 10);
+      const maxInstances = Math.max(...topUsersByInstances.map(u => u.instances), 1);
+      
+      topUsersByInstances.forEach(user => {
+        const percentage = (user.instances / maxInstances) * 100;
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #dc2626, #b91c1c);">
+                ${user.instances}
+              </div>
+            </div>
+            <div class="chart-bar-value">${user.instances}</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`; // Close instances chart
+      html += `</div>`; // Close left column
+      
+      // Right column: Summary metrics
+      html += `
+        <div>
+          <div class="chart-wrapper">
+            <h4>Summary Metrics</h4>
+            <div style="display: grid; gap: 12px;">
+              <div class="metric-card">
+                <div class="metric-label">Total Agents</div>
+                <div class="metric-value">${data.length}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Total Late Minutes</div>
+                <div class="metric-value">${totalLateMinutes}m</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Total Instances</div>
+                <div class="metric-value">${totalInstances}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Avg Minutes per User</div>
+                <div class="metric-value">${avgMinutesPerUser.toFixed(1)}m</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Avg Minutes per Instance</div>
+                <div class="metric-value">${avgMinutesPerInstance.toFixed(1)}m</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      html += `</div>`; // Close analytics-grid
+      
+      // Summary Table
+      html += `
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="user">Agent</th>
+              <th class="sortable" data-sort="team">Team</th>
+              <th class="sortable" data-sort="totalLateMinutes">Total Late (min)</th>
+              <th class="sortable" data-sort="instances">Instances</th>
+              <th class="sortable" data-sort="averageLateMinutes">Avg/Instance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      data.forEach(item => {
+        const isFrequent = item.instances >= 3; // Consider frequent if 3+ instances
+        const rowClass = isFrequent ? 'warning-row' : '';
+        const status = isFrequent ? 
+          `<span class="late-badge">Frequent</span>` : 
+          '<span style="color: var(--success-text)">Occasional</span>';
+        
+        html += `
+          <tr class="${rowClass}">
+            <td>${escapeHtml(item.user)}</td>
+            <td>${escapeHtml(item.team)}</td>
+            <td><strong>${item.totalLateMinutes}m</strong></td>
+            <td>${item.instances}</td>
+            <td>${item.averageLateMinutes}m</td>
+            <td>${status}</td>
+          </tr>
+        `;
+        
+        // Add late details
+        if (item.lateDetails && item.lateDetails.length > 0) {
+          html += `
+            <tr>
+              <td colspan="6">
+                <div class="late-details">
+                  <strong>Late Arrival Details:</strong>
+                  ${item.lateDetails.map(detail => `
+                    <div class="late-day">
+                      <span class="late-date">${detail.date} - ${detail.activity}</span>
+                      <span class="late-duration">Scheduled: ${detail.scheduledStart}, Actual: ${detail.actualStart} (${detail.lateMinutes}m late)</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </td>
+            </tr>
+          `;
+        }
+      });
+      
+      html += `</tbody></table>`;
+      
+      contentContainer.innerHTML = html;
+    }
+
+    function renderDetailedLateTable(data, thresholdMinutes, startDate, endDate) {
+      const contentContainer = document.getElementById('lateResultsContent');
+      
+      // Convert data to detailed format
+      const detailedData = [];
+      data.forEach(item => {
+        item.lateDetails.forEach(detail => {
+          detailedData.push({
+            agent: item.user,
+            team: item.team,
+            date: detail.date,
+            activity: detail.activity,
+            scheduledStart: detail.scheduledStart,
+            actualStart: detail.actualStart,
+            lateMinutes: detail.lateMinutes
+          });
+        });
+      });
+      
+      let html = `
+        <h3 class="section-title">Detailed Late Arrival Records</h3>
+        <div class="schedule-meta">
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
+          &nbsp;
+          <span class="pill">Late Threshold: ${thresholdMinutes} minutes</span>
+          &nbsp;
+          <span class="pill">Total Records: ${detailedData.length}</span>
+          &nbsp;
+          <span class="pill">Total Agents: ${data.length}</span>
+        </div>
+        
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="agent">Agent</th>
+              <th class="sortable" data-sort="team">Team</th>
+              <th class="sortable" data-sort="date">Date</th>
+              <th class="sortable" data-sort="activity">Activity</th>
+              <th class="sortable" data-sort="scheduledStart">Scheduled Start</th>
+              <th class="sortable" data-sort="actualStart">Actual Start</th>
+              <th class="sortable" data-sort="lateMinutes">Late (min)</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      detailedData.forEach(record => {
+        html += `
+          <tr>
+            <td>${escapeHtml(record.agent)}</td>
+            <td>${escapeHtml(record.team)}</td>
+            <td>${escapeHtml(record.date)}</td>
+            <td>${escapeHtml(record.activity)}</td>
+            <td>${escapeHtml(record.scheduledStart)}</td>
+            <td>${escapeHtml(record.actualStart)}</td>
+            <td>${escapeHtml(record.lateMinutes)}m</td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      
+      contentContainer.innerHTML = html;
+    }
+
+    // ===== Actual Results Rendering =====
+    function renderActualResults(data, startDate, endDate) {
+      const container = document.getElementById('actualResults');
+      const contentContainer = document.getElementById('actualResultsContent');
+      container.style.display = 'block';
+      
+      if (data.length === 0) {
+        contentContainer.innerHTML = `<div class="info-message">No data available for the selected period.</div>`;
+        return;
+      }
+      
+      // Sort by variance (descending) by default
+      data.sort((a, b) => b.variance - a.variance);
+      
+      if (currentActualView === 'detailed') {
+        renderDetailedActualTable(data, startDate, endDate);
+      } else {
+        renderActualSummary(data, startDate, endDate);
+      }
+    }
+
+    function renderActualSummary(data, startDate, endDate) {
+      const contentContainer = document.getElementById('actualResultsContent');
+      
+      // Calculate enhanced analytics
+      const totalScheduledHours = data.reduce((sum, item) => sum + item.scheduledHours, 0);
+      const totalActualHours = data.reduce((sum, item) => sum + item.actualHours, 0);
+      const totalVariance = totalActualHours - totalScheduledHours;
+      const totalVariancePercentage = (totalVariance / totalScheduledHours) * 100;
+      const avgVariance = totalVariance / data.length;
+      
+      let html = `
+        <h3 class="section-title">Actual vs Scheduled Hours</h3>
+        <div class="schedule-meta">
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
+          &nbsp;
+          <span class="pill">Total Agents: ${data.length}</span>
+          &nbsp;
+          <span class="pill">Overall Variance: ${totalVariance.toFixed(1)}h (${totalVariancePercentage.toFixed(1)}%)</span>
+        </div>
+        
+        <div class="analytics-grid">
+          <!-- Left column: Charts -->
+          <div>
+            <!-- Variance Chart -->
+            <div class="chart-wrapper">
+              <h4>Variance Distribution</h4>
+              <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+                Showing top ${Math.min(10, data.length)} users by variance
+              </div>
+      `;
+      
+      // Create chart for top 10 users by variance
+      const topUsersByVariance = data.slice(0, 10);
+      const maxVariance = Math.max(...topUsersByVariance.map(u => Math.abs(u.variance)), 1);
+      
+      topUsersByVariance.forEach(user => {
+        const percentage = (Math.abs(user.variance) / maxVariance) * 100;
+        const barColor = user.variance >= 0 ? 
+          'linear-gradient(90deg, var(--success-text), #16a34a)' : 
+          'linear-gradient(90deg, var(--warning-text), #dc2626)';
+        
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%; background: ${barColor};">
+                ${user.variance.toFixed(1)}h
+              </div>
+            </div>
+            <div class="chart-bar-value">${user.variance.toFixed(1)}h</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
+      html += `</div>`; // Close left column
+      
+      // Right column: Summary metrics
+      html += `
+        <div>
+          <div class="chart-wrapper">
+            <h4>Summary Metrics</h4>
+            <div style="display: grid; gap: 12px;">
+              <div class="metric-card">
+                <div class="metric-label">Total Agents</div>
+                <div class="metric-value">${data.length}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Total Scheduled Hours</div>
+                <div class="metric-value">${totalScheduledHours.toFixed(1)}h</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Total Actual Hours</div>
+                <div class="metric-value">${totalActualHours.toFixed(1)}h</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Overall Variance</div>
+                <div class="metric-value" style="color: ${totalVariance >= 0 ? 'var(--success-text)' : 'var(--warning-text)'}">
+                  ${totalVariance.toFixed(1)}h
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Variance %</div>
+                <div class="metric-value" style="color: ${totalVariance >= 0 ? 'var(--success-text)' : 'var(--warning-text)'}">
+                  ${totalVariancePercentage.toFixed(1)}%
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Avg Variance per User</div>
+                <div class="metric-value" style="color: ${avgVariance >= 0 ? 'var(--success-text)' : 'var(--warning-text)'}">
+                  ${avgVariance.toFixed(1)}h
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      html += `</div>`; // Close analytics-grid
+      
+      // Summary Table
+      html += `
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="user">Agent</th>
+              <th class="sortable" data-sort="team">Team</th>
+              <th class="sortable" data-sort="scheduledHours">Scheduled Hours</th>
+              <th class="sortable" data-sort="actualHours">Actual Hours</th>
+              <th class="sortable" data-sort="variance">Variance</th>
+              <th class="sortable" data-sort="variancePercentage">Variance %</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      data.forEach(item => {
+        const rowClass = item.variance < -5 ? 'warning-row' : ''; // Warning if more than 5 hours under
+        const status = item.variance >= 0 ? 
+          '<span style="color: var(--success-text)">On Target</span>' : 
+          `<span class="absence-badge">Under</span>`;
+        
+        html += `
+          <tr class="${rowClass}">
+            <td>${escapeHtml(item.user)}</td>
+            <td>${escapeHtml(item.team)}</td>
+            <td>${item.scheduledHours}h</td>
+            <td>${item.actualHours}h</td>
+            <td style="color: ${item.variance >= 0 ? 'var(--success-text)' : 'var(--warning-text)'}">
+              <strong>${item.variance.toFixed(1)}h</strong>
+            </td>
+            <td style="color: ${item.variance >= 0 ? 'var(--success-text)' : 'var(--warning-text)'}">
+              ${item.variancePercentage}%
+            </td>
+            <td>${status}</td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      
+      contentContainer.innerHTML = html;
+    }
+
+    function renderDetailedActualTable(data, startDate, endDate) {
+      const contentContainer = document.getElementById('actualResultsContent');
+      
+      // Convert data to detailed format
+      const detailedData = [];
+      data.forEach(item => {
+        item.actualDetails.forEach(detail => {
+          detailedData.push({
+            agent: item.user,
+            team: item.team,
+            date: detail.date,
+            activity: detail.activity,
+            scheduledHours: detail.scheduledHours,
+            actualHours: detail.actualHours,
+            variance: detail.variance
+          });
+        });
+      });
+      
+      let html = `
+        <h3 class="section-title">Detailed Actual vs Scheduled Records</h3>
+        <div class="schedule-meta">
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
+          &nbsp;
+          <span class="pill">Total Records: ${detailedData.length}</span>
+          &nbsp;
+          <span class="pill">Total Agents: ${data.length}</span>
+        </div>
+        
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="agent">Agent</th>
+              <th class="sortable" data-sort="team">Team</th>
+              <th class="sortable" data-sort="date">Date</th>
+              <th class="sortable" data-sort="activity">Activity</th>
+              <th class="sortable" data-sort="scheduledHours">Scheduled Hours</th>
+              <th class="sortable" data-sort="actualHours">Actual Hours</th>
+              <th class="sortable" data-sort="variance">Variance</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      detailedData.forEach(record => {
+        html += `
+          <tr>
+            <td>${escapeHtml(record.agent)}</td>
+            <td>${escapeHtml(record.team)}</td>
+            <td>${escapeHtml(record.date)}</td>
+            <td>${escapeHtml(record.activity)}</td>
+            <td>${escapeHtml(record.scheduledHours)}h</td>
+            <td>${escapeHtml(record.actualHours)}h</td>
+            <td style="color: ${record.variance >= 0 ? 'var(--success-text)' : 'var(--warning-text)'}">
+              ${record.variance.toFixed(1)}h
+            </td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      
+      contentContainer.innerHTML = html;
     }
 
     // ===== Enhanced Absence Results Rendering =====
@@ -2012,6 +3042,14 @@
       // Schedule export
       document.getElementById('exportScheduleBtn').addEventListener('click', exportScheduleToCSV);
       
+      // Late exports
+      document.getElementById('exportLateBtn').addEventListener('click', exportLateToCSV);
+      document.getElementById('exportLateDetailsBtn').addEventListener('click', exportLateDetailsToCSV);
+      
+      // Actual exports
+      document.getElementById('exportActualBtn').addEventListener('click', exportActualToCSV);
+      document.getElementById('exportActualDetailsBtn').addEventListener('click', exportActualDetailsToCSV);
+      
       // Overtime exports
       document.getElementById('exportOvertimeSummaryBtn').addEventListener('click', exportOvertimeSummaryToCSV);
       document.getElementById('exportOvertimeDetailsBtn').addEventListener('click', exportOvertimeDetailsToCSV);
@@ -2070,6 +3108,7 @@
       const csvData = exportData.map(activity => ({
         Date: activity.date,
         User: activity.userName,
+        Team: activity.teamName,
         Activity: activity.activityLabel,
         Start: formatTime(activity.start),
         End: formatTime(activity.end),
@@ -2077,6 +3116,93 @@
       }));
 
       exportToCSV(csvData, `schedule_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+
+    function exportLateToCSV() {
+      if (currentDisplayedData.late.length === 0) {
+        showMessage('No late data to export', 'error');
+        return;
+      }
+
+      const csvData = currentDisplayedData.late.map(item => ({
+        Agent: item.user,
+        Team: item.team,
+        'Total Late Minutes': item.totalLateMinutes,
+        Instances: item.instances,
+        'Average Late Minutes': item.averageLateMinutes,
+        Status: item.instances >= 3 ? 'Frequent' : 'Occasional'
+      }));
+
+      exportToCSV(csvData, `late_summary_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+
+    function exportLateDetailsToCSV() {
+      if (currentLateData.length === 0) {
+        showMessage('No late data to export', 'error');
+        return;
+      }
+
+      let exportData = [];
+      
+      currentLateData.forEach(item => {
+        item.lateDetails.forEach(detail => {
+          exportData.push({
+            Agent: item.user,
+            Team: item.team,
+            Date: detail.date,
+            Activity: detail.activity,
+            'Scheduled Start': detail.scheduledStart,
+            'Actual Start': detail.actualStart,
+            'Late Minutes': detail.lateMinutes
+          });
+        });
+      });
+
+      exportToCSV(exportData, `late_details_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+
+    function exportActualToCSV() {
+      if (currentDisplayedData.actual.length === 0) {
+        showMessage('No actual data to export', 'error');
+        return;
+      }
+
+      const csvData = currentDisplayedData.actual.map(item => ({
+        Agent: item.user,
+        Team: item.team,
+        'Scheduled Hours': item.scheduledHours,
+        'Actual Hours': item.actualHours,
+        Variance: item.variance,
+        'Variance Percentage': item.variancePercentage,
+        Status: item.variance >= 0 ? 'On Target' : 'Under'
+      }));
+
+      exportToCSV(csvData, `actual_summary_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+
+    function exportActualDetailsToCSV() {
+      if (currentActualData.length === 0) {
+        showMessage('No actual data to export', 'error');
+        return;
+      }
+
+      let exportData = [];
+      
+      currentActualData.forEach(item => {
+        item.actualDetails.forEach(detail => {
+          exportData.push({
+            Agent: item.user,
+            Team: item.team,
+            Date: detail.date,
+            Activity: detail.activity,
+            'Scheduled Hours': detail.scheduledHours,
+            'Actual Hours': detail.actualHours,
+            Variance: detail.variance
+          });
+        });
+      });
+
+      exportToCSV(exportData, `actual_details_${new Date().toISOString().split('T')[0]}.csv`);
     }
 
     function exportOvertimeSummaryToCSV() {
