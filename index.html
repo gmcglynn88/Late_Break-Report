@@ -714,6 +714,7 @@
     let allUsers = [];
     let usersById = {};
     let allTeams = [];
+    let teamsById = {};
     let activityCodesByBuId = {};
     let businessUnits = [];
     let managementUnits = [];
@@ -1332,9 +1333,19 @@
 
         allUsers = (users || []).filter(u => !u.deleted);
         usersById = {};
-        allUsers.forEach(u => { usersById[u.id] = u; });
+        allUsers.forEach(u => { 
+          usersById[u.id] = u;
+          // Add team information to users
+          if (u.teams && u.teams.length > 0) {
+            u.teamNames = u.teams.map(team => team.name).join(', ');
+          }
+        });
+        
         businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
+        
         allTeams = teams || [];
+        teamsById = {};
+        allTeams.forEach(t => { teamsById[t.id] = t; });
 
         populateUserDropdown(allUsers);
         populateBusinessUnitDropdown(businessUnits);
@@ -1364,7 +1375,11 @@
     function populateUserDropdown(users) {
       const validUsers = users
         .filter(u => u.name && u.name.trim() && u.name !== 'Unknown User')
-        .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
+        .map(u => ({ 
+          value: u.id, 
+          label: u.name || u.email || 'Unknown User',
+          teamNames: u.teamNames || 'No Team'
+        }))
         .sort((a,b)=>a.label.localeCompare(b.label));
       
       if (dropdowns.user) {
@@ -1449,7 +1464,14 @@
           `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
         );
         const list = muUsersResponse.entities || muUsersResponse.users || [];
-        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
+        const enriched = list.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          // Add team information
+          if (user.teams && user.teams.length > 0) {
+            user.teamNames = user.teams.map(team => teamsById[team.id]?.name || team.id).join(', ');
+          }
+          return user;
+        });
         console.log(`Loaded ${enriched.length} users for management unit ${selectedMuIds[0]}`);
         populateUserDropdown(enriched);
       } catch (err) {
@@ -1522,12 +1544,23 @@
         const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
                     : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
                     : [];
-        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
+        const enriched = list.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          // Add team information
+          if (user.teams && user.teams.length > 0) {
+            user.teamNames = user.teams.map(team => teamsById[team.id]?.name || team.id).join(', ');
+          }
+          return user;
+        });
         console.log(`Loaded ${enriched.length} users for actual activity management unit ${selectedMuIds[0]}`);
         
         const validUsers = enriched
           .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
+          .map(u => ({ 
+            value: u.id, 
+            label: u.name || u.email || 'Unknown User',
+            teamNames: u.teamNames || 'No Team'
+          }))
           .sort((a,b)=>a.label.localeCompare(b.label));
         
         if (dropdowns.actualUser) {
@@ -1556,12 +1589,23 @@
         const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
                     : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
                     : [];
-        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
+        const enriched = list.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          // Add team information
+          if (user.teams && user.teams.length > 0) {
+            user.teamNames = user.teams.map(team => teamsById[team.id]?.name || team.id).join(', ');
+          }
+          return user;
+        });
         console.log(`Loaded ${enriched.length} users for late report management unit ${selectedMuIds[0]}`);
         
         const validUsers = enriched
           .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
+          .map(u => ({ 
+            value: u.id, 
+            label: u.name || u.email || 'Unknown User',
+            teamNames: u.teamNames || 'No Team'
+          }))
           .sort((a,b)=>a.label.localeCompare(b.label));
         
         if (dropdowns.lateUser) {
@@ -1847,7 +1891,8 @@
               activityCodeId: activity.activityCodeId,
               type: 'shift',
               userId: userId,
-              userName: usersById[userId]?.name || userId
+              userName: usersById[userId]?.name || userId,
+              teamNames: usersById[userId]?.teamNames || 'No Team'
             });
           });
         });
@@ -1878,7 +1923,8 @@
             activityCodeId: marker.activityCodeId,
             type: 'fullDayOff',
             userId: userId,
-            userName: usersById[userId]?.name || userId
+            userName: usersById[userId]?.name || userId,
+            teamNames: usersById[userId]?.teamNames || 'No Team'
           });
         });
       }
@@ -1918,6 +1964,7 @@
             <thead>
               <tr>
                 <th class="sortable" data-sort="userName">User</th>
+                <th class="sortable" data-sort="teamNames">Team</th>
                 <th class="sortable" data-sort="date">Date</th>
                 <th class="sortable" data-sort="activityLabel">Activity</th>
                 <th>Start</th>
@@ -1931,6 +1978,7 @@
           html += `
             <tr>
               <td>${escapeHtml(row.userName)}</td>
+              <td>${escapeHtml(row.teamNames || 'No Team')}</td>
               <td>${escapeHtml(row.date)}</td>
               <td>${escapeHtml(row.activityLabel || '')}</td>
               <td>${escapeHtml(formatTime(row.start))}</td>
@@ -1964,6 +2012,7 @@
           <thead>
             <tr>
               <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="teamNames">Team</th>
               <th class="sortable" data-sort="date">Date</th>
               <th class="sortable" data-sort="activityLabel">Activity</th>
               <th>Start</th>
@@ -1978,6 +2027,7 @@
         html += `
           <tr>
             <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
             <td>${escapeHtml(row.date)}</td>
             <td>${escapeHtml(row.activityLabel || '')}</td>
             <td>${escapeHtml(formatTime(row.start))}</td>
@@ -1992,14 +2042,17 @@
       contentContainer.querySelector('table').outerHTML = html;
     }
 
-    // ===== CORS Proxy Solution =====
+    // ===== Enhanced CORS Proxy Solution =====
     async function fetchWithCorsProxy(url) {
-      // Try multiple CORS proxy options
+      // Try multiple CORS proxy options with better error handling
       const proxyUrls = [
         `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
         `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        `https://cors-anywhere.herokuapp.com/${url}`
+        `https://cors-anywhere.herokuapp.com/${url}`,
+        `https://cors.bridged.cc/${url}`
       ];
+      
+      let lastError = null;
       
       for (const proxyUrl of proxyUrls) {
         try {
@@ -2008,21 +2061,46 @@
             method: 'GET',
             headers: {
               'Accept': 'application/json',
-            }
+            },
+            timeout: 10000 // 10 second timeout
           });
           
           if (response.ok) {
             const data = await response.json();
             console.log('Successfully fetched data via CORS proxy');
             return data;
+          } else {
+            console.warn(`CORS proxy returned non-OK status: ${response.status}`);
+            lastError = new Error(`Proxy returned status: ${response.status}`);
           }
         } catch (err) {
           console.warn(`CORS proxy failed: ${err.message}`);
+          lastError = err;
           continue;
         }
       }
       
-      throw new Error('All CORS proxies failed');
+      // If all proxies fail, try direct fetch as last resort
+      try {
+        console.log('All CORS proxies failed, trying direct fetch...');
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Successfully fetched data directly');
+          return data;
+        } else {
+          throw new Error(`Direct fetch failed with status: ${response.status}`);
+        }
+      } catch (directErr) {
+        console.error('Direct fetch also failed:', directErr);
+        throw new Error(`All CORS proxies failed and direct fetch also failed: ${lastError?.message || directErr.message}`);
+      }
     }
 
     // ===== Actual Activity Functions =====
@@ -2193,6 +2271,7 @@
             data.data.forEach(userData => {
               if (userData.actuals && userData.actuals.length > 0) {
                 const userName = usersById[userData.userId]?.name || userData.userId;
+                const teamNames = usersById[userData.userId]?.teamNames || 'No Team';
                 const startDate = new Date(userData.startDate);
                 
                 userData.actuals.forEach(actual => {
@@ -2219,6 +2298,7 @@
                   allActualActivities.push({
                     userId: userData.userId,
                     userName: userName,
+                    teamNames: teamNames,
                     date: formatDate(startTime.toISOString().slice(0, 10)),
                     startTime: startTime,
                     endTime: endTime,
@@ -2281,6 +2361,7 @@
           <thead>
             <tr>
               <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="teamNames">Team</th>
               <th class="sortable" data-sort="date">Date</th>
               <th class="sortable" data-sort="activityLabel">Activity</th>
               <th>Start Time</th>
@@ -2295,6 +2376,7 @@
         html += `
           <tr>
             <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
             <td>${escapeHtml(row.date)}</td>
             <td>${escapeHtml(row.activityLabel || '')}</td>
             <td>${escapeHtml(formatTime(row.startTime))}</td>
@@ -2404,6 +2486,7 @@
               console.log(`Found overtime for ${user.name}: ${userOvertime.totalHours}h`);
               overtimeData.push({
                 user: user.name,
+                teamNames: user.teamNames || 'No Team',
                 totalHours: userOvertime.totalHours,
                 rate1Hours: userOvertime.rate1Hours,
                 rate1_5Hours: userOvertime.rate1_5Hours,
@@ -2448,7 +2531,14 @@
         users = muUsersResponse.entities || muUsersResponse.users || [];
       }
       
-      return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
+      return users.map(uRef => {
+        const user = usersById[uRef.id] || uRef;
+        // Add team information
+        if (user.teams && user.teams.length > 0) {
+          user.teamNames = user.teams.map(team => teamsById[team.id]?.name || team.id).join(', ');
+        }
+        return user;
+      }).filter(u => u && u.name);
     }
 
     async function getTeamMembers(teamId) {
@@ -2479,10 +2569,15 @@
         
         console.log(`Activity: "${activityName}", Category: "${activityCategory}", Duration: ${activity.durationMinutes}min`);
         
-        // Check if it's overtime based on name or category - ONLY include overtime activities
+        // Enhanced overtime detection - look for overtime indicators in name or category
         const isOvertime = activityName.toLowerCase().includes('overtime') || 
                           activityCategory.toLowerCase().includes('overtime') ||
-                          activityName.toLowerCase().includes('ot ');
+                          activityName.toLowerCase().includes('ot ') ||
+                          activityName.toLowerCase().includes('o/t') ||
+                          activityName.toLowerCase().includes('1.5') ||
+                          activityName.toLowerCase().includes('2.0') ||
+                          activityName.toLowerCase().includes('timehalf') ||
+                          activityName.toLowerCase().includes('double');
         
         if (isOvertime) {
           const hours = activity.durationMinutes / 60;
@@ -2622,6 +2717,7 @@
           <thead>
             <tr>
               <th class="sortable" data-sort="user">Agent</th>
+              <th class="sortable" data-sort="teamNames">Team</th>
               <th class="sortable" data-sort="totalHours">Total Overtime</th>
               <th class="sortable" data-sort="rate1Hours">1.0 Rate</th>
               <th class="sortable" data-sort="rate1_5Hours">1.5 Rate</th>
@@ -2635,6 +2731,7 @@
         html += `
           <tr>
             <td>${escapeHtml(item.user)}</td>
+            <td>${escapeHtml(item.teamNames || 'No Team')}</td>
             <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
             <td>${item.rate1Hours.toFixed(1)}h</td>
             <td>${item.rate1_5Hours.toFixed(1)}h</td>
@@ -2703,6 +2800,7 @@
               const thresholdHours = thresholdDays * 8;
               absenceData.push({
                 user: user.name,
+                teamNames: user.teamNames || 'No Team',
                 totalHours: absenceStats.totalHours,
                 absenceDays: absenceStats.days,
                 instances: absenceStats.instances,
@@ -2744,16 +2842,20 @@
         
         console.log(`Activity: ${activityName}, Category: ${activityCategory}, Code: ${activity.activityCodeId}, Duration: ${activity.durationMinutes}min`);
         
-        // Check if it's absence based on category or name, but EXCLUDE Holiday and TOIL
+        // Enhanced absence detection - look for absence indicators but exclude holidays and TOIL
         const isAbsence = (activity.type === 'fullDayOff' || 
                          activityCategory === 'TimeOff' ||
                          activityName.includes('Time Off') || 
                          activityName.includes('Sick') || 
                          activityName.includes('Absence') || 
                          activityName.includes('Vacation') ||
-                         activityName.includes('Leave')) &&
+                         activityName.includes('Leave') ||
+                         activityName.includes('Personal') ||
+                         activityName.includes('Family') ||
+                         activityName.includes('Medical')) &&
                          !activityName.includes('Holiday') &&
-                         !activityName.includes('TOIL');
+                         !activityName.includes('TOIL') &&
+                         !activityName.includes('Bank Holiday');
         
         if (isAbsence) {
           totalHours += activity.durationMinutes / 60;
@@ -2977,6 +3079,7 @@
           <thead>
             <tr>
               <th class="sortable" data-sort="user">Agent</th>
+              <th class="sortable" data-sort="teamNames">Team</th>
               <th class="sortable" data-sort="totalHours">Total Hours</th>
               <th class="sortable" data-sort="absenceDays">Days</th>
               <th class="sortable" data-sort="instances">Instances</th>
@@ -2999,6 +3102,7 @@
         html += `
           <tr class="${rowClass}">
             <td>${escapeHtml(item.user)}</td>
+            <td>${escapeHtml(item.teamNames || 'No Team')}</td>
             <td><strong>${item.totalHours}h</strong></td>
             <td>${item.absenceDays}</td>
             <td>${item.instances}</td>
@@ -3011,7 +3115,7 @@
         if (item.absenceDetails && item.absenceDetails.length > 0) {
           html += `
             <tr>
-              <td colspan="6">
+              <td colspan="7">
                 <div class="absence-details">
                   <strong>Absence Details:</strong>
                   ${item.absenceDetails.map(detail => `
@@ -3048,6 +3152,7 @@
         item.absenceDetails.forEach(detail => {
           detailedData.push({
             agent: item.user,
+            team: item.teamNames || 'No Team',
             date: detail.date,
             type: detail.type,
             duration: detail.duration,
@@ -3072,6 +3177,7 @@
           <thead>
             <tr>
               <th class="sortable" data-sort="agent">Agent</th>
+              <th class="sortable" data-sort="team">Team</th>
               <th class="sortable" data-sort="date">Date</th>
               <th class="sortable" data-sort="type">Absence Type</th>
               <th class="sortable" data-sort="duration">Duration</th>
@@ -3085,6 +3191,7 @@
         html += `
           <tr>
             <td>${escapeHtml(record.agent)}</td>
+            <td>${escapeHtml(record.team)}</td>
             <td>${escapeHtml(record.date)}</td>
             <td>${escapeHtml(record.type)}</td>
             <td>${escapeHtml(record.duration)}</td>
@@ -3272,7 +3379,22 @@
       // Group schedule data by user and date to find first activity of each day
       const scheduleByUserDate = {};
       
-      scheduleData.forEach(scheduleItem => {
+      // Filter out time-off activities from schedule data
+      const filteredScheduleData = scheduleData.filter(scheduleItem => {
+        const activityName = scheduleItem.activityLabel || '';
+        const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
+        
+        // Exclude time-off activities
+        return !activityName.toLowerCase().includes('time off') &&
+               !activityName.toLowerCase().includes('holiday') &&
+               !activityName.toLowerCase().includes('sick') &&
+               !activityName.toLowerCase().includes('absence') &&
+               !activityName.toLowerCase().includes('vacation') &&
+               !activityName.toLowerCase().includes('leave') &&
+               activityCategory !== 'TimeOff';
+      });
+      
+      filteredScheduleData.forEach(scheduleItem => {
         const key = `${scheduleItem.userId}_${scheduleItem.date}`;
         if (!scheduleByUserDate[key]) {
           scheduleByUserDate[key] = [];
@@ -3280,7 +3402,7 @@
         scheduleByUserDate[key].push(scheduleItem);
       });
       
-      console.log(`Grouped schedule into ${Object.keys(scheduleByUserDate).length} user/date combinations`);
+      console.log(`Grouped schedule into ${Object.keys(scheduleByUserDate).length} user/date combinations (after filtering time-off)`);
       
       // Group actual data by user and date for easier lookup
       const actualByUserDate = {};
@@ -3316,6 +3438,7 @@
           lateReport.push({
             userId: userId,
             userName: firstScheduledActivity.userName,
+            teamNames: firstScheduledActivity.teamNames || 'No Team',
             date: date,
             scheduledStart: firstScheduledActivity.start,
             actualStart: null,
@@ -3358,6 +3481,7 @@
         lateReport.push({
           userId: userId,
           userName: firstScheduledActivity.userName,
+          teamNames: firstScheduledActivity.teamNames || 'No Team',
           date: date,
           scheduledStart: firstScheduledActivity.start,
           actualStart: firstActualActivity.startTime,
@@ -3408,6 +3532,7 @@
           <thead>
             <tr>
               <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="teamNames">Team</th>
               <th class="sortable" data-sort="date">Date</th>
               <th>Scheduled Start</th>
               <th>Actual Start</th>
@@ -3451,6 +3576,7 @@
         html += `
           <tr>
             <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
             <td>${escapeHtml(row.date)}</td>
             <td>${row.scheduledStart ? escapeHtml(formatTime(row.scheduledStart)) : 'N/A'}</td>
             <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'N/A'}</td>
@@ -3575,6 +3701,7 @@
       const csvData = exportData.map(activity => ({
         Date: activity.date,
         User: activity.userName,
+        Team: activity.teamNames || 'No Team',
         Activity: activity.activityLabel,
         Start: formatTime(activity.start),
         End: formatTime(activity.end),
@@ -3601,6 +3728,7 @@
       const csvData = exportData.map(activity => ({
         Date: activity.date,
         User: activity.userName,
+        Team: activity.teamNames || 'No Team',
         Activity: activity.activityLabel,
         Start: formatTime(activity.startTime),
         End: formatTime(activity.endTime),
@@ -3627,6 +3755,7 @@
 
       const csvData = exportData.map(item => ({
         Agent: item.user,
+        Team: item.teamNames || 'No Team',
         'Total Overtime Hours': item.totalHours,
         '1.0 Rate Hours': item.rate1Hours,
         '1.5 Rate Hours': item.rate1_5Hours,
@@ -3654,6 +3783,7 @@
         filteredActivities.forEach(activity => {
           exportData.push({
             Agent: item.user,
+            Team: item.teamNames || 'No Team',
             Date: activity.date,
             'Start Time': activity.startTime,
             'End Time': activity.endTime,
@@ -3685,6 +3815,7 @@
 
       const csvData = exportData.map(item => ({
         Agent: item.user,
+        Team: item.teamNames || 'No Team',
         'Total Absence Hours': item.totalHours,
         'Absence Days': item.absenceDays,
         Instances: item.instances,
@@ -3713,6 +3844,7 @@
         filteredDetails.forEach(detail => {
           exportData.push({
             Agent: item.user,
+            Team: item.teamNames || 'No Team',
             Date: detail.date,
             'Absence Type': detail.type,
             Duration: detail.duration,
@@ -3733,6 +3865,7 @@
       const csvData = currentDisplayedData.late.map(row => ({
         Date: row.date,
         User: row.userName,
+        Team: row.teamNames || 'No Team',
         'Scheduled Start': row.scheduledStart ? formatTime(row.scheduledStart) : 'N/A',
         'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'N/A',
         Status: row.status,
