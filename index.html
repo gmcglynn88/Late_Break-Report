@@ -3579,11 +3579,11 @@
             <td>${escapeHtml(row.teamNames || 'No Team')}</td>
             <td>${escapeHtml(row.date)}</td>
             <td>${row.scheduledStart ? escapeHtml(formatTime(row.scheduledStart)) : 'N/A'}</td>
-            <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'N/A'}</td>
+            <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'Offline'}</td>
             <td><span class="${statusClass}">${statusText}</span></td>
             <td>${durationText}</td>
             <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
-            <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
+            <td>${escapeHtml(row.actualActivity || 'Offline')}</td>
           </tr>
         `;
       });
@@ -3867,13 +3867,13 @@
         User: row.userName,
         Team: row.teamNames || 'No Team',
         'Scheduled Start': row.scheduledStart ? formatTime(row.scheduledStart) : 'N/A',
-        'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'N/A',
+        'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'Offline',
         Status: row.status,
         'Duration Late/Early': row.durationLate !== null ? 
           (row.status === 'Late' ? `+${formatDuration(Math.ceil(row.durationLate / 60))}` : 
            row.status === 'Early' ? `-${formatDuration(Math.ceil(row.durationLate / 60))}` : '0m') : 'N/A',
         'Scheduled Activity': row.scheduledActivity || 'N/A',
-        'Actual Activity': row.actualActivity || 'N/A'
+        'Actual Activity': row.actualActivity || 'Offline'
       }));
 
       exportToCSV(csvData, `late_report_${new Date().toISOString().split('T')[0]}.csv`);
