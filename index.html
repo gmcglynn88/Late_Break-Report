@@ -344,6 +344,12 @@
       border-radius: 4px;
       font-weight: 600;
     }
+    
+    /* Time of day chart styles */
+    .chart-bars-container {
+      max-height: 400px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -653,10 +659,6 @@
             <div id="lateMuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
-            <label>Team</label>
-            <div id="lateTeamDropdown" class="checkbox-dropdown"></div>
-          </div>
-          <div>
             <label>User</label>
             <div id="lateUserDropdown" class="checkbox-dropdown"></div>
           </div>
@@ -678,20 +680,42 @@
       </div>
 
       <div id="lateResults" class="card" style="display:none;">
+        <!-- Moved Team Selection Here -->
         <div class="table-controls">
-          <div class="sort-controls">
-            <label for="lateSort">Sort by:</label>
-            <select id="lateSort">
-              <option value="userName">User</option>
-              <option value="date">Date</option>
-              <option value="status">Status</option>
-              <option value="durationLate">Duration Late</option>
-            </select>
-            <select id="lateSortOrder">
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <div>
+              <label for="lateTeamSelect" style="margin-bottom: 4px; font-weight: 600;">Filter by Team</label>
+              <div id="lateTeamDropdown" class="checkbox-dropdown" style="min-width: 200px;"></div>
+            </div>
+            <div class="sort-controls">
+              <label for="lateSort">Sort by:</label>
+              <select id="lateSort">
+                <option value="userName">User</option>
+                <option value="teamName">Team</option>
+                <option value="date">Date</option>
+                <option value="status">Status</option>
+                <option value="durationLate">Duration Late</option>
+              </select>
+              <select id="lateSortOrder">
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
           </div>
+        </div>
+        
+        <!-- Late Status Drill-down -->
+        <div class="filter-activity-container">
+          <div class="filter-activity-title">Filter by Status (Click to drill down)</div>
+          <div id="lateStatusDrilldown" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+            <!-- This will be populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Time of Day Lateness Graph -->
+        <div id="timeOfDayLatenessChart" class="chart-wrapper" style="display: none;">
+          <h4>Lateness by Time of Day</h4>
+          <div id="latenessChartContent"></div>
         </div>
         
         <div class="export-buttons">
@@ -714,6 +738,7 @@
     let allUsers = [];
     let usersById = {};
     let allTeams = [];
+    let teamsById = {};
     let activityCodesByBuId = {};
     let businessUnits = [];
     let managementUnits = [];
@@ -1183,6 +1208,20 @@
       
       // Initialize sorting
       initializeSorting();
+      
+      // Late report team filtering
+      if (dropdowns.lateTeam) {
+        dropdowns.lateTeam.onSelectionChange = (selectedTeams) => {
+          let filteredData = currentDisplayedData.late;
+          if (selectedTeams.length > 0) {
+            filteredData = currentDisplayedData.late.filter(record => {
+              return selectedTeams.includes(record.teamName);
+            });
+          }
+          currentDisplayedData.late = filteredData;
+          renderLateReportResults(filteredData);
+        };
+      }
     }
 
     // ===== View Toggle =====
@@ -1335,6 +1374,8 @@
         allUsers.forEach(u => { usersById[u.id] = u; });
         businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
         allTeams = teams || [];
+        teamsById = {};
+        allTeams.forEach(t => { teamsById[t.id] = t; });
 
         populateUserDropdown(allUsers);
         populateBusinessUnitDropdown(businessUnits);
@@ -1636,11 +1677,11 @@
       }
     }
 
-    // ===== Function to get activity name from code =====
+    // ===== Improved Function to get activity name from code =====
     function getActivityName(businessUnitId, activityCodeId) {
       if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
       
-      // Default system activity codes - hardcoded
+      // Default system activity codes - hardcoded with more comprehensive list
       const systemCodes = {
         '0': 'On Queue',
         '1': 'Break', 
@@ -1649,7 +1690,15 @@
         '4': 'Off Queue',
         '5': 'Time Off',
         '6': 'Training',
-        '7': 'Agent Unavailable'
+        '7': 'Agent Unavailable',
+        '8': 'Lunch',
+        '9': 'Coaching',
+        '10': 'System',
+        '11': 'Out of Office',
+        '12': 'Vacation',
+        '13': 'Sick',
+        '14': 'Holiday',
+        '15': 'Personal Time'
       };
       
       // First check if it's a system code
@@ -1668,7 +1717,7 @@
       return activityCodeId;
     }
 
-    // ===== Function to get activity category =====
+    // ===== Improved Function to get activity category =====
     function getActivityCategory(businessUnitId, activityCodeId) {
       if (!businessUnitId || !activityCodeId) return 'Unknown';
       
@@ -1681,7 +1730,15 @@
         '4': 'OffQueueWork',
         '5': 'TimeOff',
         '6': 'Training',
-        '7': 'Unavailable'
+        '7': 'Unavailable',
+        '8': 'Meal',
+        '9': 'Coaching',
+        '10': 'System',
+        '11': 'TimeOff',
+        '12': 'TimeOff',
+        '13': 'TimeOff',
+        '14': 'TimeOff',
+        '15': 'TimeOff'
       };
       
       // First check if it's a system code
@@ -1693,10 +1750,24 @@
       const activityCodes = activityCodesByBuId[businessUnitId];
       
       if (activityCodes && activityCodes[activityCodeId]) {
-        return activityCodes[activityCodeId].category;
+        return activityCodes[activityCodeId].category || 'Unknown';
       }
       
       return 'Unknown';
+    }
+
+    // ===== Function to get user teams =====
+    async function getUserTeams(userId) {
+      try {
+        const userTeamsResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/users/${encodeURIComponent(userId)}/teams`
+        );
+        const teams = userTeamsResponse.entities || userTeamsResponse.teams || [];
+        return teams.map(team => teamsById[team.id]?.name || 'Unknown').join(', ');
+      } catch (err) {
+        console.error(`Error fetching teams for user ${userId}:`, err);
+        return 'Unknown';
+      }
     }
 
     // ===== Schedule Functions =====
@@ -1751,7 +1822,7 @@
           try {
             const searchResult = await searchSchedules(muIds[0], userId, startDateIso, endDateIso, true);
             console.log('Raw WFM search result:', searchResult);
-            const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
+            const activities = await extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
             console.log(`Extracted ${activities.length} activities for user ${userId}`);
             allActivities = allActivities.concat(activities);
           } catch (err) {
@@ -1788,7 +1859,7 @@
     }
 
     // ===== Fixed function to extract activities from search result =====
-    function extractUserActivitiesFromSearchResult(response, userId, businessUnitId) {
+    async function extractUserActivitiesFromSearchResult(response, userId, businessUnitId) {
       console.log('Full response structure:', response);
       
       let userSchedule = null;
@@ -1847,7 +1918,8 @@
               activityCodeId: activity.activityCodeId,
               type: 'shift',
               userId: userId,
-              userName: usersById[userId]?.name || userId
+              userName: usersById[userId]?.name || userId,
+              teamName: 'Loading...' // Will be populated asynchronously
             });
           });
         });
@@ -1878,9 +1950,17 @@
             activityCodeId: marker.activityCodeId,
             type: 'fullDayOff',
             userId: userId,
-            userName: usersById[userId]?.name || userId
+            userName: usersById[userId]?.name || userId,
+            teamName: 'Loading...' // Will be populated asynchronously
           });
         });
+      }
+
+      // Populate team names asynchronously
+      for (const row of rows) {
+        if (row.teamName === 'Loading...') {
+          row.teamName = await getUserTeams(row.userId);
+        }
       }
 
       rows.sort((a, b) => {
@@ -1918,6 +1998,7 @@
             <thead>
               <tr>
                 <th class="sortable" data-sort="userName">User</th>
+                <th class="sortable" data-sort="teamName">Team</th>
                 <th class="sortable" data-sort="date">Date</th>
                 <th class="sortable" data-sort="activityLabel">Activity</th>
                 <th>Start</th>
@@ -1931,6 +2012,7 @@
           html += `
             <tr>
               <td>${escapeHtml(row.userName)}</td>
+              <td>${escapeHtml(row.teamName)}</td>
               <td>${escapeHtml(row.date)}</td>
               <td>${escapeHtml(row.activityLabel || '')}</td>
               <td>${escapeHtml(formatTime(row.start))}</td>
@@ -1964,6 +2046,7 @@
           <thead>
             <tr>
               <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="teamName">Team</th>
               <th class="sortable" data-sort="date">Date</th>
               <th class="sortable" data-sort="activityLabel">Activity</th>
               <th>Start</th>
@@ -1978,6 +2061,7 @@
         html += `
           <tr>
             <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.teamName)}</td>
             <td>${escapeHtml(row.date)}</td>
             <td>${escapeHtml(row.activityLabel || '')}</td>
             <td>${escapeHtml(formatTime(row.start))}</td>
@@ -2190,9 +2274,10 @@
           
           // Process the data
           if (data && data.data) {
-            data.data.forEach(userData => {
+            for (const userData of data.data) {
               if (userData.actuals && userData.actuals.length > 0) {
                 const userName = usersById[userData.userId]?.name || userData.userId;
+                const userTeam = await getUserTeams(userData.userId);
                 const startDate = new Date(userData.startDate);
                 
                 userData.actuals.forEach(actual => {
@@ -2219,6 +2304,7 @@
                   allActualActivities.push({
                     userId: userData.userId,
                     userName: userName,
+                    teamName: userTeam,
                     date: formatDate(startTime.toISOString().slice(0, 10)),
                     startTime: startTime,
                     endTime: endTime,
@@ -2230,7 +2316,7 @@
                   });
                 });
               }
-            });
+            }
           }
         } catch (error) {
           console.error('Error processing download URL:', error);
@@ -2281,6 +2367,7 @@
           <thead>
             <tr>
               <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="teamName">Team</th>
               <th class="sortable" data-sort="date">Date</th>
               <th class="sortable" data-sort="activityLabel">Activity</th>
               <th>Start Time</th>
@@ -2295,6 +2382,7 @@
         html += `
           <tr>
             <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.teamName)}</td>
             <td>${escapeHtml(row.date)}</td>
             <td>${escapeHtml(row.activityLabel || '')}</td>
             <td>${escapeHtml(formatTime(row.startTime))}</td>
@@ -2479,10 +2567,16 @@
         
         console.log(`Activity: "${activityName}", Category: "${activityCategory}", Duration: ${activity.durationMinutes}min`);
         
-        // Check if it's overtime based on name or category - ONLY include overtime activities
+        // Expanded overtime detection - include more patterns
         const isOvertime = activityName.toLowerCase().includes('overtime') || 
                           activityCategory.toLowerCase().includes('overtime') ||
-                          activityName.toLowerCase().includes('ot ');
+                          activityName.toLowerCase().includes('ot ') ||
+                          activityName.toLowerCase().includes('ot_') ||
+                          activityName.toLowerCase().includes('over time') ||
+                          activityName.toLowerCase().includes('1.5') ||
+                          activityName.toLowerCase().includes('2.0') ||
+                          activityName.toLowerCase().includes('timehalf') ||
+                          activityName.toLowerCase().includes('doubletime');
         
         if (isOvertime) {
           const hours = activity.durationMinutes / 60;
@@ -2744,16 +2838,19 @@
         
         console.log(`Activity: ${activityName}, Category: ${activityCategory}, Code: ${activity.activityCodeId}, Duration: ${activity.durationMinutes}min`);
         
-        // Check if it's absence based on category or name, but EXCLUDE Holiday and TOIL
+        // Expanded absence detection
         const isAbsence = (activity.type === 'fullDayOff' || 
                          activityCategory === 'TimeOff' ||
-                         activityName.includes('Time Off') || 
-                         activityName.includes('Sick') || 
-                         activityName.includes('Absence') || 
-                         activityName.includes('Vacation') ||
-                         activityName.includes('Leave')) &&
-                         !activityName.includes('Holiday') &&
-                         !activityName.includes('TOIL');
+                         activityName.toLowerCase().includes('time off') || 
+                         activityName.toLowerCase().includes('sick') || 
+                         activityName.toLowerCase().includes('absence') || 
+                         activityName.toLowerCase().includes('vacation') ||
+                         activityName.toLowerCase().includes('leave') ||
+                         activityName.toLowerCase().includes('pto') ||
+                         activityName.toLowerCase().includes('personal') ||
+                         activityName.toLowerCase().includes('medical')) &&
+                         !activityName.toLowerCase().includes('holiday') &&
+                         !activityName.toLowerCase().includes('toil');
         
         if (isAbsence) {
           totalHours += activity.durationMinutes / 60;
@@ -3226,7 +3323,7 @@
         try {
           const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
           console.log(`Schedule search result for user ${userId}:`, searchResult);
-          const activities = extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
+          const activities = await extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
           console.log(`Extracted ${activities.length} activities for user ${userId}:`, activities);
           allActivities = allActivities.concat(activities);
         } catch (err) {
@@ -3316,6 +3413,7 @@
           lateReport.push({
             userId: userId,
             userName: firstScheduledActivity.userName,
+            teamName: firstScheduledActivity.teamName,
             date: date,
             scheduledStart: firstScheduledActivity.start,
             actualStart: null,
@@ -3358,6 +3456,7 @@
         lateReport.push({
           userId: userId,
           userName: firstScheduledActivity.userName,
+          teamName: firstScheduledActivity.teamName,
           date: date,
           scheduledStart: firstScheduledActivity.start,
           actualStart: firstActualActivity.startTime,
@@ -3370,6 +3469,130 @@
       
       console.log(`Generated ${lateReport.length} late report entries`);
       return lateReport;
+    }
+
+    // ===== Time of Day Lateness Graph =====
+    function renderTimeOfDayLatenessChart(lateReportData) {
+      const chartContainer = document.getElementById('timeOfDayLatenessChart');
+      const chartContent = document.getElementById('latenessChartContent');
+      
+      if (!lateReportData || lateReportData.length === 0) {
+        chartContainer.style.display = 'none';
+        return;
+      }
+      
+      // Group by scheduled start time hour
+      const timeSlots = {};
+      for (let hour = 0; hour < 24; hour++) {
+        timeSlots[hour] = { total: 0, late: 0, early: 0, adherent: 0, awol: 0 };
+      }
+      
+      lateReportData.forEach(record => {
+        if (record.scheduledStart) {
+          const hour = record.scheduledStart.getHours();
+          timeSlots[hour].total++;
+          
+          switch(record.status) {
+            case 'Late': timeSlots[hour].late++; break;
+            case 'Early': timeSlots[hour].early++; break;
+            case 'Adherent': timeSlots[hour].adherent++; break;
+            case 'AWOL': timeSlots[hour].awol++; break;
+          }
+        }
+      });
+      
+      let html = '<div class="chart-bars-container">';
+      
+      Object.keys(timeSlots).sort().forEach(hour => {
+        const slot = timeSlots[hour];
+        if (slot.total === 0) return;
+        
+        const latePercentage = (slot.late / slot.total) * 100;
+        const hourLabel = `${String(hour).padStart(2, '0')}:00`;
+        
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${hourLabel}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${latePercentage}%; background: linear-gradient(90deg, #ef4444, #dc2626);">
+                ${slot.late}
+              </div>
+            </div>
+            <div class="chart-bar-value">
+              ${slot.late}/${slot.total} (${latePercentage.toFixed(1)}%)
+            </div>
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      chartContent.innerHTML = html;
+      chartContainer.style.display = 'block';
+    }
+
+    // ===== Late Status Drill-down =====
+    function renderLateStatusDrilldown(lateReportData) {
+      const drilldownContainer = document.getElementById('lateStatusDrilldown');
+      
+      if (!lateReportData || lateReportData.length === 0) {
+        drilldownContainer.innerHTML = '<div class="muted">No data available</div>';
+        return;
+      }
+      
+      // Count statuses
+      const statusCounts = {
+        'Late': 0,
+        'Early': 0,
+        'Adherent': 0,
+        'AWOL': 0
+      };
+      
+      lateReportData.forEach(record => {
+        statusCounts[record.status]++;
+      });
+      
+      let html = '';
+      Object.keys(statusCounts).forEach(status => {
+        const count = statusCounts[status];
+        const percentage = (count / lateReportData.length) * 100;
+        
+        let statusClass = '';
+        switch(status) {
+          case 'Late': statusClass = 'status-late'; break;
+          case 'Early': statusClass = 'status-early'; break;
+          case 'Adherent': statusClass = 'status-adherent'; break;
+          case 'AWOL': statusClass = 'status-awol'; break;
+        }
+        
+        html += `
+          <div class="metric-card clickable" style="min-width: 120px; padding: 8px 12px;" 
+                onclick="drillDownToStatus('${status}')">
+            <div class="metric-label">${status}</div>
+            <div class="metric-value">${count}</div>
+            <div class="muted">${percentage.toFixed(1)}%</div>
+          </div>
+        `;
+      });
+      
+      drilldownContainer.innerHTML = html;
+    }
+
+    // ===== Drill-down to Status =====
+    function drillDownToStatus(status) {
+      const filteredData = currentDisplayedData.late.filter(
+        record => record.status === status
+      );
+      
+      currentDisplayedData.late = filteredData;
+      renderLateReportResults(filteredData);
+      
+      // Update the drilldown state
+      currentDrillDown = {
+        type: 'status',
+        filter: status
+      };
+      
+      showMessage(`Showing data for status: ${status}`, 'info');
     }
 
     // Render late report results
@@ -3394,7 +3617,7 @@
       const awolCount = data.filter(item => item.status === 'AWOL').length;
       
       let html = `
-        <h3 class="section-title">Late Report</h3>
+        <h3 class="section-title">Late Report ${currentDrillDown.type ? `- ${currentDrillDown.filter}` : ''}</h3>
         <div class="schedule-meta">
           <span class="pill">Total Shifts: ${data.length}</span>
           <span class="pill" style="background: #fee2e2; color: #b42318;">Late: ${lateCount}</span>
@@ -3403,11 +3626,20 @@
           <span class="pill" style="background: #f3e8ff; color: #7e22ce;">AWOL: ${awolCount}</span>
           <span class="pill">Threshold: ${thresholdSeconds}s</span>
         </div>
-        
+      `;
+      
+      // Render the status drilldown
+      renderLateStatusDrilldown(data);
+      
+      // Render the time of day chart
+      renderTimeOfDayLatenessChart(data);
+      
+      html += `
         <table class="schedule-table">
           <thead>
             <tr>
               <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="teamName">Team</th>
               <th class="sortable" data-sort="date">Date</th>
               <th>Scheduled Start</th>
               <th>Actual Start</th>
@@ -3451,6 +3683,7 @@
         html += `
           <tr>
             <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.teamName)}</td>
             <td>${escapeHtml(row.date)}</td>
             <td>${row.scheduledStart ? escapeHtml(formatTime(row.scheduledStart)) : 'N/A'}</td>
             <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'N/A'}</td>
@@ -3575,6 +3808,7 @@
       const csvData = exportData.map(activity => ({
         Date: activity.date,
         User: activity.userName,
+        Team: activity.teamName,
         Activity: activity.activityLabel,
         Start: formatTime(activity.start),
         End: formatTime(activity.end),
@@ -3601,6 +3835,7 @@
       const csvData = exportData.map(activity => ({
         Date: activity.date,
         User: activity.userName,
+        Team: activity.teamName,
         Activity: activity.activityLabel,
         Start: formatTime(activity.startTime),
         End: formatTime(activity.endTime),
@@ -3733,6 +3968,7 @@
       const csvData = currentDisplayedData.late.map(row => ({
         Date: row.date,
         User: row.userName,
+        Team: row.teamName,
         'Scheduled Start': row.scheduledStart ? formatTime(row.scheduledStart) : 'N/A',
         'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'N/A',
         Status: row.status,
