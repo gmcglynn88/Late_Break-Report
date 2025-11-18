@@ -101,6 +101,11 @@
     .metric-value{font-size:24px;font-weight:bold;color:var(--primary-color);margin:8px 0;transition:color 0.2s}
     .metric-label{font-size:12px;color:var(--text-light);text-transform:uppercase}
     
+    details pre{
+      max-height:250px;overflow:auto;background:#0f172a;color:#e5e7eb;
+      padding:10px;border-radius:6px;font-size:11px
+    }
+    
     /* Overtime metrics row */
     .overtime-metrics {
       display: flex;
@@ -160,6 +165,31 @@
     }
     .overtime-duration {
       color: var(--text-light);
+    }
+    
+    /* Subtabs for overtime */
+    .subtabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin: 16px 0;
+    }
+    .subtab {
+      padding: 8px 16px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-weight: 600;
+      transition: all 0.2s;
+      color: var(--text-light);
+    }
+    .subtab.active {
+      color: var(--primary-color);
+      border-bottom-color: var(--primary-color);
+    }
+    .subtab-content {
+      display: none;
+    }
+    .subtab-content.active {
+      display: block;
     }
     
     /* Export buttons */
@@ -314,42 +344,6 @@
       color: white;
       border-color: var(--primary-color);
     }
-    
-    /* Late Report Status Colors */
-    .status-late {
-      background-color: #fee2e2;
-      color: #b42318;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-    .status-early {
-      background-color: #fffbeb;
-      color: #b45309;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-    .status-adherent {
-      background-color: #f0f9ff;
-      color: #0c4a6e;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-    .status-awol {
-      background-color: #f3e8ff;
-      color: #7e22ce;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-    
-    /* Time of day chart styles */
-    .chart-bars-container {
-      max-height: 400px;
-      overflow-y: auto;
-    }
   </style>
 </head>
 <body>
@@ -369,10 +363,8 @@
     <!-- Tabs Navigation -->
     <div class="tabs">
       <div class="tab active" data-tab="schedule">Schedule View</div>
-      <div class="tab" data-tab="actual">Actual Activity</div>
       <div class="tab" data-tab="overtime">Overtime Tracking</div>
       <div class="tab" data-tab="absence">Absence Analytics</div>
-      <div class="tab" data-tab="late">Late Report</div>
     </div>
 
     <!-- Schedule Tab -->
@@ -447,69 +439,6 @@
         </div>
         
         <div id="scheduleResultsContent"></div>
-      </div>
-    </div>
-
-    <!-- Actual Activity Tab -->
-    <div id="actual-tab" class="tab-content">
-      <div class="card">
-        <h2 class="section-title">Actual Activity (Historical Adherence)</h2>
-        <div class="controls">
-          <div>
-            <label for="actualBuSelect">Business Unit</label>
-            <div id="actualBuDropdown" class="checkbox-dropdown"></div>
-          </div>
-          <div>
-            <label for="actualMuSelect">Management Unit</label>
-            <div id="actualMuDropdown" class="checkbox-dropdown"></div>
-          </div>
-          <div>
-            <label>Team</label>
-            <div id="actualTeamDropdown" class="checkbox-dropdown"></div>
-          </div>
-          <div>
-            <label>User</label>
-            <div id="actualUserDropdown" class="checkbox-dropdown"></div>
-          </div>
-          <div>
-            <label for="actualStartDate">Start Date</label>
-            <input type="date" id="actualStartDate" />
-          </div>
-          <div>
-            <label for="actualEndDate">End Date</label>
-            <input type="date" id="actualEndDate" />
-          </div>
-        </div>
-        <button id="loadActualActivityBtn" class="full-width-btn">Load Actual Activity</button>
-      </div>
-
-      <div id="actualResults" class="card" style="display:none;">
-        <div class="table-controls">
-          <div class="sort-controls">
-            <label for="actualSort">Sort by:</label>
-            <select id="actualSort">
-              <option value="date">Date</option>
-              <option value="user">User</option>
-              <option value="activity">Activity</option>
-              <option value="duration">Duration</option>
-            </select>
-            <select id="actualSortOrder">
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </div>
-        </div>
-        
-        <div class="filter-activity-container">
-          <div class="filter-activity-title">Filter by Activity</div>
-          <div id="actualActivityFilterDropdown" class="checkbox-dropdown"></div>
-        </div>
-        
-        <div class="export-buttons">
-          <button id="exportActualActivityBtn" class="export-btn">Export Actual Activity to CSV</button>
-        </div>
-        
-        <div id="actualResultsContent"></div>
       </div>
     </div>
 
@@ -644,87 +573,6 @@
         <div id="absenceResultsContent"></div>
       </div>
     </div>
-
-    <!-- Late Report Tab -->
-    <div id="late-tab" class="tab-content">
-      <div class="card">
-        <h2 class="section-title">Late Report Configuration</h2>
-        <div class="controls">
-          <div>
-            <label for="lateBuSelect">Business Unit</label>
-            <div id="lateBuDropdown" class="checkbox-dropdown"></div>
-          </div>
-          <div>
-            <label for="lateMuSelect">Management Unit</label>
-            <div id="lateMuDropdown" class="checkbox-dropdown"></div>
-          </div>
-          <div>
-            <label>User</label>
-            <div id="lateUserDropdown" class="checkbox-dropdown"></div>
-          </div>
-          <div>
-            <label for="lateStartDate">Start Date</label>
-            <input type="date" id="lateStartDate" />
-          </div>
-          <div>
-            <label for="lateEndDate">End Date</label>
-            <input type="date" id="lateEndDate" />
-          </div>
-          <div>
-            <label for="lateThreshold">Late Threshold (seconds)</label>
-            <input type="number" id="lateThreshold" value="30" min="0" step="1" />
-            <div class="muted">Seconds allowed before being marked late</div>
-          </div>
-        </div>
-        <button id="generateLateReportBtn" class="full-width-btn">Generate Late Report</button>
-      </div>
-
-      <div id="lateResults" class="card" style="display:none;">
-        <!-- Moved Team Selection Here -->
-        <div class="table-controls">
-          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-            <div>
-              <label for="lateTeamSelect" style="margin-bottom: 4px; font-weight: 600;">Filter by Team</label>
-              <div id="lateTeamDropdown" class="checkbox-dropdown" style="min-width: 200px;"></div>
-            </div>
-            <div class="sort-controls">
-              <label for="lateSort">Sort by:</label>
-              <select id="lateSort">
-                <option value="userName">User</option>
-                <option value="teamName">Team</option>
-                <option value="date">Date</option>
-                <option value="status">Status</option>
-                <option value="durationLate">Duration Late</option>
-              </select>
-              <select id="lateSortOrder">
-                <option value="asc">Ascending</option>
-                <option value="desc">Descending</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Late Status Drill-down -->
-        <div class="filter-activity-container">
-          <div class="filter-activity-title">Filter by Status (Click to drill down)</div>
-          <div id="lateStatusDrilldown" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
-            <!-- This will be populated dynamically -->
-          </div>
-        </div>
-
-        <!-- Time of Day Lateness Graph -->
-        <div id="timeOfDayLatenessChart" class="chart-wrapper" style="display: none;">
-          <h4>Lateness by Time of Day</h4>
-          <div id="latenessChartContent"></div>
-        </div>
-        
-        <div class="export-buttons">
-          <button id="exportLateReportBtn" class="export-btn">Export Late Report to CSV</button>
-        </div>
-        
-        <div id="lateResultsContent"></div>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -738,22 +586,18 @@
     let allUsers = [];
     let usersById = {};
     let allTeams = [];
-    let teamsById = {};
     let activityCodesByBuId = {};
     let businessUnits = [];
     let managementUnits = [];
     
     // Data storage for exports and sorting
     let currentScheduleData = [];
-    let currentActualActivityData = [];
     let currentOvertimeData = [];
     let currentAbsenceData = [];
     let currentDisplayedData = {
       schedule: [],
-      actual: [],
       overtime: [],
-      absence: [],
-      late: []
+      absence: []
     };
     
     // Drill-down state
@@ -766,7 +610,21 @@
     let currentAbsenceView = 'summary';
     
     // Checkbox dropdown instances
-    const dropdowns = {};
+    const dropdowns = {
+      businessUnit: null,
+      managementUnit: null,
+      team: null,
+      user: null,
+      overtimeBu: null,
+      overtimeMu: null,
+      overtimeTeam: null,
+      absenceBu: null,
+      absenceMu: null,
+      absenceTeam: null,
+      activityFilter: null,
+      overtimeActivityFilter: null,
+      absenceActivityFilter: null
+    };
 
     // ===== Date Formatting Functions =====
     function formatDate(dateString) {
@@ -880,7 +738,10 @@
 
       initializeTabs();
       initializeDropdowns();
-      initializeEventListeners();
+      initializeScheduleApp();
+      initializeAnalytics();
+      initializeExportButtons();
+      initializeSorting();
       initializeViewToggle();
       
       // Load initial data
@@ -1050,8 +911,7 @@
 
     function initializeDropdowns() {
       console.log('Initializing dropdowns...');
-      
-      // Schedule tab dropdowns
+      // Create checkbox dropdowns for all dropdowns with selection change handlers
       dropdowns.businessUnit = createCheckboxDropdown('businessUnitDropdown', { 
         placeholder: 'Select business units', 
         searchPlaceholder: 'Search business units...',
@@ -1070,29 +930,6 @@
       });
       
       dropdowns.user = createCheckboxDropdown('userDropdown', { 
-        placeholder: 'Select users', 
-        searchPlaceholder: 'Search users...' 
-      });
-      
-      // Actual Activity tab dropdowns
-      dropdowns.actualBu = createCheckboxDropdown('actualBuDropdown', { 
-        placeholder: 'Select business units', 
-        searchPlaceholder: 'Search business units...',
-        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'actual')
-      });
-      
-      dropdowns.actualMu = createCheckboxDropdown('actualMuDropdown', { 
-        placeholder: 'Select management units', 
-        searchPlaceholder: 'Search management units...',
-        onSelectionChange: (selected) => handleActualManagementUnitChange(selected)
-      });
-      
-      dropdowns.actualTeam = createCheckboxDropdown('actualTeamDropdown', { 
-        placeholder: 'Select teams', 
-        searchPlaceholder: 'Search teams...' 
-      });
-      
-      dropdowns.actualUser = createCheckboxDropdown('actualUserDropdown', { 
         placeholder: 'Select users', 
         searchPlaceholder: 'Search users...' 
       });
@@ -1131,36 +968,8 @@
         searchPlaceholder: 'Search teams...' 
       });
       
-      // Late Report tab dropdowns
-      dropdowns.lateBu = createCheckboxDropdown('lateBuDropdown', { 
-        placeholder: 'Select business units', 
-        searchPlaceholder: 'Search business units...',
-        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'late')
-      });
-      
-      dropdowns.lateMu = createCheckboxDropdown('lateMuDropdown', { 
-        placeholder: 'Select management units', 
-        searchPlaceholder: 'Search management units...',
-        onSelectionChange: (selected) => handleLateManagementUnitChange(selected)
-      });
-      
-      dropdowns.lateTeam = createCheckboxDropdown('lateTeamDropdown', { 
-        placeholder: 'Select teams', 
-        searchPlaceholder: 'Search teams...' 
-      });
-      
-      dropdowns.lateUser = createCheckboxDropdown('lateUserDropdown', { 
-        placeholder: 'Select users', 
-        searchPlaceholder: 'Search users...' 
-      });
-      
       // Activity filter dropdowns
       dropdowns.activityFilter = createCheckboxDropdown('activityFilterDropdown', { 
-        placeholder: 'Filter by activity type', 
-        searchPlaceholder: 'Search activities...' 
-      });
-      
-      dropdowns.actualActivityFilter = createCheckboxDropdown('actualActivityFilterDropdown', { 
         placeholder: 'Filter by activity type', 
         searchPlaceholder: 'Search activities...' 
       });
@@ -1176,52 +985,6 @@
       });
       
       console.log('Dropdowns initialized:', dropdowns);
-    }
-
-    function initializeEventListeners() {
-      // Schedule tab
-      document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
-      document.getElementById('exportScheduleBtn').addEventListener('click', exportScheduleToCSV);
-      
-      // Actual Activity tab
-      document.getElementById('loadActualActivityBtn').addEventListener('click', function() {
-        loadActualActivity().catch(err => {
-          console.error('Historical adherence failed:', err);
-          showMessage(`Failed to load actual activity: ${err.message}`, 'error');
-        });
-      });
-      document.getElementById('exportActualActivityBtn').addEventListener('click', exportActualActivityToCSV);
-      
-      // Overtime tab
-      document.getElementById('analyzeOvertimeBtn').addEventListener('click', analyzeOvertime);
-      document.getElementById('exportOvertimeSummaryBtn').addEventListener('click', exportOvertimeSummaryToCSV);
-      document.getElementById('exportOvertimeDetailsBtn').addEventListener('click', exportOvertimeDetailsToCSV);
-      
-      // Absence tab
-      document.getElementById('analyzeAbsenceBtn').addEventListener('click', analyzeAbsence);
-      document.getElementById('exportAbsenceBtn').addEventListener('click', exportAbsenceToCSV);
-      document.getElementById('exportAbsenceDetailsBtn').addEventListener('click', exportAbsenceDetailsToCSV);
-      
-      // Late Report tab
-      document.getElementById('generateLateReportBtn').addEventListener('click', generateLateReport);
-      document.getElementById('exportLateReportBtn').addEventListener('click', exportLateReportToCSV);
-      
-      // Initialize sorting
-      initializeSorting();
-      
-      // Late report team filtering
-      if (dropdowns.lateTeam) {
-        dropdowns.lateTeam.onSelectionChange = (selectedTeams) => {
-          let filteredData = currentDisplayedData.late;
-          if (selectedTeams.length > 0) {
-            filteredData = currentDisplayedData.late.filter(record => {
-              return selectedTeams.includes(record.teamName);
-            });
-          }
-          currentDisplayedData.late = filteredData;
-          renderLateReportResults(filteredData);
-        };
-      }
     }
 
     // ===== View Toggle =====
@@ -1247,15 +1010,97 @@
       });
     }
 
+    // ===== Schedule View Functions =====
+    async function initializeScheduleApp() {
+      document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
+    }
+
+    async function populateInitialData() {
+      try {
+        console.log('Loading initial data...');
+        const [users, businessUnitsResponse, teams] = await Promise.all([
+          fetchAllPages(`${apiBase}/api/v2/users`),
+          authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
+          fetchAllPages(`${apiBase}/api/v2/teams`)
+        ]);
+
+        allUsers = (users || []).filter(u => !u.deleted);
+        usersById = {};
+        allUsers.forEach(u => { usersById[u.id] = u; });
+        businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
+        allTeams = teams || [];
+
+        populateUserDropdown(allUsers);
+        populateBusinessUnitDropdown(businessUnits);
+        populateTeamDropdown(allTeams);
+        
+        // Also populate analytics dropdowns
+        populateAnalyticsDropdowns();
+        
+        showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
+      } catch (err) {
+        console.error('Error initialising app:', err);
+        showMessage(`Error loading initial data: ${err.message}`, 'error');
+      }
+    }
+
+    function populateUserDropdown(users) {
+      const validUsers = users
+        .filter(u => u.name && u.name.trim() && u.name !== 'Unknown User')
+        .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
+        .sort((a,b)=>a.label.localeCompare(b.label));
+      
+      if (dropdowns.user) {
+        dropdowns.user.setOptions(validUsers);
+      }
+    }
+
+    function populateBusinessUnitDropdown(businessUnits) {
+      const buOpts = businessUnits
+        .map(bu => ({ value: bu.id, label: bu.name || bu.id }))
+        .sort((a,b)=>a.label.localeCompare(b.label));
+      
+      if (dropdowns.businessUnit) dropdowns.businessUnit.setOptions(buOpts);
+      if (dropdowns.overtimeBu) dropdowns.overtimeBu.setOptions(buOpts);
+      if (dropdowns.absenceBu) dropdowns.absenceBu.setOptions(buOpts);
+    }
+
+    function populateTeamDropdown(teams) {
+      const teamOpts = (teams||[])
+        .map(t => ({ value: t.id, label: t.name }))
+        .sort((a,b)=>a.label.localeCompare(b.label));
+      
+      if (dropdowns.team) dropdowns.team.setOptions(teamOpts);
+      if (dropdowns.overtimeTeam) dropdowns.overtimeTeam.setOptions(teamOpts);
+      if (dropdowns.absenceTeam) dropdowns.absenceTeam.setOptions(teamOpts);
+    }
+
+    // ===== Analytics Functions =====
+    function populateAnalyticsDropdowns() {
+      // Set default dates for all tabs to current week
+      const currentWeek = getCurrentWeekDates();
+      
+      document.getElementById('startDate').value = currentWeek.start;
+      document.getElementById('endDate').value = currentWeek.end;
+      document.getElementById('overtimeStartDate').value = currentWeek.start;
+      document.getElementById('overtimeEndDate').value = currentWeek.end;
+      document.getElementById('absenceStartDate').value = currentWeek.start;
+      document.getElementById('absenceEndDate').value = currentWeek.end;
+    }
+
+    function initializeAnalytics() {
+      // Overtime analysis
+      document.getElementById('analyzeOvertimeBtn').addEventListener('click', analyzeOvertime);
+      
+      // Absence analysis
+      document.getElementById('analyzeAbsenceBtn').addEventListener('click', analyzeAbsence);
+    }
+
     // ===== Initialize Sorting =====
     function initializeSorting() {
       // Schedule tab sorting
       document.getElementById('scheduleSort').addEventListener('change', () => applySorting('schedule'));
       document.getElementById('scheduleSortOrder').addEventListener('change', () => applySorting('schedule'));
-      
-      // Actual Activity tab sorting
-      document.getElementById('actualSort').addEventListener('change', () => applySorting('actual'));
-      document.getElementById('actualSortOrder').addEventListener('change', () => applySorting('actual'));
       
       // Overtime tab sorting
       document.getElementById('overtimeSort').addEventListener('change', () => applySorting('overtime'));
@@ -1264,10 +1109,6 @@
       // Absence tab sorting
       document.getElementById('absenceSort').addEventListener('change', () => applySorting('absence'));
       document.getElementById('absenceSortOrder').addEventListener('change', () => applySorting('absence'));
-      
-      // Late Report tab sorting
-      document.getElementById('lateSort').addEventListener('change', () => applyLateReportSorting());
-      document.getElementById('lateSortOrder').addEventListener('change', () => applyLateReportSorting());
     }
 
     function applySorting(tabType) {
@@ -1278,11 +1119,6 @@
           data = currentDisplayedData.schedule;
           sortField = document.getElementById('scheduleSort').value;
           sortOrder = document.getElementById('scheduleSortOrder').value;
-          break;
-        case 'actual':
-          data = currentDisplayedData.actual;
-          sortField = document.getElementById('actualSort').value;
-          sortOrder = document.getElementById('actualSortOrder').value;
           break;
         case 'overtime':
           data = currentDisplayedData.overtime;
@@ -1310,18 +1146,10 @@
               case 'duration': aVal = a.durationMinutes; bVal = b.durationMinutes; break;
             }
             break;
-        case 'actual':
-          switch(sortField) {
-            case 'date': aVal = a.date; bVal = b.date; break;
-            case 'user': aVal = a.userName; bVal = b.userName; break;
-            case 'activity': aVal = a.activityLabel; bVal = b.activityLabel; break;
-            case 'duration': aVal = a.durationMinutes; bVal = b.durationMinutes; break;
-          }
-          break;
-        case 'overtime':
-          aVal = a[sortField]; bVal = b[sortField]; break;
-        case 'absence':
-          aVal = a[sortField]; bVal = b[sortField]; break;
+          case 'overtime':
+            aVal = a[sortField]; bVal = b[sortField]; break;
+          case 'absence':
+            aVal = a[sortField]; bVal = b[sortField]; break;
         }
         
         if (typeof aVal === 'string') {
@@ -1341,11 +1169,6 @@
         case 'schedule':
           renderScheduleTable(sortedData);
           break;
-        case 'actual':
-          renderActualActivityResults(sortedData, 
-            document.getElementById('actualStartDate').value,
-            document.getElementById('actualEndDate').value);
-          break;
         case 'overtime':
           renderOvertimeResults(sortedData, 
             document.getElementById('overtimeStartDate').value,
@@ -1360,90 +1183,7 @@
       }
     }
 
-    async function populateInitialData() {
-      try {
-        console.log('Loading initial data...');
-        const [users, businessUnitsResponse, teams] = await Promise.all([
-          fetchAllPages(`${apiBase}/api/v2/users`),
-          authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
-          fetchAllPages(`${apiBase}/api/v2/teams`)
-        ]);
-
-        allUsers = (users || []).filter(u => !u.deleted);
-        usersById = {};
-        allUsers.forEach(u => { usersById[u.id] = u; });
-        businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
-        allTeams = teams || [];
-        teamsById = {};
-        allTeams.forEach(t => { teamsById[t.id] = t; });
-
-        populateUserDropdown(allUsers);
-        populateBusinessUnitDropdown(businessUnits);
-        populateTeamDropdown(allTeams);
-        
-        // Set default dates for all tabs to current week
-        const currentWeek = getCurrentWeekDates();
-        
-        document.getElementById('startDate').value = currentWeek.start;
-        document.getElementById('endDate').value = currentWeek.end;
-        document.getElementById('actualStartDate').value = currentWeek.start;
-        document.getElementById('actualEndDate').value = currentWeek.end;
-        document.getElementById('overtimeStartDate').value = currentWeek.start;
-        document.getElementById('overtimeEndDate').value = currentWeek.end;
-        document.getElementById('absenceStartDate').value = currentWeek.start;
-        document.getElementById('absenceEndDate').value = currentWeek.end;
-        document.getElementById('lateStartDate').value = currentWeek.start;
-        document.getElementById('lateEndDate').value = currentWeek.end;
-        
-        showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
-      } catch (err) {
-        console.error('Error initialising app:', err);
-        showMessage(`Error loading initial data: ${err.message}`, 'error');
-      }
-    }
-
-    function populateUserDropdown(users) {
-      const validUsers = users
-        .filter(u => u.name && u.name.trim() && u.name !== 'Unknown User')
-        .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
-        .sort((a,b)=>a.label.localeCompare(b.label));
-      
-      if (dropdowns.user) {
-        dropdowns.user.setOptions(validUsers);
-      }
-      if (dropdowns.actualUser) {
-        dropdowns.actualUser.setOptions(validUsers);
-      }
-      if (dropdowns.lateUser) {
-        dropdowns.lateUser.setOptions(validUsers);
-      }
-    }
-
-    function populateBusinessUnitDropdown(businessUnits) {
-      const buOpts = businessUnits
-        .map(bu => ({ value: bu.id, label: bu.name || bu.id }))
-        .sort((a,b)=>a.label.localeCompare(b.label));
-      
-      if (dropdowns.businessUnit) dropdowns.businessUnit.setOptions(buOpts);
-      if (dropdowns.actualBu) dropdowns.actualBu.setOptions(buOpts);
-      if (dropdowns.overtimeBu) dropdowns.overtimeBu.setOptions(buOpts);
-      if (dropdowns.absenceBu) dropdowns.absenceBu.setOptions(buOpts);
-      if (dropdowns.lateBu) dropdowns.lateBu.setOptions(buOpts);
-    }
-
-    function populateTeamDropdown(teams) {
-      const teamOpts = (teams||[])
-        .map(t => ({ value: t.id, label: t.name }))
-        .sort((a,b)=>a.label.localeCompare(b.label));
-      
-      if (dropdowns.team) dropdowns.team.setOptions(teamOpts);
-      if (dropdowns.actualTeam) dropdowns.actualTeam.setOptions(teamOpts);
-      if (dropdowns.overtimeTeam) dropdowns.overtimeTeam.setOptions(teamOpts);
-      if (dropdowns.absenceTeam) dropdowns.absenceTeam.setOptions(teamOpts);
-      if (dropdowns.lateTeam) dropdowns.lateTeam.setOptions(teamOpts);
-    }
-
-    // ===== Business Unit Change Handlers =====
+    // ===== Fixed Business Unit Change Handler =====
     async function handleBusinessUnitChange(selectedBuIds) {
       console.log('Business Unit selection changed:', selectedBuIds);
       
@@ -1477,6 +1217,7 @@
       }
     }
 
+    // ===== Fixed Management Unit Change Handler =====
     async function handleManagementUnitChange(selectedMuIds) {
       console.log('Management Unit selection changed:', selectedMuIds);
       
@@ -1499,24 +1240,11 @@
       }
     }
 
+    // ===== Fixed Analytics Business Unit Change Handler =====
     async function handleAnalyticsBuChange(selectedBuIds, tabType) {
       console.log(`Analytics Business Unit selection changed for ${tabType}:`, selectedBuIds);
       
-      let muDropdown;
-      switch(tabType) {
-        case 'actual':
-          muDropdown = dropdowns.actualMu;
-          break;
-        case 'overtime':
-          muDropdown = dropdowns.overtimeMu;
-          break;
-        case 'absence':
-          muDropdown = dropdowns.absenceMu;
-          break;
-        case 'late':
-          muDropdown = dropdowns.lateMu;
-          break;
-      }
+      const muDropdown = tabType === 'overtime' ? dropdowns.overtimeMu : dropdowns.absenceMu;
       
       if (muDropdown) {
         muDropdown.clearSelection();
@@ -1544,904 +1272,6 @@
         console.error('Error loading management units for analytics:', err);
         showMessage(`Error loading management units: ${err.message}`, 'error');
       }
-    }
-
-    async function handleActualManagementUnitChange(selectedMuIds) {
-      console.log('Actual Activity Management Unit selection changed:', selectedMuIds);
-      
-      if (!selectedMuIds || selectedMuIds.length === 0) {
-        if (dropdowns.actualUser) {
-          dropdowns.actualUser.setOptions([]);
-        }
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
-                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
-                    : [];
-        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
-        console.log(`Loaded ${enriched.length} users for actual activity management unit ${selectedMuIds[0]}`);
-        
-        const validUsers = enriched
-          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
-          .sort((a,b)=>a.label.localeCompare(b.label));
-        
-        if (dropdowns.actualUser) {
-          dropdowns.actualUser.setOptions(validUsers);
-        }
-      } catch (err) {
-        console.error('Error loading actual activity MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
-    }
-
-    async function handleLateManagementUnitChange(selectedMuIds) {
-      console.log('Late Report Management Unit selection changed:', selectedMuIds);
-      
-      if (!selectedMuIds || selectedMuIds.length === 0) {
-        if (dropdowns.lateUser) {
-          dropdowns.lateUser.setOptions([]);
-        }
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
-                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
-                    : [];
-        const enriched = list.map(uRef => usersById[uRef.id] || uRef);
-        console.log(`Loaded ${enriched.length} users for late report management unit ${selectedMuIds[0]}`);
-        
-        const validUsers = enriched
-          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ value: u.id, label: u.name || u.email || 'Unknown User' }))
-          .sort((a,b)=>a.label.localeCompare(b.label));
-        
-        if (dropdowns.lateUser) {
-          dropdowns.lateUser.setOptions(validUsers);
-        }
-      } catch (err) {
-        console.error('Error loading late report MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
-    }
-
-    // ===== Activity Codes =====
-    async function loadActivityCodes(businessUnitId) {
-      try {
-        console.log(`Loading activity codes for business unit: ${businessUnitId}`);
-        const activityCodesResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(businessUnitId)}/activitycodes`
-        );
-        
-        console.log('Full activity codes API response:', activityCodesResponse);
-        
-        let activityCodes = [];
-        
-        // Try different response structures
-        if (activityCodesResponse.activityCodes && typeof activityCodesResponse.activityCodes === 'object') {
-          console.log('Found activityCodes object, converting to array...');
-          activityCodes = Object.values(activityCodesResponse.activityCodes);
-        } else if (Array.isArray(activityCodesResponse.entities)) {
-          console.log('Found entities array');
-          activityCodes = activityCodesResponse.entities;
-        } else if (Array.isArray(activityCodesResponse)) {
-          console.log('Response is array');
-          activityCodes = activityCodesResponse;
-        } else {
-          console.log('Unknown response structure, trying to extract any arrays...');
-          // Try to find any array in the response
-          for (const key in activityCodesResponse) {
-            if (Array.isArray(activityCodesResponse[key])) {
-              activityCodes = activityCodesResponse[key];
-              console.log(`Found array in key: ${key}`);
-              break;
-            }
-          }
-        }
-        
-        console.log(`Loaded ${activityCodes.length} activity codes:`, activityCodes);
-        
-        // Create a lookup map by ID - now storing both name and category
-        const activityCodeMap = {};
-        activityCodes.forEach(code => {
-          if (code && code.id) {
-            activityCodeMap[code.id] = {
-              name: code.name ? code.name.trim() : code.id,
-              category: code.category || 'Unknown'
-            };
-            console.log(`Mapped: ${code.id} -> "${code.name}" (Category: ${code.category})`);
-          } else {
-            console.log('Skipping invalid activity code:', code);
-          }
-        });
-        
-        // Cache the activity codes for this business unit
-        activityCodesByBuId[businessUnitId] = activityCodeMap;
-        
-        console.log('Final activity code map:', activityCodeMap);
-        return activityCodeMap;
-      } catch (err) {
-        console.error('Error loading activity codes:', err);
-        // Return empty map but don't fail completely
-        activityCodesByBuId[businessUnitId] = {};
-        return {};
-      }
-    }
-
-    // ===== Improved Function to get activity name from code =====
-    function getActivityName(businessUnitId, activityCodeId) {
-      if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
-      
-      // Default system activity codes - hardcoded with more comprehensive list
-      const systemCodes = {
-        '0': 'On Queue',
-        '1': 'Break', 
-        '2': 'Meal',
-        '3': 'Meeting',
-        '4': 'Off Queue',
-        '5': 'Time Off',
-        '6': 'Training',
-        '7': 'Agent Unavailable',
-        '8': 'Lunch',
-        '9': 'Coaching',
-        '10': 'System',
-        '11': 'Out of Office',
-        '12': 'Vacation',
-        '13': 'Sick',
-        '14': 'Holiday',
-        '15': 'Personal Time'
-      };
-      
-      // First check if it's a system code
-      if (systemCodes[activityCodeId]) {
-        return systemCodes[activityCodeId];
-      }
-      
-      // If it's a UUID, check business unit activity codes
-      const activityCodes = activityCodesByBuId[businessUnitId];
-      
-      if (activityCodes && activityCodes[activityCodeId]) {
-        return activityCodes[activityCodeId].name;
-      }
-      
-      // Return the code ID if not found anywhere
-      return activityCodeId;
-    }
-
-    // ===== Improved Function to get activity category =====
-    function getActivityCategory(businessUnitId, activityCodeId) {
-      if (!businessUnitId || !activityCodeId) return 'Unknown';
-      
-      // System code categories
-      const systemCodeCategories = {
-        '0': 'OnQueueWork',
-        '1': 'Break', 
-        '2': 'Meal',
-        '3': 'Meeting',
-        '4': 'OffQueueWork',
-        '5': 'TimeOff',
-        '6': 'Training',
-        '7': 'Unavailable',
-        '8': 'Meal',
-        '9': 'Coaching',
-        '10': 'System',
-        '11': 'TimeOff',
-        '12': 'TimeOff',
-        '13': 'TimeOff',
-        '14': 'TimeOff',
-        '15': 'TimeOff'
-      };
-      
-      // First check if it's a system code
-      if (systemCodeCategories[activityCodeId]) {
-        return systemCodeCategories[activityCodeId];
-      }
-      
-      // If it's a UUID, check business unit activity codes
-      const activityCodes = activityCodesByBuId[businessUnitId];
-      
-      if (activityCodes && activityCodes[activityCodeId]) {
-        return activityCodes[activityCodeId].category || 'Unknown';
-      }
-      
-      return 'Unknown';
-    }
-
-    // ===== Function to get user teams =====
-    async function getUserTeams(userId) {
-      try {
-        const userTeamsResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/users/${encodeURIComponent(userId)}/teams`
-        );
-        const teams = userTeamsResponse.entities || userTeamsResponse.teams || [];
-        return teams.map(team => teamsById[team.id]?.name || 'Unknown').join(', ');
-      } catch (err) {
-        console.error(`Error fetching teams for user ${userId}:`, err);
-        return 'Unknown';
-      }
-    }
-
-    // ===== Schedule Functions =====
-    async function loadSchedule() {
-      const resultsDiv = document.getElementById('results');
-      resultsDiv.style.display = 'block';
-      
-      const buIds = dropdowns.businessUnit ? dropdowns.businessUnit.getSelectedValues() : [];
-      const muIds = dropdowns.managementUnit ? dropdowns.managementUnit.getSelectedValues() : [];
-      const userIds = dropdowns.user ? dropdowns.user.getSelectedValues() : [];
-      const startDate = document.getElementById('startDate').value;
-      const endDate = document.getElementById('endDate').value;
-
-      // Convert dd-mm-yyyy to yyyy-mm-dd for API
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-
-      if (buIds.length === 0) {
-        resultsDiv.innerHTML = `<div class="error-message">Please select a business unit.</div>`;
-        return;
-      }
-      if (muIds.length === 0) {
-        resultsDiv.innerHTML = `<div class="error-message">Please select a management unit.</div>`;
-        return;
-      }
-      if (userIds.length === 0) {
-        resultsDiv.innerHTML = `<div class="error-message">Please select at least one user.</div>`;
-        return;
-      }
-      if (!startDate || !endDate) {
-        resultsDiv.innerHTML = `<div class="error-message">Please select both a start and end date.</div>`;
-        return;
-      }
-      if (endDate < startDate) {
-        resultsDiv.innerHTML = `<div class="error-message">End date must be on or after the start date.</div>`;
-        return;
-      }
-
-      const button = document.getElementById('loadScheduleBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Loading schedule...';
-
-      // Set end time to 23:59:59 to include the entire end date
-      const startDateIso = `${startDateApi}T00:00:00.000Z`;
-      const endDateIso = `${endDateApi}T23:59:59.999Z`;
-
-      try {
-        // Get schedules for all selected users
-        let allActivities = [];
-        for (const userId of userIds) {
-          try {
-            const searchResult = await searchSchedules(muIds[0], userId, startDateIso, endDateIso, true);
-            console.log('Raw WFM search result:', searchResult);
-            const activities = await extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
-            console.log(`Extracted ${activities.length} activities for user ${userId}`);
-            allActivities = allActivities.concat(activities);
-          } catch (err) {
-            console.error(`Error loading schedule for user ${userId}:`, err);
-          }
-        }
-        
-        currentScheduleData = allActivities; // Store for export
-        currentDisplayedData.schedule = [...allActivities];
-        renderScheduleResults(resultsDiv, allActivities, userIds, startDateIso, endDateIso);
-      } catch (err) {
-        console.error('Error loading schedule:', err);
-        resultsDiv.innerHTML = `<div class="error-message">Error loading schedule: ${err.message}</div>`;
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-      }
-    }
-
-    async function searchSchedules(managementUnitId, userId, startDateIso, endDateIso, loadFullWeeks) {
-      const body = {
-        userIds: [userId],
-        startDate: startDateIso,
-        endDate: endDateIso,
-        loadFullWeeks: loadFullWeeks
-      };
-
-      const url = `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}/schedules/search`;
-
-      return authorizedFetchJson(url, {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
-    }
-
-    // ===== Fixed function to extract activities from search result =====
-    async function extractUserActivitiesFromSearchResult(response, userId, businessUnitId) {
-      console.log('Full response structure:', response);
-      
-      let userSchedule = null;
-
-      // Handle the nested structure from your sample data
-      if (response && response.userSchedules) {
-        // Your data structure: userSchedules is an object keyed by userId
-        if (response.userSchedules[userId]) {
-          userSchedule = response.userSchedules[userId];
-        } else {
-          // Fallback: take the first user schedule if userId doesn't match key
-          const firstUserId = Object.keys(response.userSchedules)[0];
-          userSchedule = response.userSchedules[firstUserId];
-        }
-      }
-
-      const rows = [];
-
-      // If we found a user schedule, extract shifts and full day time off markers
-      if (userSchedule) {
-        // Process shifts (regular scheduled activities)
-        const shifts = Array.isArray(userSchedule.shifts) ? userSchedule.shifts : [];
-        console.log(`Found ${shifts.length} shifts for user`, shifts);
-
-        shifts.forEach(shift => {
-          const shiftStartDate = shift.startDate ? new Date(shift.startDate) : null;
-          const shiftDateStr = shiftStartDate ? formatDate(shiftStartDate.toISOString().slice(0, 10)) : null;
-          
-          const activities = Array.isArray(shift.activities) ? shift.activities : [];
-          console.log(`Shift ${shift.id} has ${activities.length} activities`, activities);
-
-          activities.forEach(activity => {
-            const startIso = activity.startDate;
-            const lengthMin = activity.lengthInMinutes;
-
-            if (!startIso || lengthMin == null) {
-              console.warn('Skipping activity missing startDate or lengthInMinutes:', activity);
-              return;
-            }
-
-            const start = new Date(startIso);
-            const end = new Date(start.getTime() + lengthMin * 60000);
-
-            // Use the API-based activity name lookup
-            const activityLabel = getActivityName(businessUnitId, activity.activityCodeId);
-
-            const dateStr = shiftDateStr || formatDate(start.toISOString().slice(0, 10));
-
-            rows.push({
-              date: dateStr,
-              start,
-              end,
-              durationMinutes: lengthMin,
-              activityLabel,
-              countsAsPaidTime: activity.countsAsPaidTime,
-              activityCodeId: activity.activityCodeId,
-              type: 'shift',
-              userId: userId,
-              userName: usersById[userId]?.name || userId,
-              teamName: 'Loading...' // Will be populated asynchronously
-            });
-          });
-        });
-
-        // Process full day time off markers (like Sick days)
-        const fullDayTimeOffMarkers = Array.isArray(userSchedule.fullDayTimeOffMarkers) ? userSchedule.fullDayTimeOffMarkers : [];
-        console.log(`Found ${fullDayTimeOffMarkers.length} full day time off markers`, fullDayTimeOffMarkers);
-
-        fullDayTimeOffMarkers.forEach(marker => {
-          const dateStr = marker.managementUnitDate ? formatDate(marker.managementUnitDate) : null;
-          const lengthMin = marker.lengthInMinutes || 480; // Default to 8 hours if not specified
-          
-          if (!dateStr) {
-            console.warn('Skipping marker missing managementUnitDate:', marker);
-            return;
-          }
-
-          // Use the API-based activity name lookup
-          const activityLabel = getActivityName(businessUnitId, marker.activityCodeId);
-
-          rows.push({
-            date: dateStr,
-            start: null, // No specific start time for full day off
-            end: null,   // No specific end time for full day off
-            durationMinutes: lengthMin,
-            activityLabel: activityLabel,
-            countsAsPaidTime: marker.isPaid !== false, // Default to true if not specified
-            activityCodeId: marker.activityCodeId,
-            type: 'fullDayOff',
-            userId: userId,
-            userName: usersById[userId]?.name || userId,
-            teamName: 'Loading...' // Will be populated asynchronously
-          });
-        });
-      }
-
-      // Populate team names asynchronously
-      for (const row of rows) {
-        if (row.teamName === 'Loading...') {
-          row.teamName = await getUserTeams(row.userId);
-        }
-      }
-
-      rows.sort((a, b) => {
-        if (a.date === b.date) {
-          return (a.start || new Date(a.date)) - (b.start || new Date(b.date));
-        }
-        return a.date.localeCompare(b.date);
-      });
-
-      console.log(`Extracted ${rows.length} activities total (${rows.filter(r => r.type === 'shift').length} shifts + ${rows.filter(r => r.type === 'fullDayOff').length} full day off)`);
-      return rows;
-    }
-
-    function renderScheduleResults(container, activities, userIds, startDateIso, endDateIso) {
-      // Convert ISO dates to dd-mm-yyyy for display
-      const startDateStr = formatDate(startDateIso.slice(0, 10));
-      const endDateStr = formatDate(endDateIso.slice(0, 10));
-
-      let html = `
-        <h2 class="section-title">Schedule for Selected Users</h2>
-        <div class="schedule-meta">
-          <span class="pill">From: ${escapeHtml(startDateStr)}</span>
-          &nbsp;
-          <span class="pill">To: ${escapeHtml(endDateStr)}</span>
-          &nbsp;
-          <span class="pill">Source: MU schedules/search</span>
-        </div>
-      `;
-
-      if (!activities.length) {
-        html += `<div class="info-message" style="margin-top:12px;">No activities found for selected users in the selected date range.</div>`;
-      } else {
-        html += `
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th class="sortable" data-sort="userName">User</th>
-                <th class="sortable" data-sort="teamName">Team</th>
-                <th class="sortable" data-sort="date">Date</th>
-                <th class="sortable" data-sort="activityLabel">Activity</th>
-                <th>Start</th>
-                <th>End</th>
-                <th class="sortable" data-sort="durationMinutes">Duration</th>
-              </tr>
-            </thead>
-            <tbody>
-        `;
-        activities.forEach(row => {
-          html += `
-            <tr>
-              <td>${escapeHtml(row.userName)}</td>
-              <td>${escapeHtml(row.teamName)}</td>
-              <td>${escapeHtml(row.date)}</td>
-              <td>${escapeHtml(row.activityLabel || '')}</td>
-              <td>${escapeHtml(formatTime(row.start))}</td>
-              <td>${escapeHtml(formatTime(row.end))}</td>
-              <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
-            </tr>
-          `;
-        });
-        html += `</tbody></table>`;
-      }
-
-      const contentContainer = document.getElementById('scheduleResultsContent');
-      contentContainer.innerHTML = html;
-      
-      // Populate activity filter dropdown
-      const allActivities = [...new Set(activities.map(a => a.activityLabel))].sort();
-      if (dropdowns.activityFilter && allActivities.length > 0) {
-        const activityOpts = allActivities.map(a => ({ value: a, label: a }));
-        dropdowns.activityFilter.setOptions(activityOpts);
-      }
-      
-      // Apply initial sorting
-      applySorting('schedule');
-    }
-
-    function renderScheduleTable(activities) {
-      const contentContainer = document.getElementById('scheduleResultsContent');
-      
-      let html = `
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="userName">User</th>
-              <th class="sortable" data-sort="teamName">Team</th>
-              <th class="sortable" data-sort="date">Date</th>
-              <th class="sortable" data-sort="activityLabel">Activity</th>
-              <th>Start</th>
-              <th>End</th>
-              <th class="sortable" data-sort="durationMinutes">Duration</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      activities.forEach(row => {
-        html += `
-          <tr>
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${escapeHtml(row.teamName)}</td>
-            <td>${escapeHtml(row.date)}</td>
-            <td>${escapeHtml(row.activityLabel || '')}</td>
-            <td>${escapeHtml(formatTime(row.start))}</td>
-            <td>${escapeHtml(formatTime(row.end))}</td>
-            <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
-          </tr>
-        `;
-      });
-      
-      html += `</tbody></table>`;
-      
-      contentContainer.querySelector('table').outerHTML = html;
-    }
-
-    // ===== CORS Proxy Solution =====
-    async function fetchWithCorsProxy(url) {
-      // Try multiple CORS proxy options
-      const proxyUrls = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        `https://cors-anywhere.herokuapp.com/${url}`
-      ];
-      
-      for (const proxyUrl of proxyUrls) {
-        try {
-          console.log(`Trying CORS proxy: ${proxyUrl}`);
-          const response = await fetch(proxyUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-            }
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log('Successfully fetched data via CORS proxy');
-            return data;
-          }
-        } catch (err) {
-          console.warn(`CORS proxy failed: ${err.message}`);
-          continue;
-        }
-      }
-      
-      throw new Error('All CORS proxies failed');
-    }
-
-    // ===== Actual Activity Functions =====
-    async function loadActualActivity() {
-      const buIds = dropdowns.actualBu ? dropdowns.actualBu.getSelectedValues() : [];
-      const muIds = dropdowns.actualMu ? dropdowns.actualMu.getSelectedValues() : [];
-      const userIds = dropdowns.actualUser ? dropdowns.actualUser.getSelectedValues() : [];
-      const startDateRaw = document.getElementById('actualStartDate').value;
-      const endDateRaw = document.getElementById('actualEndDate').value;
-
-      const startDateApi = convertToApiFormat(startDateRaw);
-      const endDateApi = convertToApiFormat(endDateRaw);
-
-      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateApi || !endDateApi) {
-        showMessage('Please select business unit, management unit, users, and date range', 'error');
-        return;
-      }
-
-      const start = new Date(startDateApi);
-      const end = new Date(endDateApi);
-      const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-      
-      if (daysDiff > 31) {
-        showMessage('Historical adherence queries are limited to 31 days maximum', 'error');
-        return;
-      }
-
-      const button = document.getElementById('loadActualActivityBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Loading actual activity...';
-
-      try {
-        await loadActivityCodes(buIds[0]);
-        
-        const jobId = await createHistoricalAdherenceQuery(muIds[0], userIds, startDateApi, endDateApi);
-        const jobResult = await pollHistoricalAdherenceJob(jobId);
-        const actualActivityData = await processJobResults(jobResult, buIds[0]);
-        
-        currentActualActivityData = actualActivityData;
-        currentDisplayedData.actual = [...actualActivityData];
-        renderActualActivityResults(actualActivityData, startDateRaw, endDateRaw);
-        
-        showMessage('Actual activity data loaded successfully', 'success');
-      } catch (err) {
-        console.error('Error loading actual activity:', err);
-        throw err;
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-      }
-    }
-
-    async function createHistoricalAdherenceQuery(managementUnitId, userIds, startDate, endDate) {
-      const body = {
-        startDate: `${startDate}T00:00:00.000Z`,
-        endDate: `${endDate}T23:59:59.999Z`,
-        timeZone: 'UTC',
-        userIds: userIds
-      };
-
-      console.log('Creating historical adherence query with body:', body);
-
-      const url = `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}/historicaladherencequery`;
-
-      try {
-        const response = await authorizedFetchJson(url, {
-          method: 'POST',
-          body: JSON.stringify(body)
-        });
-
-        console.log('Historical adherence query response:', response);
-
-        if (response && response.id) {
-          console.log(`Historical adherence job created with ID: ${response.id}`);
-          return response.id;
-        } else {
-          throw new Error('Failed to create historical adherence query job - no job ID returned');
-        }
-      } catch (err) {
-        console.error('Error creating historical adherence query:', err);
-        throw new Error(`Failed to create historical adherence query: ${err.message}`);
-      }
-    }
-
-    async function pollHistoricalAdherenceJob(jobId) {
-      const url = `${apiBase}/api/v2/workforcemanagement/adherence/historical/jobs/${encodeURIComponent(jobId)}`;
-      
-      console.log(`Starting to poll historical adherence job: ${jobId}`);
-      
-      return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 90; // 3 minutes maximum (2 seconds * 90)
-        
-        const checkJobStatus = async () => {
-          attempts++;
-          
-          try {
-            console.log(`Checking job status (attempt ${attempts})...`);
-            const response = await authorizedFetchJson(url);
-            
-            console.log('Job status response:', response);
-            
-            if (!response) {
-              reject(new Error('Empty response from job status check'));
-              return;
-            }
-            
-            const jobState = response.queryState || response.state || response.status;
-            
-            console.log(`Detected job state: ${jobState}`);
-            
-            if (jobState === 'Complete' || jobState === 'COMPLETE' || jobState === 'Completed' || jobState === 'COMPLETED') {
-              console.log('Job completed successfully');
-              resolve(response);
-            } else if (jobState === 'Failed' || jobState === 'FAILED' || jobState === 'Error' || jobState === 'ERROR') {
-              const errorMessage = response.errorMessage || response.message || 'Historical adherence job failed';
-              console.error('Job failed:', errorMessage);
-              reject(new Error(errorMessage));
-            } else if (jobState === 'Processing' || jobState === 'PROCESSING' || jobState === 'Running' || jobState === 'RUNNING') {
-              // Still processing, check again after delay
-              if (attempts >= maxAttempts) {
-                reject(new Error('Job polling timeout - job took too long to complete'));
-              } else {
-                setTimeout(checkJobStatus, 2000);
-              }
-            } else {
-              // Unknown state, log and continue polling
-              console.log(`Job in unknown state: ${jobState}, continuing to poll...`);
-              if (attempts >= maxAttempts) {
-                reject(new Error(`Job polling timeout - stuck in state: ${jobState}`));
-              } else {
-                setTimeout(checkJobStatus, 2000);
-              }
-            }
-          } catch (err) {
-            console.error('Error checking job status:', err);
-            if (attempts >= maxAttempts) {
-              reject(new Error(`Job polling failed after ${maxAttempts} attempts: ${err.message}`));
-            } else {
-              setTimeout(checkJobStatus, 2000);
-            }
-          }
-        };
-        
-        // Start polling
-        checkJobStatus();
-      });
-    }
-
-    async function processJobResults(jobResult, businessUnitId) {
-      if (!jobResult.downloadUrls || jobResult.downloadUrls.length === 0) {
-        throw new Error('No download URLs found in job result');
-      }
-
-      const allActualActivities = [];
-      
-      // Download and process each URL using CORS proxy
-      for (const downloadUrl of jobResult.downloadUrls) {
-        try {
-          console.log('Downloading from:', downloadUrl);
-          
-          // Use CORS proxy to bypass CORS restrictions
-          const data = await fetchWithCorsProxy(downloadUrl);
-          
-          // Process the data
-          if (data && data.data) {
-            for (const userData of data.data) {
-              if (userData.actuals && userData.actuals.length > 0) {
-                const userName = usersById[userData.userId]?.name || userData.userId;
-                const userTeam = await getUserTeams(userData.userId);
-                const startDate = new Date(userData.startDate);
-                
-                userData.actuals.forEach(actual => {
-                  // Skip if no start/end offsets
-                  if (actual.startOffsetSeconds == null || actual.endOffsetSeconds == null) {
-                    return;
-                  }
-                  
-                  // Calculate actual start and end times
-                  const startTime = new Date(startDate.getTime() + (actual.startOffsetSeconds * 1000));
-                  const endTime = new Date(startDate.getTime() + (actual.endOffsetSeconds * 1000));
-                  
-                  const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
-                  
-                  // Get activity name
-                  let activityName = actual.actualActivityCategory || 'Unknown Activity';
-                  if (actual.actualActivityCodeId) {
-                    const mappedName = getActivityName(businessUnitId, actual.actualActivityCodeId);
-                    if (mappedName && mappedName !== actual.actualActivityCodeId) {
-                      activityName = mappedName;
-                    }
-                  }
-                  
-                  allActualActivities.push({
-                    userId: userData.userId,
-                    userName: userName,
-                    teamName: userTeam,
-                    date: formatDate(startTime.toISOString().slice(0, 10)),
-                    startTime: startTime,
-                    endTime: endTime,
-                    durationMinutes: durationMinutes,
-                    activityLabel: activityName,
-                    activityCodeId: actual.actualActivityCodeId,
-                    activityCategory: actual.actualActivityCategory,
-                    systemPresence: actual.systemPresence
-                  });
-                });
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error processing download URL:', error);
-          throw new Error(`Failed to download results: ${error.message}`);
-        }
-      }
-      
-      console.log(`Processed ${allActualActivities.length} actual activities`);
-      return allActualActivities;
-    }
-
-    function renderActualActivityResults(data, startDateInputFormat, endDateInputFormat) {
-      const container = document.getElementById('actualResults');
-      const contentContainer = document.getElementById('actualResultsContent');
-      container.style.display = 'block';
-      
-      if (!data || data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No actual activity data found for the selected period.
-          </div>
-        `;
-        return;
-      }
-      
-      // Apply initial sorting by date and time
-      data.sort((a, b) => {
-        if (a.date === b.date) {
-          return a.startTime - b.startTime;
-        }
-        return a.date.localeCompare(b.date);
-      });
-
-      const niceStart = formatDate(convertToApiFormat(startDateInputFormat));
-      const niceEnd = formatDate(convertToApiFormat(endDateInputFormat));
-      
-      let html = `
-        <h3 class="section-title">Actual Activity (Historical Adherence)</h3>
-        <div class="schedule-meta">
-          <span class="pill">Period: ${niceStart} to ${niceEnd}</span>
-          &nbsp;
-          <span class="pill">Total Activities: ${data.length}</span>
-          &nbsp;
-          <span class="pill">Source: Historical Adherence API</span>
-        </div>
-        
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="userName">User</th>
-              <th class="sortable" data-sort="teamName">Team</th>
-              <th class="sortable" data-sort="date">Date</th>
-              <th class="sortable" data-sort="activityLabel">Activity</th>
-              <th>Start Time</th>
-              <th>End Time</th>
-              <th class="sortable" data-sort="durationMinutes">Duration</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(row => {
-        html += `
-          <tr>
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${escapeHtml(row.teamName)}</td>
-            <td>${escapeHtml(row.date)}</td>
-            <td>${escapeHtml(row.activityLabel || '')}</td>
-            <td>${escapeHtml(formatTime(row.startTime))}</td>
-            <td>${escapeHtml(formatTime(row.endTime))}</td>
-            <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
-          </tr>
-        `;
-      });
-      
-      html += `</tbody></table>`;
-      
-      contentContainer.innerHTML = html;
-      
-      // Populate activity filter dropdown
-      const allActivities = [...new Set(data.map(a => a.activityLabel))].sort();
-      if (dropdowns.actualActivityFilter && allActivities.length > 0) {
-        const activityOpts = allActivities.map(a => ({ value: a, label: a }));
-        dropdowns.actualActivityFilter.setOptions(activityOpts);
-        
-        // Add event listener for activity filtering
-        dropdowns.actualActivityFilter.onSelectionChange = (selectedActivities) => {
-          let filteredData = currentActualActivityData;
-          if (selectedActivities.length > 0) {
-            filteredData = currentActualActivityData.filter(activity => 
-              selectedActivities.includes(activity.activityLabel)
-            );
-          }
-          currentDisplayedData.actual = filteredData;
-          renderActualActivityResults(filteredData, startDateInputFormat, endDateInputFormat);
-        };
-      }
-      
-      // Add sorting functionality to table headers
-      addTableSorting('actual');
-    }
-
-    function addTableSorting(tabType) {
-      const table = document.querySelector(`#${tabType}ResultsContent table`);
-      if (!table) return;
-      
-      const headers = table.querySelectorAll('th.sortable');
-      headers.forEach(header => {
-        header.addEventListener('click', () => {
-          const sortField = header.getAttribute('data-sort');
-          const currentSort = document.getElementById(`${tabType}Sort`).value;
-          const currentOrder = document.getElementById(`${tabType}SortOrder`).value;
-          
-          if (sortField === currentSort) {
-            // Toggle order if same field
-            document.getElementById(`${tabType}SortOrder`).value = currentOrder === 'asc' ? 'desc' : 'asc';
-          } else {
-            // New field, default to ascending
-            document.getElementById(`${tabType}Sort`).value = sortField;
-            document.getElementById(`${tabType}SortOrder`).value = 'asc';
-          }
-          
-          applySorting(tabType);
-        });
-      });
     }
 
     // ===== Overtime Analysis =====
@@ -2519,38 +1349,6 @@
       }
     }
 
-    async function getUsersForAnalytics(muId, teamIds) {
-      let users = [];
-      
-      // Handle team selection
-      if (teamIds && teamIds.length > 0) {
-        const teamMembersArrays = await Promise.all(
-          teamIds.map(teamId => getTeamMembers(teamId))
-        );
-        users = teamMembersArrays.flat();
-      } else {
-        // Get all users from management unit
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
-        );
-        users = muUsersResponse.entities || muUsersResponse.users || [];
-      }
-      
-      return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
-    }
-
-    async function getTeamMembers(teamId) {
-      try {
-        const teamMembersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
-        );
-        return teamMembersResponse.entities || teamMembersResponse.members || [];
-      } catch (err) {
-        console.error(`Error fetching team members for team ${teamId}:`, err);
-        return [];
-      }
-    }
-
     function extractOvertimeActivities(schedule, userId, businessUnitId) {
       const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
       let totalHours = 0;
@@ -2567,16 +1365,10 @@
         
         console.log(`Activity: "${activityName}", Category: "${activityCategory}", Duration: ${activity.durationMinutes}min`);
         
-        // Expanded overtime detection - include more patterns
+        // Check if it's overtime based on name or category - ONLY include overtime activities
         const isOvertime = activityName.toLowerCase().includes('overtime') || 
                           activityCategory.toLowerCase().includes('overtime') ||
-                          activityName.toLowerCase().includes('ot ') ||
-                          activityName.toLowerCase().includes('ot_') ||
-                          activityName.toLowerCase().includes('over time') ||
-                          activityName.toLowerCase().includes('1.5') ||
-                          activityName.toLowerCase().includes('2.0') ||
-                          activityName.toLowerCase().includes('timehalf') ||
-                          activityName.toLowerCase().includes('doubletime');
+                          activityName.toLowerCase().includes('ot ');
         
         if (isOvertime) {
           const hours = activity.durationMinutes / 60;
@@ -2620,137 +1412,6 @@
         rate2Hours: parseFloat(rate2Hours.toFixed(1)),
         activities: overtimeActivities
       };
-    }
-
-    // ===== Overtime Results Rendering =====
-    function renderOvertimeResults(data, startDate, endDate) {
-      const container = document.getElementById('overtimeResults');
-      const contentContainer = document.getElementById('overtimeResultsContent');
-      container.style.display = 'block';
-      
-      if (data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No overtime activities found for the selected period.
-          </div>
-        `;
-        return;
-      }
-      
-      // Sort by total overtime hours (descending) by default
-      data.sort((a, b) => b.totalHours - a.totalHours);
-      
-      // Calculate overall metrics
-      const totalOvertime = data.reduce((sum, item) => sum + item.totalHours, 0);
-      const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
-      const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
-      const totalRate2 = data.reduce((sum, item) => sum + item.rate2Hours, 0);
-      const avgOvertimePerUser = totalOvertime / data.length;
-      
-      let html = `
-        <h3 class="section-title">Overtime Report</h3>
-        <div class="schedule-meta">
-          <span class="pill">Period: ${startDate} to ${endDate}</span>
-          &nbsp;
-          <span class="pill">Total Agents: ${data.length}</span>
-          &nbsp;
-          <span class="pill">Total Overtime: ${totalOvertime.toFixed(1)}h</span>
-        </div>
-        
-        <!-- Overtime Metrics -->
-        <div class="overtime-metrics">
-          <div class="overtime-metric-card">
-            <div class="metric-label">Total Overtime</div>
-            <div class="metric-value">${totalOvertime.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">1.0 Rate</div>
-            <div class="metric-value">${totalRate1.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">1.5 Rate</div>
-            <div class="metric-value">${totalRate1_5.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">2.0 Rate</div>
-            <div class="metric-value">${totalRate2.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">Avg per User</div>
-            <div class="metric-value">${avgOvertimePerUser.toFixed(1)}h</div>
-          </div>
-        </div>
-        
-        <!-- Overtime Chart -->
-        <div class="chart-wrapper">
-          <h4>Overtime Distribution</h4>
-          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
-            Showing top ${Math.min(10, data.length)} users by overtime hours
-          </div>
-      `;
-      
-      // Create chart for top 10 users
-      const topUsers = data.slice(0, 10);
-      const maxHours = Math.max(...topUsers.map(u => u.totalHours), 1);
-      
-      topUsers.forEach(user => {
-        const percentage = (user.totalHours / maxHours) * 100;
-        html += `
-          <div class="chart-bar">
-            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
-            <div class="chart-bar-container">
-              <div class="chart-bar-fill" style="width: ${percentage}%">
-                ${user.totalHours.toFixed(1)}h
-              </div>
-            </div>
-            <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
-          </div>
-        `;
-      });
-      
-      html += `</div>`;
-      
-      // Summary Table
-      html += `
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="user">Agent</th>
-              <th class="sortable" data-sort="totalHours">Total Overtime</th>
-              <th class="sortable" data-sort="rate1Hours">1.0 Rate</th>
-              <th class="sortable" data-sort="rate1_5Hours">1.5 Rate</th>
-              <th class="sortable" data-sort="rate2Hours">2.0 Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(item => {
-        html += `
-          <tr>
-            <td>${escapeHtml(item.user)}</td>
-            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
-            <td>${item.rate1Hours.toFixed(1)}h</td>
-            <td>${item.rate1_5Hours.toFixed(1)}h</td>
-            <td>${item.rate2Hours.toFixed(1)}h</td>
-          </tr>
-        `;
-      });
-      
-      html += `
-            </tbody>
-          </table>
-        </div>
-      `;
-      
-      contentContainer.innerHTML = html;
-      
-      // Populate overtime activity filter dropdown
-      const overtimeActivities = [...new Set(data.flatMap(u => u.activities.map(a => a.activity)))].sort();
-      if (dropdowns.overtimeActivityFilter && overtimeActivities.length > 0) {
-        const activityOpts = overtimeActivities.map(a => ({ value: a, label: a }));
-        dropdowns.overtimeActivityFilter.setOptions(activityOpts);
-      }
     }
 
     // ===== Absence Analysis =====
@@ -2838,19 +1499,16 @@
         
         console.log(`Activity: ${activityName}, Category: ${activityCategory}, Code: ${activity.activityCodeId}, Duration: ${activity.durationMinutes}min`);
         
-        // Expanded absence detection
+        // Check if it's absence based on category or name, but EXCLUDE Holiday and TOIL
         const isAbsence = (activity.type === 'fullDayOff' || 
                          activityCategory === 'TimeOff' ||
-                         activityName.toLowerCase().includes('time off') || 
-                         activityName.toLowerCase().includes('sick') || 
-                         activityName.toLowerCase().includes('absence') || 
-                         activityName.toLowerCase().includes('vacation') ||
-                         activityName.toLowerCase().includes('leave') ||
-                         activityName.toLowerCase().includes('pto') ||
-                         activityName.toLowerCase().includes('personal') ||
-                         activityName.toLowerCase().includes('medical')) &&
-                         !activityName.toLowerCase().includes('holiday') &&
-                         !activityName.toLowerCase().includes('toil');
+                         activityName.includes('Time Off') || 
+                         activityName.includes('Sick') || 
+                         activityName.includes('Absence') || 
+                         activityName.includes('Vacation') ||
+                         activityName.includes('Leave')) &&
+                         !activityName.includes('Holiday') &&
+                         !activityName.includes('TOIL');
         
         if (isAbsence) {
           totalHours += activity.durationMinutes / 60;
@@ -3260,505 +1918,20 @@
         .slice(0, 10); // Top 10 types
     }
 
-    // ===== Late Report Functions =====
-    async function generateLateReport() {
-      const buIds = dropdowns.lateBu ? dropdowns.lateBu.getSelectedValues() : [];
-      const muIds = dropdowns.lateMu ? dropdowns.lateMu.getSelectedValues() : [];
-      const userIds = dropdowns.lateUser ? dropdowns.lateUser.getSelectedValues() : [];
-      const startDateRaw = document.getElementById('lateStartDate').value;
-      const endDateRaw = document.getElementById('lateEndDate').value;
-      const thresholdSeconds = parseInt(document.getElementById('lateThreshold').value) || 30;
-
-      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
-        showMessage('Please select business unit, management unit, users, and date range', 'error');
-        return;
-      }
-
-      const button = document.getElementById('generateLateReportBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Generating late report...';
-
-      try {
-        // Load activity codes first
-        await loadActivityCodes(buIds[0]);
-        
-        // Get schedule data
-        const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        console.log('Schedule data for late report:', scheduleData);
-        
-        // Get actual activity data
-        const actualData = await getActualActivityDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        console.log('Actual data for late report:', actualData);
-        
-        // Generate late report by comparing schedule vs actual
-        const lateReportData = generateLateReportData(scheduleData, actualData, thresholdSeconds);
-        console.log('Generated late report data:', lateReportData);
-        
-        currentDisplayedData.late = [...lateReportData];
-        renderLateReportResults(lateReportData);
-        
-        showMessage('Late report generated successfully', 'success');
-      } catch (err) {
-        console.error('Error generating late report:', err);
-        showMessage(`Failed to generate late report: ${err.message}`, 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-      }
-    }
-
-    // Get schedule data for late report - FIXED
-    async function getScheduleDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      // Convert dd-mm-yyyy to yyyy-mm-dd for API
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-      
-      // Set end time to 23:59:59 to include the entire end date
-      const startDateIso = `${startDateApi}T00:00:00.000Z`;
-      const endDateIso = `${endDateApi}T23:59:59.999Z`;
-
-      let allActivities = [];
-      for (const userId of userIds) {
-        try {
-          const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
-          console.log(`Schedule search result for user ${userId}:`, searchResult);
-          const activities = await extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
-          console.log(`Extracted ${activities.length} activities for user ${userId}:`, activities);
-          allActivities = allActivities.concat(activities);
-        } catch (err) {
-          console.error(`Error loading schedule for user ${userId}:`, err);
-        }
-      }
-      
-      return allActivities;
-    }
-
-    // Get actual activity data for late report - FIXED  
-    async function getActualActivityDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-
-      try {
-        const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
-        const jobResult = await pollHistoricalAdherenceJob(jobId);
-        const actualData = await processJobResults(jobResult, businessUnitId);
-        
-        // Filter out 'Unavailable' activities as requested
-        const filteredActualData = actualData.filter(activity => 
-          !activity.activityLabel.toLowerCase().includes('unavailable') &&
-          !activity.activityCategory.toLowerCase().includes('unavailable')
-        );
-        
-        console.log(`Filtered actual data: ${filteredActualData.length} activities (removed ${actualData.length - filteredActualData.length} unavailable activities)`);
-        
-        return filteredActualData;
-      } catch (err) {
-        console.error('Error getting actual activity data for late report:', err);
-        // Return empty array instead of throwing to allow schedule-only data
-        return [];
-      }
-    }
-
-    // Generate late report by comparing schedule vs actual - FIXED
-    function generateLateReportData(scheduleData, actualData, thresholdSeconds) {
-      const lateReport = [];
-      
-      console.log(`Generating late report with ${scheduleData.length} schedule items and ${actualData.length} actual items`);
-      
-      // Group schedule data by user and date to find first activity of each day
-      const scheduleByUserDate = {};
-      
-      scheduleData.forEach(scheduleItem => {
-        const key = `${scheduleItem.userId}_${scheduleItem.date}`;
-        if (!scheduleByUserDate[key]) {
-          scheduleByUserDate[key] = [];
-        }
-        scheduleByUserDate[key].push(scheduleItem);
-      });
-      
-      console.log(`Grouped schedule into ${Object.keys(scheduleByUserDate).length} user/date combinations`);
-      
-      // Group actual data by user and date for easier lookup
-      const actualByUserDate = {};
-      actualData.forEach(actualItem => {
-        const key = `${actualItem.userId}_${actualItem.date}`;
-        if (!actualByUserDate[key]) {
-          actualByUserDate[key] = [];
-        }
-        actualByUserDate[key].push(actualItem);
-      });
-      
-      // For each user/date combination in schedule, find matching actual data
-      Object.keys(scheduleByUserDate).forEach(key => {
-        const [userId, date] = key.split('_');
-        const userSchedule = scheduleByUserDate[key];
-        
-        // Sort by start time and get first activity of the day
-        userSchedule.sort((a, b) => {
-          const aTime = a.start ? a.start.getTime() : new Date(a.date).getTime();
-          const bTime = b.start ? b.start.getTime() : new Date(b.date).getTime();
-          return aTime - bTime;
-        });
-        
-        const firstScheduledActivity = userSchedule[0];
-        
-        if (!firstScheduledActivity) return;
-        
-        // Find actual activities for this user/date
-        const userActualActivities = actualByUserDate[key] || [];
-        
-        if (userActualActivities.length === 0) {
-          // No actual data found - label as AWOL
-          lateReport.push({
-            userId: userId,
-            userName: firstScheduledActivity.userName,
-            teamName: firstScheduledActivity.teamName,
-            date: date,
-            scheduledStart: firstScheduledActivity.start,
-            actualStart: null,
-            status: 'AWOL',
-            durationLate: null,
-            scheduledActivity: firstScheduledActivity.activityLabel,
-            actualActivity: null
-          });
-          return;
-        }
-        
-        // Sort actual activities by start time and get first one
-        userActualActivities.sort((a, b) => a.startTime - b.startTime);
-        const firstActualActivity = userActualActivities[0];
-        
-        if (!firstActualActivity) return;
-        
-        // Skip if scheduled start time is not available (full day off)
-        if (!firstScheduledActivity.start) {
-          return;
-        }
-        
-        // Calculate time difference in seconds
-        const timeDiffSeconds = Math.round((firstActualActivity.startTime - firstScheduledActivity.start) / 1000);
-        
-        // Determine status
-        let status, durationLate;
-        
-        if (timeDiffSeconds <= thresholdSeconds && timeDiffSeconds >= -thresholdSeconds) {
-          status = 'Adherent';
-          durationLate = 0;
-        } else if (timeDiffSeconds > thresholdSeconds) {
-          status = 'Late';
-          durationLate = timeDiffSeconds;
-        } else {
-          status = 'Early';
-          durationLate = Math.abs(timeDiffSeconds);
-        }
-        
-        lateReport.push({
-          userId: userId,
-          userName: firstScheduledActivity.userName,
-          teamName: firstScheduledActivity.teamName,
-          date: date,
-          scheduledStart: firstScheduledActivity.start,
-          actualStart: firstActualActivity.startTime,
-          status: status,
-          durationLate: durationLate,
-          scheduledActivity: firstScheduledActivity.activityLabel,
-          actualActivity: firstActualActivity.activityLabel
-        });
-      });
-      
-      console.log(`Generated ${lateReport.length} late report entries`);
-      return lateReport;
-    }
-
-    // ===== Time of Day Lateness Graph =====
-    function renderTimeOfDayLatenessChart(lateReportData) {
-      const chartContainer = document.getElementById('timeOfDayLatenessChart');
-      const chartContent = document.getElementById('latenessChartContent');
-      
-      if (!lateReportData || lateReportData.length === 0) {
-        chartContainer.style.display = 'none';
-        return;
-      }
-      
-      // Group by scheduled start time hour
-      const timeSlots = {};
-      for (let hour = 0; hour < 24; hour++) {
-        timeSlots[hour] = { total: 0, late: 0, early: 0, adherent: 0, awol: 0 };
-      }
-      
-      lateReportData.forEach(record => {
-        if (record.scheduledStart) {
-          const hour = record.scheduledStart.getHours();
-          timeSlots[hour].total++;
-          
-          switch(record.status) {
-            case 'Late': timeSlots[hour].late++; break;
-            case 'Early': timeSlots[hour].early++; break;
-            case 'Adherent': timeSlots[hour].adherent++; break;
-            case 'AWOL': timeSlots[hour].awol++; break;
-          }
-        }
-      });
-      
-      let html = '<div class="chart-bars-container">';
-      
-      Object.keys(timeSlots).sort().forEach(hour => {
-        const slot = timeSlots[hour];
-        if (slot.total === 0) return;
-        
-        const latePercentage = (slot.late / slot.total) * 100;
-        const hourLabel = `${String(hour).padStart(2, '0')}:00`;
-        
-        html += `
-          <div class="chart-bar">
-            <div class="chart-bar-label">${hourLabel}</div>
-            <div class="chart-bar-container">
-              <div class="chart-bar-fill" style="width: ${latePercentage}%; background: linear-gradient(90deg, #ef4444, #dc2626);">
-                ${slot.late}
-              </div>
-            </div>
-            <div class="chart-bar-value">
-              ${slot.late}/${slot.total} (${latePercentage.toFixed(1)}%)
-            </div>
-          </div>
-        `;
-      });
-      
-      html += '</div>';
-      chartContent.innerHTML = html;
-      chartContainer.style.display = 'block';
-    }
-
-    // ===== Late Status Drill-down =====
-    function renderLateStatusDrilldown(lateReportData) {
-      const drilldownContainer = document.getElementById('lateStatusDrilldown');
-      
-      if (!lateReportData || lateReportData.length === 0) {
-        drilldownContainer.innerHTML = '<div class="muted">No data available</div>';
-        return;
-      }
-      
-      // Count statuses
-      const statusCounts = {
-        'Late': 0,
-        'Early': 0,
-        'Adherent': 0,
-        'AWOL': 0
-      };
-      
-      lateReportData.forEach(record => {
-        statusCounts[record.status]++;
-      });
-      
-      let html = '';
-      Object.keys(statusCounts).forEach(status => {
-        const count = statusCounts[status];
-        const percentage = (count / lateReportData.length) * 100;
-        
-        let statusClass = '';
-        switch(status) {
-          case 'Late': statusClass = 'status-late'; break;
-          case 'Early': statusClass = 'status-early'; break;
-          case 'Adherent': statusClass = 'status-adherent'; break;
-          case 'AWOL': statusClass = 'status-awol'; break;
-        }
-        
-        html += `
-          <div class="metric-card clickable" style="min-width: 120px; padding: 8px 12px;" 
-                onclick="drillDownToStatus('${status}')">
-            <div class="metric-label">${status}</div>
-            <div class="metric-value">${count}</div>
-            <div class="muted">${percentage.toFixed(1)}%</div>
-          </div>
-        `;
-      });
-      
-      drilldownContainer.innerHTML = html;
-    }
-
-    // ===== Drill-down to Status =====
-    function drillDownToStatus(status) {
-      const filteredData = currentDisplayedData.late.filter(
-        record => record.status === status
-      );
-      
-      currentDisplayedData.late = filteredData;
-      renderLateReportResults(filteredData);
-      
-      // Update the drilldown state
-      currentDrillDown = {
-        type: 'status',
-        filter: status
-      };
-      
-      showMessage(`Showing data for status: ${status}`, 'info');
-    }
-
-    // Render late report results
-    function renderLateReportResults(data) {
-      const container = document.getElementById('lateResults');
-      const contentContainer = document.getElementById('lateResultsContent');
-      container.style.display = 'block';
-      
-      if (!data || data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No late report data found for the selected period.
-          </div>
-        `;
-        return;
-      }
-      
-      const thresholdSeconds = parseInt(document.getElementById('lateThreshold').value) || 30;
-      const lateCount = data.filter(item => item.status === 'Late').length;
-      const earlyCount = data.filter(item => item.status === 'Early').length;
-      const adherentCount = data.filter(item => item.status === 'Adherent').length;
-      const awolCount = data.filter(item => item.status === 'AWOL').length;
-      
-      let html = `
-        <h3 class="section-title">Late Report ${currentDrillDown.type ? `- ${currentDrillDown.filter}` : ''}</h3>
-        <div class="schedule-meta">
-          <span class="pill">Total Shifts: ${data.length}</span>
-          <span class="pill" style="background: #fee2e2; color: #b42318;">Late: ${lateCount}</span>
-          <span class="pill" style="background: #fffbeb; color: #b45309;">Early: ${earlyCount}</span>
-          <span class="pill" style="background: #f0f9ff; color: #0c4a6e;">Adherent: ${adherentCount}</span>
-          <span class="pill" style="background: #f3e8ff; color: #7e22ce;">AWOL: ${awolCount}</span>
-          <span class="pill">Threshold: ${thresholdSeconds}s</span>
-        </div>
-      `;
-      
-      // Render the status drilldown
-      renderLateStatusDrilldown(data);
-      
-      // Render the time of day chart
-      renderTimeOfDayLatenessChart(data);
-      
-      html += `
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="userName">User</th>
-              <th class="sortable" data-sort="teamName">Team</th>
-              <th class="sortable" data-sort="date">Date</th>
-              <th>Scheduled Start</th>
-              <th>Actual Start</th>
-              <th class="sortable" data-sort="status">Status</th>
-              <th class="sortable" data-sort="durationLate">Duration</th>
-              <th>Scheduled Activity</th>
-              <th>Actual Activity</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(row => {
-        let statusClass = '';
-        let statusText = '';
-        let durationText = '';
-        
-        switch(row.status) {
-          case 'Late':
-            statusClass = 'status-late';
-            statusText = `Late by ${formatDuration(Math.ceil(row.durationLate / 60))}`;
-            durationText = `+${formatDuration(Math.ceil(row.durationLate / 60))}`;
-            break;
-          case 'Early':
-            statusClass = 'status-early';
-            statusText = `Early by ${formatDuration(Math.ceil(row.durationLate / 60))}`;
-            durationText = `-${formatDuration(Math.ceil(row.durationLate / 60))}`;
-            break;
-          case 'Adherent':
-            statusClass = 'status-adherent';
-            statusText = 'On Time';
-            durationText = '0m';
-            break;
-          case 'AWOL':
-            statusClass = 'status-awol';
-            statusText = 'AWOL';
-            durationText = 'N/A';
-            break;
-        }
-        
-        html += `
-          <tr>
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${escapeHtml(row.teamName)}</td>
-            <td>${escapeHtml(row.date)}</td>
-            <td>${row.scheduledStart ? escapeHtml(formatTime(row.scheduledStart)) : 'N/A'}</td>
-            <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'N/A'}</td>
-            <td><span class="${statusClass}">${statusText}</span></td>
-            <td>${durationText}</td>
-            <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
-            <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
-          </tr>
-        `;
-      });
-      
-      html += `</tbody></table>`;
-      
-      contentContainer.innerHTML = html;
-      
-      // Add sorting functionality
-      addLateReportTableSorting();
-    }
-
-    // Add sorting to late report table
-    function addLateReportTableSorting() {
-      const table = document.querySelector('#lateResultsContent table');
-      if (!table) return;
-      
-      const headers = table.querySelectorAll('th.sortable');
-      headers.forEach(header => {
-        header.addEventListener('click', () => {
-          const sortField = header.getAttribute('data-sort');
-          const currentSort = document.getElementById('lateSort').value;
-          const currentOrder = document.getElementById('lateSortOrder').value;
-          
-          if (sortField === currentSort) {
-            document.getElementById('lateSortOrder').value = currentOrder === 'asc' ? 'desc' : 'asc';
-          } else {
-            document.getElementById('lateSort').value = sortField;
-            document.getElementById('lateSortOrder').value = 'asc';
-          }
-          
-          applyLateReportSorting();
-        });
-      });
-    }
-
-    // Apply sorting to late report
-    function applyLateReportSorting() {
-      const data = currentDisplayedData.late;
-      const sortField = document.getElementById('lateSort').value;
-      const sortOrder = document.getElementById('lateSortOrder').value;
-      
-      if (!data || data.length === 0) return;
-      
-      const sortedData = [...data].sort((a, b) => {
-        let aVal = a[sortField];
-        let bVal = b[sortField];
-        
-        if (sortField === 'date') {
-          aVal = new Date(aVal.split('-').reverse().join('-'));
-          bVal = new Date(bVal.split('-').reverse().join('-'));
-        }
-        
-        if (sortField === 'durationLate') {
-          aVal = aVal || 0;
-          bVal = bVal || 0;
-        }
-        
-        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-      
-      currentDisplayedData.late = sortedData;
-      renderLateReportResults(sortedData);
-    }
-
     // ===== Export Functions =====
+    function initializeExportButtons() {
+      // Schedule export
+      document.getElementById('exportScheduleBtn').addEventListener('click', exportScheduleToCSV);
+      
+      // Overtime exports
+      document.getElementById('exportOvertimeSummaryBtn').addEventListener('click', exportOvertimeSummaryToCSV);
+      document.getElementById('exportOvertimeDetailsBtn').addEventListener('click', exportOvertimeDetailsToCSV);
+      
+      // Absence exports
+      document.getElementById('exportAbsenceBtn').addEventListener('click', exportAbsenceToCSV);
+      document.getElementById('exportAbsenceDetailsBtn').addEventListener('click', exportAbsenceDetailsToCSV);
+    }
+
     function exportToCSV(data, filename) {
       if (!data || data.length === 0) {
         showMessage('No data to export', 'error');
@@ -3808,7 +1981,6 @@
       const csvData = exportData.map(activity => ({
         Date: activity.date,
         User: activity.userName,
-        Team: activity.teamName,
         Activity: activity.activityLabel,
         Start: formatTime(activity.start),
         End: formatTime(activity.end),
@@ -3816,33 +1988,6 @@
       }));
 
       exportToCSV(csvData, `schedule_${new Date().toISOString().split('T')[0]}.csv`);
-    }
-
-    function exportActualActivityToCSV() {
-      if (currentDisplayedData.actual.length === 0) {
-        showMessage('No actual activity data to export', 'error');
-        return;
-      }
-
-      let exportData = currentDisplayedData.actual;
-      const selectedActivities = dropdowns.actualActivityFilter ? dropdowns.actualActivityFilter.getSelectedValues() : [];
-      if (selectedActivities.length > 0) {
-        exportData = currentDisplayedData.actual.filter(activity => 
-          selectedActivities.includes(activity.activityLabel)
-        );
-      }
-
-      const csvData = exportData.map(activity => ({
-        Date: activity.date,
-        User: activity.userName,
-        Team: activity.teamName,
-        Activity: activity.activityLabel,
-        Start: formatTime(activity.startTime),
-        End: formatTime(activity.endTime),
-        Duration: formatDuration(activity.durationMinutes)
-      }));
-
-      exportToCSV(csvData, `actual_activity_${new Date().toISOString().split('T')[0]}.csv`);
     }
 
     function exportOvertimeSummaryToCSV() {
@@ -3959,30 +2104,360 @@
       exportToCSV(exportData, `absence_details_${new Date().toISOString().split('T')[0]}.csv`);
     }
 
-    function exportLateReportToCSV() {
-      if (currentDisplayedData.late.length === 0) {
-        showMessage('No late report data to export', 'error');
+    // ===== Existing Functions (shortened for brevity) =====
+    async function getUsersForAnalytics(muId, teamIds) {
+      let users = [];
+      
+      // Handle team selection
+      if (teamIds && teamIds.length > 0) {
+        const teamMembersArrays = await Promise.all(
+          teamIds.map(teamId => getTeamMembers(teamId))
+        );
+        users = teamMembersArrays.flat();
+      } else {
+        // Get all users from management unit
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
+        );
+        users = muUsersResponse.entities || muUsersResponse.users || [];
+      }
+      
+      return users.map(uRef => usersById[uRef.id] || uRef).filter(u => u && u.name);
+    }
+
+    async function getTeamMembers(teamId) {
+      try {
+        const teamMembersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
+        );
+        return teamMembersResponse.entities || teamMembersResponse.members || [];
+      } catch (err) {
+        console.error(`Error fetching team members for team ${teamId}:`, err);
+        return [];
+      }
+    }
+
+    // ===== Fixed function to load activity codes from business unit =====
+    async function loadActivityCodes(businessUnitId) {
+      try {
+        console.log(`Loading activity codes for business unit: ${businessUnitId}`);
+        const activityCodesResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(businessUnitId)}/activitycodes`
+        );
+        
+        console.log('Full activity codes API response:', activityCodesResponse);
+        
+        let activityCodes = [];
+        
+        // Try different response structures
+        if (activityCodesResponse.activityCodes && typeof activityCodesResponse.activityCodes === 'object') {
+          console.log('Found activityCodes object, converting to array...');
+          activityCodes = Object.values(activityCodesResponse.activityCodes);
+        } else if (Array.isArray(activityCodesResponse.entities)) {
+          console.log('Found entities array');
+          activityCodes = activityCodesResponse.entities;
+        } else if (Array.isArray(activityCodesResponse)) {
+          console.log('Response is array');
+          activityCodes = activityCodesResponse;
+        } else {
+          console.log('Unknown response structure, trying to extract any arrays...');
+          // Try to find any array in the response
+          for (const key in activityCodesResponse) {
+            if (Array.isArray(activityCodesResponse[key])) {
+              activityCodes = activityCodesResponse[key];
+              console.log(`Found array in key: ${key}`);
+              break;
+            }
+          }
+        }
+        
+        console.log(`Loaded ${activityCodes.length} activity codes:`, activityCodes);
+        
+        // Create a lookup map by ID - now storing both name and category
+        const activityCodeMap = {};
+        activityCodes.forEach(code => {
+          if (code && code.id) {
+            activityCodeMap[code.id] = {
+              name: code.name ? code.name.trim() : code.id,
+              category: code.category || 'Unknown'
+            };
+            console.log(`Mapped: ${code.id} -> "${code.name}" (Category: ${code.category})`);
+          } else {
+            console.log('Skipping invalid activity code:', code);
+          }
+        });
+        
+        // Cache the activity codes for this business unit
+        activityCodesByBuId[businessUnitId] = activityCodeMap;
+        
+        console.log('Final activity code map:', activityCodeMap);
+        return activityCodeMap;
+      } catch (err) {
+        console.error('Error loading activity codes:', err);
+        // Return empty map but don't fail completely
+        activityCodesByBuId[businessUnitId] = {};
+        return {};
+      }
+    }
+
+    // ===== Function to get activity name from code =====
+    function getActivityName(businessUnitId, activityCodeId) {
+      if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
+      
+      // Default system activity codes - hardcoded
+      const systemCodes = {
+        '0': 'On Queue',
+        '1': 'Break', 
+        '2': 'Meal',
+        '3': 'Meeting',
+        '4': 'Off Queue',
+        '5': 'Time Off',
+        '6': 'Training',
+        '7': 'Agent Unavailable'
+      };
+      
+      // First check if it's a system code
+      if (systemCodes[activityCodeId]) {
+        return systemCodes[activityCodeId];
+      }
+      
+      // If it's a UUID, check business unit activity codes
+      const activityCodes = activityCodesByBuId[businessUnitId];
+      
+      if (activityCodes && activityCodes[activityCodeId]) {
+        return activityCodes[activityCodeId].name;
+      }
+      
+      // Return the code ID if not found anywhere
+      return activityCodeId;
+    }
+
+    // ===== Function to get activity category =====
+    function getActivityCategory(businessUnitId, activityCodeId) {
+      if (!businessUnitId || !activityCodeId) return 'Unknown';
+      
+      // System code categories
+      const systemCodeCategories = {
+        '0': 'OnQueueWork',
+        '1': 'Break', 
+        '2': 'Meal',
+        '3': 'Meeting',
+        '4': 'OffQueueWork',
+        '5': 'TimeOff',
+        '6': 'Training',
+        '7': 'Unavailable'
+      };
+      
+      // First check if it's a system code
+      if (systemCodeCategories[activityCodeId]) {
+        return systemCodeCategories[activityCodeId];
+      }
+      
+      // If it's a UUID, check business unit activity codes
+      const activityCodes = activityCodesByBuId[businessUnitId];
+      
+      if (activityCodes && activityCodes[activityCodeId]) {
+        return activityCodes[activityCodeId].category;
+      }
+      
+      return 'Unknown';
+    }
+
+    // ===== Main schedule search using MU schedules/search =====
+    async function loadSchedule() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.style.display = 'block';
+      
+      const buIds = dropdowns.businessUnit ? dropdowns.businessUnit.getSelectedValues() : [];
+      const muIds = dropdowns.managementUnit ? dropdowns.managementUnit.getSelectedValues() : [];
+      const userIds = dropdowns.user ? dropdowns.user.getSelectedValues() : [];
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      // Convert dd-mm-yyyy to yyyy-mm-dd for API
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+
+      if (buIds.length === 0) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select a business unit.</div>`;
+        return;
+      }
+      if (muIds.length === 0) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select a management unit.</div>`;
+        return;
+      }
+      if (userIds.length === 0) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select at least one user.</div>`;
+        return;
+      }
+      if (!startDate || !endDate) {
+        resultsDiv.innerHTML = `<div class="error-message">Please select both a start and end date.</div>`;
+        return;
+      }
+      if (endDate < startDate) {
+        resultsDiv.innerHTML = `<div class="error-message">End date must be on or after the start date.</div>`;
         return;
       }
 
-      const csvData = currentDisplayedData.late.map(row => ({
-        Date: row.date,
-        User: row.userName,
-        Team: row.teamName,
-        'Scheduled Start': row.scheduledStart ? formatTime(row.scheduledStart) : 'N/A',
-        'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'N/A',
-        Status: row.status,
-        'Duration Late/Early': row.durationLate !== null ? 
-          (row.status === 'Late' ? `+${formatDuration(Math.ceil(row.durationLate / 60))}` : 
-           row.status === 'Early' ? `-${formatDuration(Math.ceil(row.durationLate / 60))}` : '0m') : 'N/A',
-        'Scheduled Activity': row.scheduledActivity || 'N/A',
-        'Actual Activity': row.actualActivity || 'N/A'
-      }));
+      const button = document.getElementById('loadScheduleBtn');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Loading schedule...';
 
-      exportToCSV(csvData, `late_report_${new Date().toISOString().split('T')[0]}.csv`);
+      // Set end time to 23:59:59 to include the entire end date
+      const startDateIso = `${startDateApi}T00:00:00.000Z`;
+      const endDateIso = `${endDateApi}T23:59:59.999Z`;
+
+      try {
+        // Get schedules for all selected users
+        let allActivities = [];
+        for (const userId of userIds) {
+          try {
+            const searchResult = await searchSchedules(muIds[0], userId, startDateIso, endDateIso, true);
+            console.log('Raw WFM search result:', searchResult);
+            const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
+            console.log(`Extracted ${activities.length} activities for user ${userId}`);
+            allActivities = allActivities.concat(activities);
+          } catch (err) {
+            console.error(`Error loading schedule for user ${userId}:`, err);
+          }
+        }
+        
+        currentScheduleData = allActivities; // Store for export
+        currentDisplayedData.schedule = [...allActivities];
+        renderScheduleResults(resultsDiv, allActivities, userIds, startDateIso, endDateIso);
+      } catch (err) {
+        console.error('Error loading schedule:', err);
+        resultsDiv.innerHTML = `<div class="error-message">Error loading schedule: ${err.message}</div>`;
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
     }
 
-    // ===== Utility Functions =====
+    async function searchSchedules(managementUnitId, userId, startDateIso, endDateIso, loadFullWeeks) {
+      const body = {
+        userIds: [userId],
+        startDate: startDateIso,
+        endDate: endDateIso,
+        loadFullWeeks: loadFullWeeks
+      };
+
+      const url = `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}/schedules/search`;
+
+      return authorizedFetchJson(url, {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+    }
+
+    // ===== Fixed function to extract activities from search result =====
+    function extractUserActivitiesFromSearchResult(response, userId, businessUnitId) {
+      console.log('Full response structure:', response);
+      
+      let userSchedule = null;
+
+      // Handle the nested structure from your sample data
+      if (response && response.userSchedules) {
+        // Your data structure: userSchedules is an object keyed by userId
+        if (response.userSchedules[userId]) {
+          userSchedule = response.userSchedules[userId];
+        } else {
+          // Fallback: take the first user schedule if userId doesn't match key
+          const firstUserId = Object.keys(response.userSchedules)[0];
+          userSchedule = response.userSchedules[firstUserId];
+        }
+      }
+
+      const rows = [];
+
+      // If we found a user schedule, extract shifts and full day time off markers
+      if (userSchedule) {
+        // Process shifts (regular scheduled activities)
+        const shifts = Array.isArray(userSchedule.shifts) ? userSchedule.shifts : [];
+        console.log(`Found ${shifts.length} shifts for user`, shifts);
+
+        shifts.forEach(shift => {
+          const shiftStartDate = shift.startDate ? new Date(shift.startDate) : null;
+          const shiftDateStr = shiftStartDate ? formatDate(shiftStartDate.toISOString().slice(0, 10)) : null;
+          
+          const activities = Array.isArray(shift.activities) ? shift.activities : [];
+          console.log(`Shift ${shift.id} has ${activities.length} activities`, activities);
+
+          activities.forEach(activity => {
+            const startIso = activity.startDate;
+            const lengthMin = activity.lengthInMinutes;
+
+            if (!startIso || lengthMin == null) {
+              console.warn('Skipping activity missing startDate or lengthInMinutes:', activity);
+              return;
+            }
+
+            const start = new Date(startIso);
+            const end = new Date(start.getTime() + lengthMin * 60000);
+
+            // Use the API-based activity name lookup
+            const activityLabel = getActivityName(businessUnitId, activity.activityCodeId);
+
+            const dateStr = shiftDateStr || formatDate(start.toISOString().slice(0, 10));
+
+            rows.push({
+              date: dateStr,
+              start,
+              end,
+              durationMinutes: lengthMin,
+              activityLabel,
+              countsAsPaidTime: activity.countsAsPaidTime,
+              activityCodeId: activity.activityCodeId,
+              type: 'shift',
+              userId: userId,
+              userName: usersById[userId]?.name || userId
+            });
+          });
+        });
+
+        // Process full day time off markers (like Sick days)
+        const fullDayTimeOffMarkers = Array.isArray(userSchedule.fullDayTimeOffMarkers) ? userSchedule.fullDayTimeOffMarkers : [];
+        console.log(`Found ${fullDayTimeOffMarkers.length} full day time off markers`, fullDayTimeOffMarkers);
+
+        fullDayTimeOffMarkers.forEach(marker => {
+          const dateStr = marker.managementUnitDate ? formatDate(marker.managementUnitDate) : null;
+          const lengthMin = marker.lengthInMinutes || 480; // Default to 8 hours if not specified
+          
+          if (!dateStr) {
+            console.warn('Skipping marker missing managementUnitDate:', marker);
+            return;
+          }
+
+          // Use the API-based activity name lookup
+          const activityLabel = getActivityName(businessUnitId, marker.activityCodeId);
+
+          rows.push({
+            date: dateStr,
+            start: null, // No specific start time for full day off
+            end: null,   // No specific end time for full day off
+            durationMinutes: lengthMin,
+            activityLabel: activityLabel,
+            countsAsPaidTime: marker.isPaid !== false, // Default to true if not specified
+            activityCodeId: marker.activityCodeId,
+            type: 'fullDayOff',
+            userId: userId,
+            userName: usersById[userId]?.name || userId
+          });
+        });
+      }
+
+      rows.sort((a, b) => {
+        if (a.date === b.date) {
+          return (a.start || new Date(a.date)) - (b.start || new Date(b.date));
+        }
+        return a.date.localeCompare(b.date);
+      });
+
+      console.log(`Extracted ${rows.length} activities total (${rows.filter(r => r.type === 'shift').length} shifts + ${rows.filter(r => r.type === 'fullDayOff').length} full day off)`);
+      return rows;
+    }
+
     function formatTime(d) {
       if (!d) return 'All Day';
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -4005,31 +2480,232 @@
         .replace(/>/g, '&gt;');
     }
 
-    // Temporary debug function - call this in the browser console
-    async function debugLateReport() {
-      const buIds = dropdowns.lateBu ? dropdowns.lateBu.getSelectedValues() : [];
-      const muIds = dropdowns.lateMu ? dropdowns.lateMu.getSelectedValues() : [];
-      const userIds = dropdowns.lateUser ? dropdowns.lateUser.getSelectedValues() : [];
+    function renderScheduleResults(container, activities, userIds, startDateIso, endDateIso) {
+      // Convert ISO dates to dd-mm-yyyy for display
+      const startDateStr = formatDate(startDateIso.slice(0, 10));
+      const endDateStr = formatDate(endDateIso.slice(0, 10));
+
+      let html = `
+        <h2 class="section-title">Schedule for Selected Users</h2>
+        <div class="schedule-meta">
+          <span class="pill">From: ${escapeHtml(startDateStr)}</span>
+          &nbsp;
+          <span class="pill">To: ${escapeHtml(endDateStr)}</span>
+          &nbsp;
+          <span class="pill">Source: MU schedules/search</span>
+        </div>
+      `;
+
+      if (!activities.length) {
+        html += `<div class="info-message" style="margin-top:12px;">No activities found for selected users in the selected date range.</div>`;
+      } else {
+        html += `
+          <table class="schedule-table">
+            <thead>
+              <tr>
+                <th class="sortable" data-sort="userName">User</th>
+                <th class="sortable" data-sort="date">Date</th>
+                <th class="sortable" data-sort="activityLabel">Activity</th>
+                <th>Start</th>
+                <th>End</th>
+                <th class="sortable" data-sort="durationMinutes">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        activities.forEach(row => {
+          html += `
+            <tr>
+              <td>${escapeHtml(row.userName)}</td>
+              <td>${escapeHtml(row.date)}</td>
+              <td>${escapeHtml(row.activityLabel || '')}</td>
+              <td>${escapeHtml(formatTime(row.start))}</td>
+              <td>${escapeHtml(formatTime(row.end))}</td>
+              <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
+            </tr>
+          `;
+        });
+        html += `</tbody></table>`;
+      }
+
+      const contentContainer = document.getElementById('scheduleResultsContent');
+      contentContainer.innerHTML = html;
       
-      console.log('Debug Late Report:');
-      console.log('Business Units:', buIds);
-      console.log('Management Units:', muIds);
-      console.log('Users:', userIds);
+      // Populate activity filter dropdown
+      const allActivities = [...new Set(activities.map(a => a.activityLabel))].sort();
+      if (dropdowns.activityFilter && allActivities.length > 0) {
+        const activityOpts = allActivities.map(a => ({ value: a, label: a }));
+        dropdowns.activityFilter.setOptions(activityOpts);
+      }
       
-      if (buIds.length > 0 && muIds.length > 0 && userIds.length > 0) {
-        const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, 
-          document.getElementById('lateStartDate').value, 
-          document.getElementById('lateEndDate').value, 
-          buIds[0]
-        );
-        console.log('Schedule Data:', scheduleData);
+      // Apply initial sorting
+      applySorting('schedule');
+    }
+
+    function renderScheduleTable(activities) {
+      const contentContainer = document.getElementById('scheduleResultsContent');
+      
+      let html = `
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="date">Date</th>
+              <th class="sortable" data-sort="activityLabel">Activity</th>
+              <th>Start</th>
+              <th>End</th>
+              <th class="sortable" data-sort="durationMinutes">Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      activities.forEach(row => {
+        html += `
+          <tr>
+            <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.date)}</td>
+            <td>${escapeHtml(row.activityLabel || '')}</td>
+            <td>${escapeHtml(formatTime(row.start))}</td>
+            <td>${escapeHtml(formatTime(row.end))}</td>
+            <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      
+      contentContainer.querySelector('table').outerHTML = html;
+    }
+
+    // ===== Overtime Results Rendering (simplified) =====
+    function renderOvertimeResults(data, startDate, endDate) {
+      const container = document.getElementById('overtimeResults');
+      const contentContainer = document.getElementById('overtimeResultsContent');
+      container.style.display = 'block';
+      
+      if (data.length === 0) {
+        contentContainer.innerHTML = `
+          <div class="info-message">
+            No overtime activities found for the selected period.
+          </div>
+        `;
+        return;
+      }
+      
+      // Sort by total overtime hours (descending) by default
+      data.sort((a, b) => b.totalHours - a.totalHours);
+      
+      // Calculate overall metrics
+      const totalOvertime = data.reduce((sum, item) => sum + item.totalHours, 0);
+      const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
+      const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
+      const totalRate2 = data.reduce((sum, item) => sum + item.rate2Hours, 0);
+      const avgOvertimePerUser = totalOvertime / data.length;
+      
+      let html = `
+        <h3 class="section-title">Overtime Report</h3>
+        <div class="schedule-meta">
+          <span class="pill">Period: ${startDate} to ${endDate}</span>
+          &nbsp;
+          <span class="pill">Total Agents: ${data.length}</span>
+          &nbsp;
+          <span class="pill">Total Overtime: ${totalOvertime.toFixed(1)}h</span>
+        </div>
         
-        const actualData = await getActualActivityDataForLateReport(muIds[0], userIds,
-          document.getElementById('lateStartDate').value,
-          document.getElementById('lateEndDate').value,
-          buIds[0]
-        );
-        console.log('Actual Data:', actualData);
+        <!-- Overtime Metrics -->
+        <div class="overtime-metrics">
+          <div class="overtime-metric-card">
+            <div class="metric-label">Total Overtime</div>
+            <div class="metric-value">${totalOvertime.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">1.0 Rate</div>
+            <div class="metric-value">${totalRate1.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">1.5 Rate</div>
+            <div class="metric-value">${totalRate1_5.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">2.0 Rate</div>
+            <div class="metric-value">${totalRate2.toFixed(1)}h</div>
+          </div>
+          <div class="overtime-metric-card">
+            <div class="metric-label">Avg per User</div>
+            <div class="metric-value">${avgOvertimePerUser.toFixed(1)}h</div>
+          </div>
+        </div>
+        
+        <!-- Overtime Chart -->
+        <div class="chart-wrapper">
+          <h4>Overtime Distribution</h4>
+          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+            Showing top ${Math.min(10, data.length)} users by overtime hours
+          </div>
+      `;
+      
+      // Create chart for top 10 users
+      const topUsers = data.slice(0, 10);
+      const maxHours = Math.max(...topUsers.map(u => u.totalHours), 1);
+      
+      topUsers.forEach(user => {
+        const percentage = (user.totalHours / maxHours) * 100;
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%">
+                ${user.totalHours.toFixed(1)}h
+              </div>
+            </div>
+            <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
+      
+      // Summary Table
+      html += `
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="user">Agent</th>
+              <th class="sortable" data-sort="totalHours">Total Overtime</th>
+              <th class="sortable" data-sort="rate1Hours">1.0 Rate</th>
+              <th class="sortable" data-sort="rate1_5Hours">1.5 Rate</th>
+              <th class="sortable" data-sort="rate2Hours">2.0 Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      data.forEach(item => {
+        html += `
+          <tr>
+            <td>${escapeHtml(item.user)}</td>
+            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
+            <td>${item.rate1Hours.toFixed(1)}h</td>
+            <td>${item.rate1_5Hours.toFixed(1)}h</td>
+            <td>${item.rate2Hours.toFixed(1)}h</td>
+          </tr>
+        `;
+      });
+      
+      html += `
+            </tbody>
+          </table>
+        </div>
+      `;
+      
+      contentContainer.innerHTML = html;
+      
+      // Populate overtime activity filter dropdown
+      const overtimeActivities = [...new Set(data.flatMap(u => u.activities.map(a => a.activity)))].sort();
+      if (dropdowns.overtimeActivityFilter && overtimeActivities.length > 0) {
+        const activityOpts = overtimeActivities.map(a => ({ value: a, label: a }));
+        dropdowns.overtimeActivityFilter.setOptions(activityOpts);
       }
     }
   </script>
