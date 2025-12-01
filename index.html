@@ -367,6 +367,13 @@
       border-radius: 4px;
       font-weight: 600;
     }
+    .status-no-data {
+      background-color: #f3f4f6;
+      color: #374151;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -4098,16 +4105,16 @@
         const actualOfflineTime = lastActualActivity.endTime;
         
         // Calculate time difference in minutes
-        const timeDiffMinutes = Math.round((scheduledEnd - actualOfflineTime) / (1000 * 60));
+        const timeDiffMinutes = Math.round((actualOfflineTime - scheduledEnd) / (1000 * 60));
         
         // Determine status and time owed
         let status, timeOwed;
         
-        if (timeDiffMinutes > 0) {
+        if (timeDiffMinutes < 0) {
           // Logged out before scheduled end - time is owed
           status = 'Logged Out Early';
-          timeOwed = timeDiffMinutes;
-        } else if (timeDiffMinutes < 0) {
+          timeOwed = Math.abs(timeDiffMinutes);
+        } else if (timeDiffMinutes > 0) {
           // Logged out after scheduled end - worked extra time
           status = 'Completed';
           timeOwed = 0; // No time owed, they worked extra
@@ -4125,7 +4132,7 @@
           scheduledEnd: scheduledEnd,
           actualOfflineTime: actualOfflineTime,
           status: status,
-          timeOwed: Math.abs(timeOwed), // Always positive number for display
+          timeOwed: timeOwed,
           scheduledActivity: lastScheduledActivity.activityLabel,
           actualActivity: lastActualActivity.activityLabel
         });
@@ -4196,7 +4203,7 @@
             statusText = 'Completed Shift';
             break;
           case 'No Data':
-            statusClass = 'status-awol';
+            statusClass = 'status-no-data';
             statusText = 'No Data';
             break;
         }
@@ -4550,30 +4557,30 @@
     }
 
     // Temporary debug function - call this in the browser console
-    async function debugLateReport() {
-      const buIds = dropdowns.lateBu ? dropdowns.lateBu.getSelectedValues() : [];
-      const muIds = dropdowns.lateMu ? dropdowns.lateMu.getSelectedValues() : [];
-      const userIds = dropdowns.lateUser ? dropdowns.lateUser.getSelectedValues() : [];
+    async function debugTimeOwedReport() {
+      const buIds = dropdowns.timeOwedBu ? dropdowns.timeOwedBu.getSelectedValues() : [];
+      const muIds = dropdowns.timeOwedMu ? dropdowns.timeOwedMu.getSelectedValues() : [];
+      const userIds = dropdowns.timeOwedUser ? dropdowns.timeOwedUser.getSelectedValues() : [];
       
-      console.log('Debug Late Report:');
+      console.log('Debug Time Owed Report:');
       console.log('Business Units:', buIds);
       console.log('Management Units:', muIds);
       console.log('Users:', userIds);
       
       if (buIds.length > 0 && muIds.length > 0 && userIds.length > 0) {
-        const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, 
-          document.getElementById('lateStartDate').value, 
-          document.getElementById('lateEndDate').value, 
+        const scheduleData = await getScheduleDataForTimeOwed(muIds[0], userIds, 
+          document.getElementById('timeOwedStartDate').value, 
+          document.getElementById('timeOwedEndDate').value, 
           buIds[0]
         );
-        console.log('Schedule Data:', scheduleData);
+        console.log('Schedule Data for Time Owed:', scheduleData);
         
-        const actualData = await getActualActivityDataForLateReport(muIds[0], userIds,
-          document.getElementById('lateStartDate').value,
-          document.getElementById('lateEndDate').value,
+        const actualData = await getActualActivityDataForTimeOwed(muIds[0], userIds,
+          document.getElementById('timeOwedStartDate').value,
+          document.getElementById('timeOwedEndDate').value,
           buIds[0]
         );
-        console.log('Actual Data:', actualData);
+        console.log('Actual Data for Time Owed:', actualData);
       }
     }
   </script>
