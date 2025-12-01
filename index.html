@@ -344,6 +344,29 @@
       border-radius: 4px;
       font-weight: 600;
     }
+    
+    /* Time Owed Status Colors */
+    .status-logged-out-early {
+      background-color: #fef3c7;
+      color: #92400e;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .status-time-owed {
+      background-color: #fee2e2;
+      color: #dc2626;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .status-completed {
+      background-color: #dcfce7;
+      color: #166534;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -367,6 +390,7 @@
       <div class="tab" data-tab="overtime">Overtime Tracking</div>
       <div class="tab" data-tab="absence">Absence Analytics</div>
       <div class="tab" data-tab="late">Late Report</div>
+      <div class="tab" data-tab="timeowed">Time Owed</div>
     </div>
 
     <!-- Schedule Tab -->
@@ -701,6 +725,64 @@
         <div id="lateResultsContent"></div>
       </div>
     </div>
+
+    <!-- Time Owed Tab -->
+    <div id="timeowed-tab" class="tab-content">
+      <div class="card">
+        <h2 class="section-title">Time Owed Report</h2>
+        <div class="controls">
+          <div>
+            <label for="timeOwedBuSelect">Business Unit</label>
+            <div id="timeOwedBuDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label for="timeOwedMuSelect">Management Unit</label>
+            <div id="timeOwedMuDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label>Team</label>
+            <div id="timeOwedTeamDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label>User</label>
+            <div id="timeOwedUserDropdown" class="checkbox-dropdown"></div>
+          </div>
+          <div>
+            <label for="timeOwedStartDate">Start Date</label>
+            <input type="date" id="timeOwedStartDate" />
+          </div>
+          <div>
+            <label for="timeOwedEndDate">End Date</label>
+            <input type="date" id="timeOwedEndDate" />
+          </div>
+        </div>
+        <button id="generateTimeOwedReportBtn" class="full-width-btn">Generate Time Owed Report</button>
+      </div>
+
+      <div id="timeOwedResults" class="card" style="display:none;">
+        <div class="table-controls">
+          <div class="sort-controls">
+            <label for="timeOwedSort">Sort by:</label>
+            <select id="timeOwedSort">
+              <option value="userName">User</option>
+              <option value="date">Date</option>
+              <option value="status">Status</option>
+              <option value="timeOwed">Time Owed</option>
+            </select>
+            <select id="timeOwedSortOrder">
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="export-buttons">
+          <button id="exportTimeOwedReportBtn" class="export-btn">Export Time Owed Report to CSV</button>
+        </div>
+        
+        <div id="timeOwedResultsContent"></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -725,12 +807,14 @@
     let currentActualActivityData = [];
     let currentOvertimeData = [];
     let currentAbsenceData = [];
+    let currentTimeOwedData = [];
     let currentDisplayedData = {
       schedule: [],
       actual: [],
       overtime: [],
       absence: [],
-      late: []
+      late: [],
+      timeowed: []
     };
     
     // Drill-down state
@@ -777,6 +861,26 @@
         return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
       return dateStr;
+    }
+
+    // ===== Date Helper Functions =====
+    function isToday(dateStr) {
+      const inputDate = new Date(dateStr);
+      const today = new Date();
+      return inputDate.getDate() === today.getDate() &&
+             inputDate.getMonth() === today.getMonth() &&
+             inputDate.getFullYear() === today.getFullYear();
+    }
+
+    function getEndDateIso(dateStr) {
+      const dateApi = convertToApiFormat(dateStr);
+      if (isToday(dateApi)) {
+        // For today, return current time
+        return new Date().toISOString();
+      } else {
+        // For other dates, return end of day
+        return `${dateApi}T23:59:59.999Z`;
+      }
     }
 
     // ===== Initialize with current week dates =====
@@ -1131,6 +1235,29 @@
         searchPlaceholder: 'Search users...' 
       });
       
+      // Time Owed tab dropdowns
+      dropdowns.timeOwedBu = createCheckboxDropdown('timeOwedBuDropdown', { 
+        placeholder: 'Select business units', 
+        searchPlaceholder: 'Search business units...',
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'timeowed')
+      });
+      
+      dropdowns.timeOwedMu = createCheckboxDropdown('timeOwedMuDropdown', { 
+        placeholder: 'Select management units', 
+        searchPlaceholder: 'Search management units...',
+        onSelectionChange: (selected) => handleTimeOwedManagementUnitChange(selected)
+      });
+      
+      dropdowns.timeOwedTeam = createCheckboxDropdown('timeOwedTeamDropdown', { 
+        placeholder: 'Select teams', 
+        searchPlaceholder: 'Search teams...' 
+      });
+      
+      dropdowns.timeOwedUser = createCheckboxDropdown('timeOwedUserDropdown', { 
+        placeholder: 'Select users', 
+        searchPlaceholder: 'Search users...' 
+      });
+      
       // Activity filter dropdowns
       dropdowns.activityFilter = createCheckboxDropdown('activityFilterDropdown', { 
         placeholder: 'Filter by activity type', 
@@ -1183,6 +1310,10 @@
       document.getElementById('generateLateReportBtn').addEventListener('click', generateLateReport);
       document.getElementById('exportLateReportBtn').addEventListener('click', exportLateReportToCSV);
       
+      // Time Owed tab
+      document.getElementById('generateTimeOwedReportBtn').addEventListener('click', generateTimeOwedReport);
+      document.getElementById('exportTimeOwedReportBtn').addEventListener('click', exportTimeOwedReportToCSV);
+      
       // Initialize sorting
       initializeSorting();
     }
@@ -1231,6 +1362,10 @@
       // Late Report tab sorting
       document.getElementById('lateSort').addEventListener('change', () => applyLateReportSorting());
       document.getElementById('lateSortOrder').addEventListener('change', () => applyLateReportSorting());
+      
+      // Time Owed tab sorting
+      document.getElementById('timeOwedSort').addEventListener('change', () => applyTimeOwedSorting());
+      document.getElementById('timeOwedSortOrder').addEventListener('change', () => applyTimeOwedSorting());
     }
 
     function applySorting(tabType) {
@@ -1367,6 +1502,8 @@
         document.getElementById('absenceEndDate').value = currentWeek.end;
         document.getElementById('lateStartDate').value = currentWeek.start;
         document.getElementById('lateEndDate').value = currentWeek.end;
+        document.getElementById('timeOwedStartDate').value = currentWeek.start;
+        document.getElementById('timeOwedEndDate').value = currentWeek.end;
         
         showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
       } catch (err) {
@@ -1465,6 +1602,9 @@
       if (dropdowns.lateUser) {
         dropdowns.lateUser.setOptions(validUsers);
       }
+      if (dropdowns.timeOwedUser) {
+        dropdowns.timeOwedUser.setOptions(validUsers);
+      }
     }
 
     function populateBusinessUnitDropdown(businessUnits) {
@@ -1477,6 +1617,7 @@
       if (dropdowns.overtimeBu) dropdowns.overtimeBu.setOptions(buOpts);
       if (dropdowns.absenceBu) dropdowns.absenceBu.setOptions(buOpts);
       if (dropdowns.lateBu) dropdowns.lateBu.setOptions(buOpts);
+      if (dropdowns.timeOwedBu) dropdowns.timeOwedBu.setOptions(buOpts);
     }
 
     function populateTeamDropdown(teams) {
@@ -1489,6 +1630,7 @@
       if (dropdowns.overtimeTeam) dropdowns.overtimeTeam.setOptions(teamOpts);
       if (dropdowns.absenceTeam) dropdowns.absenceTeam.setOptions(teamOpts);
       if (dropdowns.lateTeam) dropdowns.lateTeam.setOptions(teamOpts);
+      if (dropdowns.timeOwedTeam) dropdowns.timeOwedTeam.setOptions(teamOpts);
     }
 
     // ===== Business Unit Change Handlers =====
@@ -1568,6 +1710,9 @@
           break;
         case 'late':
           muDropdown = dropdowns.lateMu;
+          break;
+        case 'timeowed':
+          muDropdown = dropdowns.timeOwedMu;
           break;
       }
       
@@ -1681,6 +1826,49 @@
         }
       } catch (err) {
         console.error('Error loading late report MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleTimeOwedManagementUnitChange(selectedMuIds) {
+      console.log('Time Owed Management Unit selection changed:', selectedMuIds);
+      
+      if (!selectedMuIds || selectedMuIds.length === 0) {
+        if (dropdowns.timeOwedUser) {
+          dropdowns.timeOwedUser.setOptions([]);
+        }
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
+        );
+        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
+                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
+                    : [];
+        const enriched = list.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          // Use the pre-loaded team information
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
+          return user;
+        });
+        console.log(`Loaded ${enriched.length} users for time owed management unit ${selectedMuIds[0]}`);
+        
+        const validUsers = enriched
+          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
+          .map(u => ({ 
+            value: u.id, 
+            label: u.name || u.email || 'Unknown User',
+            teamNames: u.teamNames || 'No Team'
+          }))
+          .sort((a,b)=>a.label.localeCompare(b.label));
+        
+        if (dropdowns.timeOwedUser) {
+          dropdowns.timeOwedUser.setOptions(validUsers);
+        }
+      } catch (err) {
+        console.error('Error loading time owed MU users:', err);
         showMessage(`Error loading management unit users: ${err.message}`, 'error');
       }
     }
@@ -1852,9 +2040,9 @@
       button.disabled = true;
       button.textContent = 'Loading schedule...';
 
-      // Set end time to 23:59:59 to include the entire end date
+      // Use the helper function for end date
       const startDateIso = `${startDateApi}T00:00:00.000Z`;
-      const endDateIso = `${endDateApi}T23:59:59.999Z`;
+      const endDateIso = getEndDateIso(endDate);
 
       try {
         // Get schedules for all selected users
@@ -2204,6 +2392,9 @@
       try {
         await loadActivityCodes(buIds[0]);
         
+        // Use helper function for end date
+        const endDateIso = getEndDateIso(endDateRaw);
+        
         const jobId = await createHistoricalAdherenceQuery(muIds[0], userIds, startDateApi, endDateApi);
         const jobResult = await pollHistoricalAdherenceJob(jobId);
         const actualActivityData = await processJobResults(jobResult, buIds[0]);
@@ -2223,9 +2414,13 @@
     }
 
     async function createHistoricalAdherenceQuery(managementUnitId, userIds, startDate, endDate) {
+      // Use helper function for end date
+      const endDateIso = getEndDateIso(endDate);
+      const startDateIso = `${startDate}T00:00:00.000Z`;
+
       const body = {
-        startDate: `${startDate}T00:00:00.000Z`,
-        endDate: `${endDate}T23:59:59.999Z`,
+        startDate: startDateIso,
+        endDate: endDateIso,
         timeZone: 'UTC',
         userIds: userIds
       };
@@ -2537,9 +2732,9 @@
         
         const overtimeData = [];
         
-        // Set end time to 23:59:59 to include the entire end date
+        // Use helper function for end date
         const startDateIso = `${startDateApi}T00:00:00.000Z`;
-        const endDateIso = `${endDateApi}T23:59:59.999Z`;
+        const endDateIso = getEndDateIso(endDate);
 
         console.log(`Analyzing overtime for ${users.length} users from ${startDate} to ${endDate}`);
 
@@ -2849,9 +3044,9 @@
         let users = await getUsersForAnalytics(muIds[0], teamIds);
         const absenceData = [];
         
-        // Set end time to 23:59:59 to include the entire end date
+        // Use helper function for end date
         const startDateIso = `${startDateApi}T00:00:00.000Z`;
-        const endDateIso = `${endDateApi}T23:59:59.999Z`;
+        const endDateIso = getEndDateIso(endDate);
 
         for (const user of users) {
           try {
@@ -3387,9 +3582,9 @@
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
       
-      // Set end time to 23:59:59 to include the entire end date
+      // Use helper function for end date
       const startDateIso = `${startDateApi}T00:00:00.000Z`;
-      const endDateIso = `${endDateApi}T23:59:59.999Z`;
+      const endDateIso = getEndDateIso(endDate);
 
       let allActivities = [];
       for (const userId of userIds) {
@@ -3714,6 +3909,374 @@
       renderLateReportResults(sortedData);
     }
 
+    // ===== Time Owed Functions =====
+    async function generateTimeOwedReport() {
+      const buIds = dropdowns.timeOwedBu ? dropdowns.timeOwedBu.getSelectedValues() : [];
+      const muIds = dropdowns.timeOwedMu ? dropdowns.timeOwedMu.getSelectedValues() : [];
+      const userIds = dropdowns.timeOwedUser ? dropdowns.timeOwedUser.getSelectedValues() : [];
+      const startDateRaw = document.getElementById('timeOwedStartDate').value;
+      const endDateRaw = document.getElementById('timeOwedEndDate').value;
+
+      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
+        showMessage('Please select business unit, management unit, users, and date range', 'error');
+        return;
+      }
+
+      const button = document.getElementById('generateTimeOwedReportBtn');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Generating time owed report...';
+
+      try {
+        // Load activity codes first
+        await loadActivityCodes(buIds[0]);
+        
+        // Get schedule data
+        const scheduleData = await getScheduleDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+        console.log('Schedule data for time owed:', scheduleData);
+        
+        // Get actual activity data
+        const actualData = await getActualActivityDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+        console.log('Actual data for time owed:', actualData);
+        
+        // Generate time owed report by comparing schedule end vs actual offline time
+        const timeOwedData = generateTimeOwedData(scheduleData, actualData);
+        console.log('Generated time owed data:', timeOwedData);
+        
+        currentTimeOwedData = timeOwedData;
+        currentDisplayedData.timeowed = [...timeOwedData];
+        renderTimeOwedResults(timeOwedData);
+        
+        showMessage('Time owed report generated successfully', 'success');
+      } catch (err) {
+        console.error('Error generating time owed report:', err);
+        showMessage(`Failed to generate time owed report: ${err.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
+    async function getScheduleDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
+      // Convert dd-mm-yyyy to yyyy-mm-dd for API
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+      
+      // Use helper function for end date
+      const startDateIso = `${startDateApi}T00:00:00.000Z`;
+      const endDateIso = getEndDateIso(endDate);
+
+      let allActivities = [];
+      for (const userId of userIds) {
+        try {
+          const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
+          console.log(`Schedule search result for user ${userId}:`, searchResult);
+          const activities = extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
+          console.log(`Extracted ${activities.length} activities for user ${userId}:`, activities);
+          allActivities = allActivities.concat(activities);
+        } catch (err) {
+          console.error(`Error loading schedule for user ${userId}:`, err);
+        }
+      }
+      
+      return allActivities;
+    }
+
+    async function getActualActivityDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+
+      try {
+        const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
+        const jobResult = await pollHistoricalAdherenceJob(jobId);
+        const actualData = await processJobResults(jobResult, businessUnitId);
+        
+        // Filter to only include "On Queue" activities to find when they went offline
+        const onQueueActivities = actualData.filter(activity => 
+          activity.activityLabel.toLowerCase().includes('on queue') ||
+          activity.activityCategory === 'OnQueueWork'
+        );
+        
+        console.log(`Found ${onQueueActivities.length} On Queue activities for time owed analysis`);
+        
+        return onQueueActivities;
+      } catch (err) {
+        console.error('Error getting actual activity data for time owed:', err);
+        // Return empty array instead of throwing
+        return [];
+      }
+    }
+
+    function generateTimeOwedData(scheduleData, actualData) {
+      const timeOwedReport = [];
+      
+      console.log(`Generating time owed report with ${scheduleData.length} schedule items and ${actualData.length} actual items`);
+      
+      // Group schedule data by user and date to find last activity of each day
+      const scheduleByUserDate = {};
+      
+      // Filter out time-off activities from schedule data
+      const filteredScheduleData = scheduleData.filter(scheduleItem => {
+        const activityName = scheduleItem.activityLabel || '';
+        const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
+        
+        // Exclude time-off activities and include only work activities
+        return !activityName.toLowerCase().includes('time off') &&
+               !activityName.toLowerCase().includes('holiday') &&
+               !activityName.toLowerCase().includes('sick') &&
+               !activityName.toLowerCase().includes('absence') &&
+               !activityName.toLowerCase().includes('vacation') &&
+               !activityName.toLowerCase().includes('leave') &&
+               activityCategory !== 'TimeOff' &&
+               (activityCategory === 'OnQueueWork' || activityCategory === 'OffQueueWork');
+      });
+      
+      filteredScheduleData.forEach(scheduleItem => {
+        const key = `${scheduleItem.userId}_${scheduleItem.date}`;
+        if (!scheduleByUserDate[key]) {
+          scheduleByUserDate[key] = [];
+        }
+        scheduleByUserDate[key].push(scheduleItem);
+      });
+      
+      console.log(`Grouped schedule into ${Object.keys(scheduleByUserDate).length} user/date combinations for time owed`);
+      
+      // Group actual "On Queue" data by user and date
+      const actualByUserDate = {};
+      actualData.forEach(actualItem => {
+        const key = `${actualItem.userId}_${actualItem.date}`;
+        if (!actualByUserDate[key]) {
+          actualByUserDate[key] = [];
+        }
+        actualByUserDate[key].push(actualItem);
+      });
+      
+      // For each user/date combination in schedule, find last activity and compare with actual offline time
+      Object.keys(scheduleByUserDate).forEach(key => {
+        const [userId, date] = key.split('_');
+        const userSchedule = scheduleByUserDate[key];
+        
+        // Sort by end time and get last activity of the day
+        userSchedule.sort((a, b) => {
+          const aTime = a.end ? a.end.getTime() : new Date(a.date).getTime();
+          const bTime = b.end ? b.end.getTime() : new Date(b.date).getTime();
+          return aTime - bTime;
+        });
+        
+        const lastScheduledActivity = userSchedule[userSchedule.length - 1];
+        
+        if (!lastScheduledActivity || !lastScheduledActivity.end) {
+          return; // Skip if no end time
+        }
+        
+        // Find actual "On Queue" activities for this user/date
+        const userActualActivities = actualByUserDate[key] || [];
+        
+        if (userActualActivities.length === 0) {
+          // No actual data found - assume they didn't work
+          timeOwedReport.push({
+            userId: userId,
+            userName: lastScheduledActivity.userName,
+            teamNames: lastScheduledActivity.teamNames || 'No Team',
+            date: date,
+            scheduledEnd: lastScheduledActivity.end,
+            actualOfflineTime: null,
+            status: 'No Data',
+            timeOwed: 0,
+            scheduledActivity: lastScheduledActivity.activityLabel
+          });
+          return;
+        }
+        
+        // Sort actual activities by end time and get last "On Queue" activity
+        userActualActivities.sort((a, b) => a.endTime - b.endTime);
+        const lastActualActivity = userActualActivities[userActualActivities.length - 1];
+        
+        if (!lastActualActivity) return;
+        
+        const scheduledEnd = lastScheduledActivity.end;
+        const actualOfflineTime = lastActualActivity.endTime;
+        
+        // Calculate time difference in minutes
+        const timeDiffMinutes = Math.round((scheduledEnd - actualOfflineTime) / (1000 * 60));
+        
+        // Determine status and time owed
+        let status, timeOwed;
+        
+        if (timeDiffMinutes > 0) {
+          // Logged out before scheduled end - time is owed
+          status = 'Logged Out Early';
+          timeOwed = timeDiffMinutes;
+        } else if (timeDiffMinutes < 0) {
+          // Logged out after scheduled end - worked extra time
+          status = 'Completed';
+          timeOwed = 0; // No time owed, they worked extra
+        } else {
+          // Logged out exactly on time
+          status = 'Completed';
+          timeOwed = 0;
+        }
+        
+        timeOwedReport.push({
+          userId: userId,
+          userName: lastScheduledActivity.userName,
+          teamNames: lastScheduledActivity.teamNames || 'No Team',
+          date: date,
+          scheduledEnd: scheduledEnd,
+          actualOfflineTime: actualOfflineTime,
+          status: status,
+          timeOwed: Math.abs(timeOwed), // Always positive number for display
+          scheduledActivity: lastScheduledActivity.activityLabel,
+          actualActivity: lastActualActivity.activityLabel
+        });
+      });
+      
+      console.log(`Generated ${timeOwedReport.length} time owed report entries`);
+      return timeOwedReport;
+    }
+
+    function renderTimeOwedResults(data) {
+      const container = document.getElementById('timeOwedResults');
+      const contentContainer = document.getElementById('timeOwedResultsContent');
+      container.style.display = 'block';
+      
+      if (!data || data.length === 0) {
+        contentContainer.innerHTML = `
+          <div class="info-message">
+            No time owed data found for the selected period.
+          </div>
+        `;
+        return;
+      }
+      
+      const loggedOutEarlyCount = data.filter(item => item.status === 'Logged Out Early').length;
+      const completedCount = data.filter(item => item.status === 'Completed').length;
+      const noDataCount = data.filter(item => item.status === 'No Data').length;
+      const totalTimeOwed = data.reduce((sum, item) => sum + item.timeOwed, 0);
+      const avgTimeOwed = totalTimeOwed / data.length;
+      
+      let html = `
+        <h3 class="section-title">Time Owed Report</h3>
+        <div class="schedule-meta">
+          <span class="pill">Total Shifts: ${data.length}</span>
+          <span class="pill" style="background: #fef3c7; color: #92400e;">Logged Out Early: ${loggedOutEarlyCount}</span>
+          <span class="pill" style="background: #dcfce7; color: #166534;">Completed: ${completedCount}</span>
+          <span class="pill" style="background: #f3f4f6; color: #374151;">No Data: ${noDataCount}</span>
+          <span class="pill">Total Time Owed: ${formatDuration(totalTimeOwed)}</span>
+        </div>
+        
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="userName">User</th>
+              <th class="sortable" data-sort="teamNames">Team</th>
+              <th class="sortable" data-sort="date">Date</th>
+              <th>Scheduled End</th>
+              <th>Actual Offline Time</th>
+              <th class="sortable" data-sort="status">Status</th>
+              <th class="sortable" data-sort="timeOwed">Time Owed</th>
+              <th>Scheduled Activity</th>
+              <th>Actual Activity</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      data.forEach(row => {
+        let statusClass = '';
+        let statusText = '';
+        
+        switch(row.status) {
+          case 'Logged Out Early':
+            statusClass = 'status-logged-out-early';
+            statusText = `Early by ${formatDuration(row.timeOwed)}`;
+            break;
+          case 'Completed':
+            statusClass = 'status-completed';
+            statusText = 'Completed Shift';
+            break;
+          case 'No Data':
+            statusClass = 'status-awol';
+            statusText = 'No Data';
+            break;
+        }
+        
+        html += `
+          <tr>
+            <td>${escapeHtml(row.userName)}</td>
+            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
+            <td>${escapeHtml(row.date)}</td>
+            <td>${row.scheduledEnd ? escapeHtml(formatTime(row.scheduledEnd)) : 'N/A'}</td>
+            <td>${row.actualOfflineTime ? escapeHtml(formatTime(row.actualOfflineTime)) : 'N/A'}</td>
+            <td><span class="${statusClass}">${statusText}</span></td>
+            <td>${row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m'}</td>
+            <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
+            <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      
+      contentContainer.innerHTML = html;
+      
+      // Add sorting functionality
+      addTimeOwedTableSorting();
+    }
+
+    function addTimeOwedTableSorting() {
+      const table = document.querySelector('#timeOwedResultsContent table');
+      if (!table) return;
+      
+      const headers = table.querySelectorAll('th.sortable');
+      headers.forEach(header => {
+        header.addEventListener('click', () => {
+          const sortField = header.getAttribute('data-sort');
+          const currentSort = document.getElementById('timeOwedSort').value;
+          const currentOrder = document.getElementById('timeOwedSortOrder').value;
+          
+          if (sortField === currentSort) {
+            document.getElementById('timeOwedSortOrder').value = currentOrder === 'asc' ? 'desc' : 'asc';
+          } else {
+            document.getElementById('timeOwedSort').value = sortField;
+            document.getElementById('timeOwedSortOrder').value = 'asc';
+          }
+          
+          applyTimeOwedSorting();
+        });
+      });
+    }
+
+    function applyTimeOwedSorting() {
+      const data = currentDisplayedData.timeowed;
+      const sortField = document.getElementById('timeOwedSort').value;
+      const sortOrder = document.getElementById('timeOwedSortOrder').value;
+      
+      if (!data || data.length === 0) return;
+      
+      const sortedData = [...data].sort((a, b) => {
+        let aVal = a[sortField];
+        let bVal = b[sortField];
+        
+        if (sortField === 'date') {
+          aVal = new Date(aVal.split('-').reverse().join('-'));
+          bVal = new Date(bVal.split('-').reverse().join('-'));
+        }
+        
+        if (sortField === 'timeOwed') {
+          aVal = aVal || 0;
+          bVal = bVal || 0;
+        }
+        
+        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      currentDisplayedData.timeowed = sortedData;
+      renderTimeOwedResults(sortedData);
+    }
+
     // ===== Export Functions =====
     function exportToCSV(data, filename) {
       if (!data || data.length === 0) {
@@ -3940,6 +4503,27 @@
       }));
 
       exportToCSV(csvData, `late_report_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+
+    function exportTimeOwedReportToCSV() {
+      if (currentDisplayedData.timeowed.length === 0) {
+        showMessage('No time owed data to export', 'error');
+        return;
+      }
+
+      const csvData = currentDisplayedData.timeowed.map(row => ({
+        Date: row.date,
+        User: row.userName,
+        Team: row.teamNames || 'No Team',
+        'Scheduled End': row.scheduledEnd ? formatTime(row.scheduledEnd) : 'N/A',
+        'Actual Offline Time': row.actualOfflineTime ? formatTime(row.actualOfflineTime) : 'N/A',
+        Status: row.status,
+        'Time Owed': row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m',
+        'Scheduled Activity': row.scheduledActivity || 'N/A',
+        'Actual Activity': row.actualActivity || 'N/A'
+      }));
+
+      exportToCSV(csvData, `time_owed_${new Date().toISOString().split('T')[0]}.csv`);
     }
 
     // ===== Utility Functions =====
