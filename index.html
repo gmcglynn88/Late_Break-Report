@@ -4444,6 +4444,7 @@
       return allActivities;
     }
 
+    // FIXED: Get actual activity data for time owed
     async function getActualActivityDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
@@ -4453,18 +4454,43 @@
         const jobResult = await pollHistoricalAdherenceJob(jobId);
         const actualData = await processJobResults(jobResult, businessUnitId);
         
-        // Filter to only include "On Queue" activities to find when they went offline
-        const onQueueActivities = actualData.filter(activity => 
-          activity.activityLabel.toLowerCase().includes('on queue') ||
-          activity.activityCategory === 'OnQueueWork'
-        );
+        // DON'T filter out activities - we need ALL activities to find the last one
+        console.log(`Total actual activities for time owed: ${actualData.length}`);
         
-        console.log(`Found ${onQueueActivities.length} On Queue activities for time owed analysis`);
+        // Group by user and date to find the last activity of each day
+        const lastActivitiesByDay = {};
         
-        return onQueueActivities;
+        actualData.forEach(activity => {
+          const key = `${activity.userId}_${activity.date}`;
+          
+          if (!lastActivitiesByDay[key]) {
+            lastActivitiesByDay[key] = [];
+          }
+          
+          lastActivitiesByDay[key].push(activity);
+        });
+        
+        // For each user/date, find the last activity (chronologically)
+        const lastActivities = [];
+        
+        Object.keys(lastActivitiesByDay).forEach(key => {
+          const activities = lastActivitiesByDay[key];
+          
+          // Sort by end time descending to get the last activity
+          activities.sort((a, b) => b.endTime - a.endTime);
+          
+          const lastActivity = activities[0];
+          if (lastActivity) {
+            lastActivities.push(lastActivity);
+            
+            // Log for debugging
+            console.log(`Last activity for ${key}: ${lastActivity.activityLabel} at ${formatTime(lastActivity.endTime)}`);
+          }
+        });
+        
+        return lastActivities;
       } catch (err) {
         console.error('Error getting actual activity data for time owed:', err);
-        // Return empty array instead of throwing
         return [];
       }
     }
@@ -4503,7 +4529,7 @@
       
       console.log(`Grouped schedule into ${Object.keys(scheduleByUserDate).length} user/date combinations`);
       
-      // Group actual "On Queue" data by user and date
+      // Group actual data by user and date for easier lookup
       const actualByUserDate = {};
       actualData.forEach(actualItem => {
         const key = `${actualItem.userId}_${actualItem.date}`;
@@ -4555,13 +4581,11 @@
           return;
         }
         
-        // Find the last "On Queue" activity
-        const lastOnQueueActivity = userActualActivities
-          .filter(activity => activity.activityLabel.toLowerCase().includes('on queue'))
-          .sort((a, b) => b.endTime - a.endTime)[0]; // Sort by end time descending
+        // Find the LAST activity of the day (already sorted by end time)
+        const lastActualActivity = userActualActivities[0];
         
-        if (!lastOnQueueActivity) {
-          console.log(`No On Queue activity found for user ${userId} on ${date}`);
+        if (!lastActualActivity) {
+          console.log(`No actual activity found for user ${userId} on ${date}`);
           timeOwedReport.push({
             userId: userId,
             userName: lastScheduledActivity.userName,
@@ -4569,7 +4593,7 @@
             date: date,
             scheduledEnd: scheduledEndTime,
             actualOfflineTime: null,
-            status: 'No On Queue Data',
+            status: 'No Activity Data',
             timeOwed: 0,
             scheduledActivity: lastScheduledActivity.activityLabel,
             actualActivity: null
@@ -4577,8 +4601,8 @@
           return;
         }
         
-        const actualOfflineTime = lastOnQueueActivity.endTime;
-        console.log(`Last On Queue activity ended at: ${formatTime(actualOfflineTime)}`);
+        const actualOfflineTime = lastActualActivity.endTime;
+        console.log(`Last actual activity: ${lastActualActivity.activityLabel} ended at: ${formatTime(actualOfflineTime)}`);
         
         // Calculate time difference in minutes
         const timeDiffMinutes = Math.round((scheduledEndTime - actualOfflineTime) / (1000 * 60));
@@ -4611,7 +4635,7 @@
           status: status,
           timeOwed: Math.abs(timeOwed),
           scheduledActivity: lastScheduledActivity.activityLabel,
-          actualActivity: lastOnQueueActivity.activityLabel
+          actualActivity: lastActualActivity.activityLabel
         });
       });
       
@@ -4636,7 +4660,7 @@
       const loggedOutEarlyCount = data.filter(item => item.status === 'Logged Out Early').length;
       const completedCount = data.filter(item => item.status === 'Completed').length;
       const workedExtraCount = data.filter(item => item.status === 'Worked Extra').length;
-      const noDataCount = data.filter(item => item.status === 'No Data' || item.status === 'No On Queue Data').length;
+      const noDataCount = data.filter(item => item.status === 'No Data' || item.status === 'No Activity Data').length;
       const totalTimeOwed = data.reduce((sum, item) => sum + item.timeOwed, 0);
       const avgTimeOwed = totalTimeOwed / data.length;
       
@@ -4686,7 +4710,7 @@
             statusText = 'Worked Extra Time';
             break;
           case 'No Data':
-          case 'No On Queue Data':
+          case 'No Activity Data':
             statusClass = 'status-awol';
             statusText = 'No Data';
             break;
