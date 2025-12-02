@@ -2044,217 +2044,117 @@
       if (dropdowns.timeOwedTeam) dropdowns.timeOwedTeam.setOptions(teamOpts);
     }
 
-    // ===== BUSINESS UNIT CHANGE HANDLERS =====
-    async function handleBusinessUnitChange(selectedBuIds) {
-      if (dropdowns.managementUnit) {
-        dropdowns.managementUnit.clearSelection();
-        dropdowns.managementUnit.setOptions([]);
-      }
+// ===== BUSINESS UNIT CHANGE HANDLERS =====
+async function handleBusinessUnitChange(selectedBuIds) {
+  if (dropdowns.managementUnit) {
+    dropdowns.managementUnit.clearSelection();
+    dropdowns.managementUnit.setOptions([]);
+  }
 
-      if (selectedBuIds.length === 0) return;
+  if (selectedBuIds.length === 0) return;
 
-      try {
-        await loadActivityCodes(selectedBuIds[0]);
-        
-        const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(selectedBuIds[0])}`
-        );
-        const list = muResponse.entities || muResponse.managementUnits || [];
-        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
-        
-        if (dropdowns.managementUnit) {
-          dropdowns.managementUnit.setOptions(muOpts);
-        }
-      } catch (err) {
-        console.error('Error loading management units:', err);
-        showMessage(`Error loading management units: ${err.message}`, 'error');
-      }
+  try {
+    await loadActivityCodes(selectedBuIds[0]);
+    
+    // Fetch ONLY the management units for the selected business unit
+    const muResponse = await authorizedFetchJson(
+      `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(selectedBuIds[0])}/managementunits`
+    );
+    
+    let managementUnits = [];
+    
+    // Handle different response structures
+    if (muResponse.entities) {
+      managementUnits = muResponse.entities;
+    } else if (muResponse.managementUnits) {
+      managementUnits = muResponse.managementUnits;
+    } else if (Array.isArray(muResponse)) {
+      managementUnits = muResponse;
     }
-
-    async function handleManagementUnitChange(selectedMuIds) {
-      if (selectedMuIds.length === 0) {
-        populateUserDropdown(allUsers);
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = muUsersResponse.entities || muUsersResponse.users || [];
-        const enriched = list.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-        populateUserDropdown(enriched);
-      } catch (err) {
-        console.error('Error loading MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
+    
+    const muOpts = managementUnits.map(mu => ({ 
+      value: mu.id, 
+      label: mu.name || mu.id 
+    }));
+    
+    if (dropdowns.managementUnit) {
+      dropdowns.managementUnit.setOptions(muOpts);
     }
-
-    async function handleAnalyticsBuChange(selectedBuIds, tabType) {
-      let muDropdown;
-      switch(tabType) {
-        case 'actual': muDropdown = dropdowns.actualMu; break;
-        case 'overtime': muDropdown = dropdowns.overtimeMu; break;
-        case 'absence': muDropdown = dropdowns.absenceMu; break;
-        case 'late': muDropdown = dropdowns.lateMu; break;
-        case 'timeowed': muDropdown = dropdowns.timeOwedMu; break;
-      }
-      
-      if (muDropdown) {
-        muDropdown.clearSelection();
-        muDropdown.setOptions([]);
-      }
-
-      if (selectedBuIds.length === 0) return;
-
-      try {
-        await loadActivityCodes(selectedBuIds[0]);
-        
-        const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(selectedBuIds[0])}`
-        );
-        const list = muResponse.entities || muResponse.managementUnits || [];
-        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
-        
-        if (muDropdown) {
-          muDropdown.setOptions(muOpts);
-        }
-      } catch (err) {
-        console.error('Error loading management units for analytics:', err);
-        showMessage(`Error loading management units: ${err.message}`, 'error');
-      }
+    
+    // Clear user dropdown when BU changes
+    if (dropdowns.user) {
+      dropdowns.user.clearSelection();
+      dropdowns.user.setOptions([]);
     }
+  } catch (err) {
+    console.error('Error loading management units:', err);
+    showMessage(`Error loading management units: ${err.message}`, 'error');
+  }
+}
 
-    async function handleActualManagementUnitChange(selectedMuIds) {
-      if (!selectedMuIds || selectedMuIds.length === 0) {
-        if (dropdowns.actualUser) {
-          dropdowns.actualUser.setOptions([]);
-        }
-        return;
-      }
+// Update all analytics BU change handlers to use the same pattern
+async function handleAnalyticsBuChange(selectedBuIds, tabType) {
+  let muDropdown;
+  switch(tabType) {
+    case 'actual': muDropdown = dropdowns.actualMu; break;
+    case 'overtime': muDropdown = dropdowns.overtimeMu; break;
+    case 'absence': muDropdown = dropdowns.absenceMu; break;
+    case 'late': muDropdown = dropdowns.lateMu; break;
+    case 'timeowed': muDropdown = dropdowns.timeOwedMu; break;
+  }
+  
+  if (muDropdown) {
+    muDropdown.clearSelection();
+    muDropdown.setOptions([]);
+  }
 
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
-                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
-                    : [];
-        const enriched = list.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-        
-        const validUsers = enriched
-          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ 
-            value: u.id, 
-            label: u.name || u.email || 'Unknown User',
-            teamNames: u.teamNames || 'No Team'
-          }))
-          .sort((a,b)=>a.label.localeCompare(b.label));
-        
-        if (dropdowns.actualUser) {
-          dropdowns.actualUser.setOptions(validUsers);
-        }
-      } catch (err) {
-        console.error('Error loading actual activity MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
+  if (selectedBuIds.length === 0) return;
+
+  try {
+    await loadActivityCodes(selectedBuIds[0]);
+    
+    // Fetch management units for the selected business unit
+    const muResponse = await authorizedFetchJson(
+      `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(selectedBuIds[0])}/managementunits`
+    );
+    
+    let managementUnits = [];
+    
+    if (muResponse.entities) {
+      managementUnits = muResponse.entities;
+    } else if (muResponse.managementUnits) {
+      managementUnits = muResponse.managementUnits;
+    } else if (Array.isArray(muResponse)) {
+      managementUnits = muResponse;
     }
-
-    async function handleOvertimeManagementUnitChange(selectedMuIds) {
-      if (!selectedMuIds || selectedMuIds.length === 0) return;
-      // Overtime doesn't need user dropdown, but we could load users if needed
+    
+    const muOpts = managementUnits.map(mu => ({ 
+      value: mu.id, 
+      label: mu.name || mu.id 
+    }));
+    
+    if (muDropdown) {
+      muDropdown.setOptions(muOpts);
     }
-
-    async function handleAbsenceManagementUnitChange(selectedMuIds) {
-      if (!selectedMuIds || selectedMuIds.length === 0) return;
-      // Absence doesn't need user dropdown directly
+    
+    // Clear user dropdowns when BU changes
+    if (tabType === 'actual' && dropdowns.actualUser) {
+      dropdowns.actualUser.clearSelection();
+      dropdowns.actualUser.setOptions([]);
     }
-
-    async function handleLateManagementUnitChange(selectedMuIds) {
-      if (!selectedMuIds || selectedMuIds.length === 0) {
-        if (dropdowns.lateUser) {
-          dropdowns.lateUser.setOptions([]);
-        }
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
-                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
-                    : [];
-        const enriched = list.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-        
-        const validUsers = enriched
-          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ 
-            value: u.id, 
-            label: u.name || u.email || 'Unknown User',
-            teamNames: u.teamNames || 'No Team'
-          }))
-          .sort((a,b)=>a.label.localeCompare(b.label));
-        
-        if (dropdowns.lateUser) {
-          dropdowns.lateUser.setOptions(validUsers);
-        }
-      } catch (err) {
-        console.error('Error loading late report MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
+    if (tabType === 'late' && dropdowns.lateUser) {
+      dropdowns.lateUser.clearSelection();
+      dropdowns.lateUser.setOptions([]);
     }
-
-    async function handleTimeOwedManagementUnitChange(selectedMuIds) {
-      if (!selectedMuIds || selectedMuIds.length === 0) {
-        if (dropdowns.timeOwedUser) {
-          dropdowns.timeOwedUser.setOptions([]);
-        }
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
-                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
-                    : [];
-        const enriched = list.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-        
-        const validUsers = enriched
-          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ 
-            value: u.id, 
-            label: u.name || u.email || 'Unknown User',
-            teamNames: u.teamNames || 'No Team'
-          }))
-          .sort((a,b)=>a.label.localeCompare(b.label));
-        
-        if (dropdowns.timeOwedUser) {
-          dropdowns.timeOwedUser.setOptions(validUsers);
-        }
-      } catch (err) {
-        console.error('Error loading time owed MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
+    if (tabType === 'timeowed' && dropdowns.timeOwedUser) {
+      dropdowns.timeOwedUser.clearSelection();
+      dropdowns.timeOwedUser.setOptions([]);
     }
+  } catch (err) {
+    console.error(`Error loading management units for ${tabType}:`, err);
+    showMessage(`Error loading management units: ${err.message}`, 'error');
+  }
+}
 
     // ===== SCHEDULE TAB FUNCTIONS =====
     function initializeEventListeners() {
@@ -4086,324 +3986,342 @@
       renderLateReportResults(sortedData);
     }
 
-    // ===== TIME OWED TAB FUNCTIONS =====
-    async function generateTimeOwedReport() {
-      const buIds = dropdowns.timeOwedBu ? dropdowns.timeOwedBu.getSelectedValues() : [];
-      const muIds = dropdowns.timeOwedMu ? dropdowns.timeOwedMu.getSelectedValues() : [];
-      const userIds = dropdowns.timeOwedUser ? dropdowns.timeOwedUser.getSelectedValues() : [];
-      const startDateRaw = document.getElementById('timeOwedStartDate').value;
-      const endDateRaw = document.getElementById('timeOwedEndDate').value;
+// ===== TIME OWED TAB FUNCTIONS =====
+async function getActualActivityDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
+  const startDateApi = convertToApiFormat(startDate);
+  const endDateApi = convertToApiFormat(endDate);
 
-      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
-        showMessage('Please select business unit, management unit, users, and date range', 'error');
-        return;
+  try {
+    const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
+    const jobResult = await pollHistoricalAdherenceJob(jobId);
+    const actualData = await processJobResults(jobResult, businessUnitId);
+    
+    // Filter for 'offline' activities (Agent Unavailable, Off Queue, etc.)
+    const offlineActivities = actualData.filter(activity => {
+      const activityName = activity.activityLabel.toLowerCase();
+      const activityCategory = activity.activityCategory ? activity.activityCategory.toLowerCase() : '';
+      
+      return activityName.includes('unavailable') || 
+             activityName.includes('off queue') ||
+             activityName.includes('off-queue') ||
+             activityName.includes('logged out') ||
+             activityName.includes('sign off') ||
+             activityCategory.includes('unavailable') ||
+             activityCategory.includes('offqueue');
+    });
+    
+    console.log(`Found ${offlineActivities.length} offline activities out of ${actualData.length} total activities`);
+    
+    return offlineActivities;
+  } catch (err) {
+    console.error('Error getting actual activity data for time owed:', err);
+    return [];
+  }
+}
+
+function generateTimeOwedData(scheduleData, actualData) {
+  const timeOwedReport = [];
+  
+  console.log(`Generating time owed report with ${scheduleData.length} schedule items and ${actualData.length} offline activities`);
+  
+  const scheduleByUserDate = {};
+  
+  // Filter schedule to only include work activities
+  const filteredScheduleData = scheduleData.filter(scheduleItem => {
+    const activityName = scheduleItem.activityLabel || '';
+    const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
+    
+    return !activityName.toLowerCase().includes('time off') &&
+           !activityName.toLowerCase().includes('holiday') &&
+           !activityName.toLowerCase().includes('sick') &&
+           !activityName.toLowerCase().includes('absence') &&
+           !activityName.toLowerCase().includes('vacation') &&
+           !activityName.toLowerCase().includes('leave') &&
+           activityCategory !== 'TimeOff';
+  });
+  
+  // Group schedule by user and date
+  filteredScheduleData.forEach(scheduleItem => {
+    const key = `${scheduleItem.userId}_${scheduleItem.date}`;
+    if (!scheduleByUserDate[key]) {
+      scheduleByUserDate[key] = [];
+    }
+    scheduleByUserDate[key].push(scheduleItem);
+  });
+  
+  // Group actual offline activities by user and date
+  const offlineByUserDate = {};
+  actualData.forEach(offlineItem => {
+    const key = `${offlineItem.userId}_${offlineItem.date}`;
+    if (!offlineByUserDate[key]) {
+      offlineByUserDate[key] = [];
+    }
+    offlineByUserDate[key].push(offlineItem);
+  });
+  
+  // Process each user/date combination
+  Object.keys(scheduleByUserDate).forEach(key => {
+    const [userId, date] = key.split('_');
+    const userSchedule = scheduleByUserDate[key];
+    
+    // Sort schedule by end time to find last scheduled activity of the day
+    userSchedule.sort((a, b) => {
+      const aTime = a.end ? a.end.getTime() : 0;
+      const bTime = b.end ? b.end.getTime() : 0;
+      return bTime - aTime; // Sort descending to get last activity first
+    });
+    
+    const lastScheduledActivity = userSchedule[0];
+    
+    if (!lastScheduledActivity || !lastScheduledActivity.end) {
+      console.log(`No end time for user ${userId} on ${date}`);
+      return;
+    }
+    
+    const scheduledEndTime = lastScheduledActivity.end;
+    
+    // Get offline activities for this user/date
+    const userOfflineActivities = offlineByUserDate[key] || [];
+    
+    if (userOfflineActivities.length === 0) {
+      // No offline activities found - agent didn't log off properly
+      timeOwedReport.push({
+        userId: userId,
+        userName: lastScheduledActivity.userName,
+        teamNames: lastScheduledActivity.teamNames || 'No Team',
+        date: date,
+        scheduledEnd: scheduledEndTime,
+        actualOfflineTime: null,
+        status: 'No Logoff Found',
+        timeOwed: 0, // No time owed if they didn't log off
+        timeOwedType: 'none',
+        scheduledActivity: lastScheduledActivity.activityLabel,
+        actualActivity: null
+      });
+      return;
+    }
+    
+    // Find the NEAREST offline activity to scheduled end time
+    let nearestOfflineActivity = null;
+    let minTimeDiff = Infinity;
+    
+    userOfflineActivities.forEach(offlineActivity => {
+      const offlineTime = offlineActivity.endTime;
+      const timeDiff = Math.abs(offlineTime - scheduledEndTime);
+      
+      if (timeDiff < minTimeDiff) {
+        minTimeDiff = timeDiff;
+        nearestOfflineActivity = offlineActivity;
       }
-
-      const button = document.getElementById('generateTimeOwedReportBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Generating time owed report...';
-
-      try {
-        await loadActivityCodes(buIds[0]);
-        
-        const scheduleData = await getScheduleDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        const actualData = await getActualActivityDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        const timeOwedData = generateTimeOwedData(scheduleData, actualData);
-        
-        currentTimeOwedData = timeOwedData;
-        currentDisplayedData.timeowed = [...timeOwedData];
-        renderTimeOwedResults(timeOwedData);
-        
-        showMessage('Time owed report generated successfully', 'success');
-      } catch (err) {
-        console.error('Error generating time owed report:', err);
-        showMessage(`Failed to generate time owed report: ${err.message}`, 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-      }
+    });
+    
+    if (!nearestOfflineActivity) {
+      timeOwedReport.push({
+        userId: userId,
+        userName: lastScheduledActivity.userName,
+        teamNames: lastScheduledActivity.teamNames || 'No Team',
+        date: date,
+        scheduledEnd: scheduledEndTime,
+        actualOfflineTime: null,
+        status: 'No Valid Logoff',
+        timeOwed: 0,
+        timeOwedType: 'none',
+        scheduledActivity: lastScheduledActivity.activityLabel,
+        actualActivity: null
+      });
+      return;
+    }
+    
+    const actualOfflineTime = nearestOfflineActivity.endTime;
+    
+    // Calculate time difference in minutes
+    const timeDiffMinutes = Math.round((scheduledEndTime - actualOfflineTime) / (1000 * 60));
+    
+    // Determine status and time owed
+    let status, timeOwed, timeOwedType;
+    
+    if (timeDiffMinutes > 5) { // Using 5-minute grace period
+      // Logged out BEFORE scheduled end (left early)
+      status = 'Left Early';
+      timeOwed = timeDiffMinutes; // Time OWED TO BUSINESS (agent left early)
+      timeOwedType = 'toBusiness';
+    } else if (timeDiffMinutes < -5) {
+      // Logged out AFTER scheduled end (worked over)
+      status = 'Worked Over';
+      timeOwed = Math.abs(timeDiffMinutes); // Time OWED TO AGENT (worked extra)
+      timeOwedType = 'toAgent';
+    } else {
+      // Within 5 minutes of scheduled time
+      status = 'Completed';
+      timeOwed = 0;
+      timeOwedType = 'none';
+    }
+    
+    timeOwedReport.push({
+      userId: userId,
+      userName: lastScheduledActivity.userName,
+      teamNames: lastScheduledActivity.teamNames || 'No Team',
+      date: date,
+      scheduledEnd: scheduledEndTime,
+      actualOfflineTime: actualOfflineTime,
+      status: status,
+      timeOwed: timeOwed,
+      timeOwedType: timeOwedType,
+      scheduledActivity: lastScheduledActivity.activityLabel,
+      actualActivity: nearestOfflineActivity.activityLabel
+    });
+  });
+  
+  console.log(`Generated ${timeOwedReport.length} time owed report entries`);
+  return timeOwedReport;
     }
 
-    async function getScheduleDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-      
-      const startDateIso = `${startDateApi}T00:00:00.000Z`;
-      const endDateIso = getEndDateIso(endDate);
-
-      let allActivities = [];
-      for (const userId of userIds) {
-        try {
-          const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
-          const activities = extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
-          allActivities = allActivities.concat(activities);
-        } catch (err) {
-          console.error(`Error loading schedule for user ${userId}:`, err);
-        }
-      }
-      
-      return allActivities;
-    }
-
-    async function getActualActivityDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-
-      try {
-        const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
-        const jobResult = await pollHistoricalAdherenceJob(jobId);
-        const actualData = await processJobResults(jobResult, businessUnitId);
-        
-        const lastActivitiesByDay = {};
-        
-        actualData.forEach(activity => {
-          const key = `${activity.userId}_${activity.date}`;
-          
-          if (!lastActivitiesByDay[key]) {
-            lastActivitiesByDay[key] = [];
-          }
-          
-          lastActivitiesByDay[key].push(activity);
-        });
-        
-        const lastActivities = [];
-        
-        Object.keys(lastActivitiesByDay).forEach(key => {
-          const activities = lastActivitiesByDay[key];
-          
-          activities.sort((a, b) => b.endTime - a.endTime);
-          
-          const lastActivity = activities[0];
-          if (lastActivity) {
-            lastActivities.push(lastActivity);
-          }
-        });
-        
-        return lastActivities;
-      } catch (err) {
-        console.error('Error getting actual activity data for time owed:', err);
-        return [];
-      }
-    }
-
-    function generateTimeOwedData(scheduleData, actualData) {
-      const timeOwedReport = [];
-      
-      const scheduleByUserDate = {};
-      
-      const filteredScheduleData = scheduleData.filter(scheduleItem => {
-        const activityName = scheduleItem.activityLabel || '';
-        const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
-        
-        return !activityName.toLowerCase().includes('time off') &&
-               !activityName.toLowerCase().includes('holiday') &&
-               !activityName.toLowerCase().includes('sick') &&
-               !activityName.toLowerCase().includes('absence') &&
-               !activityName.toLowerCase().includes('vacation') &&
-               !activityName.toLowerCase().includes('leave') &&
-               activityCategory !== 'TimeOff';
-      });
-      
-      filteredScheduleData.forEach(scheduleItem => {
-        const key = `${scheduleItem.userId}_${scheduleItem.date}`;
-        if (!scheduleByUserDate[key]) {
-          scheduleByUserDate[key] = [];
-        }
-        scheduleByUserDate[key].push(scheduleItem);
-      });
-      
-      const actualByUserDate = {};
-      actualData.forEach(actualItem => {
-        const key = `${actualItem.userId}_${actualItem.date}`;
-        if (!actualByUserDate[key]) {
-          actualByUserDate[key] = [];
-        }
-        actualByUserDate[key].push(actualItem);
-      });
-      
-      Object.keys(scheduleByUserDate).forEach(key => {
-        const [userId, date] = key.split('_');
-        const userSchedule = scheduleByUserDate[key];
-        
-        userSchedule.sort((a, b) => {
-          const aTime = a.end ? a.end.getTime() : 0;
-          const bTime = b.end ? b.end.getTime() : 0;
-          return bTime - aTime;
-        });
-        
-        const lastScheduledActivity = userSchedule[0];
-        
-        if (!lastScheduledActivity || !lastScheduledActivity.end) {
-          return;
-        }
-        
-        const scheduledEndTime = lastScheduledActivity.end;
-        
-        const userActualActivities = actualByUserDate[key] || [];
-        
-        if (userActualActivities.length === 0) {
-          timeOwedReport.push({
-            userId: userId,
-            userName: lastScheduledActivity.userName,
-            teamNames: lastScheduledActivity.teamNames || 'No Team',
-            date: date,
-            scheduledEnd: scheduledEndTime,
-            actualOfflineTime: null,
-            status: 'No Data',
-            timeOwed: 0,
-            scheduledActivity: lastScheduledActivity.activityLabel,
-            actualActivity: null
-          });
-          return;
-        }
-        
-        const lastActualActivity = userActualActivities[0];
-        
-        if (!lastActualActivity) {
-          timeOwedReport.push({
-            userId: userId,
-            userName: lastScheduledActivity.userName,
-            teamNames: lastScheduledActivity.teamNames || 'No Team',
-            date: date,
-            scheduledEnd: scheduledEndTime,
-            actualOfflineTime: null,
-            status: 'No Activity Data',
-            timeOwed: 0,
-            scheduledActivity: lastScheduledActivity.activityLabel,
-            actualActivity: null
-          });
-          return;
-        }
-        
-        const actualOfflineTime = lastActualActivity.endTime;
-        
-        const timeDiffMinutes = Math.round((scheduledEndTime - actualOfflineTime) / (1000 * 60));
-        
-        let status, timeOwed;
-        
-        if (timeDiffMinutes > 5) {
-          status = 'Logged Out Early';
-          timeOwed = timeDiffMinutes;
-        } else if (timeDiffMinutes < -5) {
-          status = 'Worked Extra';
-          timeOwed = 0;
-        } else {
-          status = 'Completed';
-          timeOwed = 0;
-        }
-        
-        timeOwedReport.push({
-          userId: userId,
-          userName: lastScheduledActivity.userName,
-          teamNames: lastScheduledActivity.teamNames || 'No Team',
-          date: date,
-          scheduledEnd: scheduledEndTime,
-          actualOfflineTime: actualOfflineTime,
-          status: status,
-          timeOwed: Math.abs(timeOwed),
-          scheduledActivity: lastScheduledActivity.activityLabel,
-          actualActivity: lastActualActivity.activityLabel
-        });
-      });
-      
-      return timeOwedReport;
-    }
-
-    function renderTimeOwedResults(data) {
-      const container = document.getElementById('timeOwedResults');
-      const contentContainer = document.getElementById('timeOwedResultsContent');
-      container.style.display = 'block';
-      
-      if (!data || data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No time owed data found for the selected period.
-          </div>
-        `;
-        return;
-      }
-      
-      const loggedOutEarlyCount = data.filter(item => item.status === 'Logged Out Early').length;
-      const completedCount = data.filter(item => item.status === 'Completed').length;
-      const workedExtraCount = data.filter(item => item.status === 'Worked Extra').length;
-      const noDataCount = data.filter(item => item.status === 'No Data' || item.status === 'No Activity Data').length;
-      const totalTimeOwed = data.reduce((sum, item) => sum + item.timeOwed, 0);
-      const avgTimeOwed = totalTimeOwed / data.length;
-      
-      let html = `
-        <h3 class="section-title">Time Owed Report</h3>
-        <div class="schedule-meta">
-          <span class="pill">Total Shifts: ${data.length}</span>
-          <span class="pill" style="background: #fef3c7; color: #92400e;">Logged Out Early: ${loggedOutEarlyCount}</span>
-          <span class="pill" style="background: #dcfce7; color: #166534;">Completed: ${completedCount}</span>
-          <span class="pill" style="background: #dbeafe; color: #1e40af;">Worked Extra: ${workedExtraCount}</span>
-          <span class="pill" style="background: #f3f4f6; color: #374151;">No Data: ${noDataCount}</span>
-          <span class="pill">Total Time Owed: ${formatDuration(totalTimeOwed)}</span>
+function renderTimeOwedResults(data) {
+  const container = document.getElementById('timeOwedResults');
+  const contentContainer = document.getElementById('timeOwedResultsContent');
+  container.style.display = 'block';
+  
+  if (!data || data.length === 0) {
+    contentContainer.innerHTML = `
+      <div class="info-message">
+        No time owed data found for the selected period.
+      </div>
+    `;
+    return;
+  }
+  
+  // Calculate statistics
+  const leftEarlyCount = data.filter(item => item.status === 'Left Early').length;
+  const completedCount = data.filter(item => item.status === 'Completed').length;
+  const workedOverCount = data.filter(item => item.status === 'Worked Over').length;
+  const noLogoffCount = data.filter(item => item.status === 'No Logoff Found' || item.status === 'No Valid Logoff').length;
+  
+  // Calculate totals
+  const totalTimeOwedToBusiness = data
+    .filter(item => item.timeOwedType === 'toBusiness')
+    .reduce((sum, item) => sum + item.timeOwed, 0);
+    
+  const totalTimeOwedToAgent = data
+    .filter(item => item.timeOwedType === 'toAgent')
+    .reduce((sum, item) => sum + item.timeOwed, 0);
+    
+  const totalTimeOwed = totalTimeOwedToBusiness + totalTimeOwedToAgent;
+  
+  // Calculate averages
+  const avgTimeOwedToBusiness = leftEarlyCount > 0 ? totalTimeOwedToBusiness / leftEarlyCount : 0;
+  const avgTimeOwedToAgent = workedOverCount > 0 ? totalTimeOwedToAgent / workedOverCount : 0;
+  
+  let html = `
+    <h3 class="section-title">Time Owed Report</h3>
+    <div class="schedule-meta">
+      <span class="pill">Total Shifts: ${data.length}</span>
+      <span class="pill" style="background: #fee2e2; color: #b42318;">Left Early: ${leftEarlyCount}</span>
+      <span class="pill" style="background: #dcfce7; color: #166534;">Completed: ${completedCount}</span>
+      <span class="pill" style="background: #dbeafe; color: #1e40af;">Worked Over: ${workedOverCount}</span>
+      <span class="pill" style="background: #f3f4f6; color: #374151;">No Logoff: ${noLogoffCount}</span>
+    </div>
+    
+    <!-- Time Owed Summary -->
+    <div class="chart-wrapper" style="margin-bottom: 20px;">
+      <h4>Time Owed Summary</h4>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px;">
+        <div class="metric-card" style="background: #fee2e2; border-color: #fecaca;">
+          <div class="metric-label">Time Owed TO BUSINESS</div>
+          <div class="metric-value" style="color: #b42318;">${formatDuration(totalTimeOwedToBusiness)}</div>
+          <div style="font-size: 12px; color: #b42318;">(${leftEarlyCount} agents)</div>
         </div>
-        
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="userName">User</th>
-              <th class="sortable" data-sort="teamNames">Team</th>
-              <th class="sortable" data-sort="date">Date</th>
-              <th>Scheduled End</th>
-              <th>Actual Offline Time</th>
-              <th class="sortable" data-sort="status">Status</th>
-              <th class="sortable" data-sort="timeOwed">Time Owed</th>
-              <th>Scheduled Activity</th>
-              <th>Actual Activity</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(row => {
-        let statusClass = '';
-        let statusText = '';
-        
-        switch(row.status) {
-          case 'Logged Out Early':
-            statusClass = 'status-logged-out-early';
-            statusText = `Early by ${formatDuration(row.timeOwed)}`;
-            break;
-          case 'Completed':
-            statusClass = 'status-completed';
-            statusText = 'Completed Shift';
-            break;
-          case 'Worked Extra':
-            statusClass = 'status-time-owed';
-            statusText = 'Worked Extra Time';
-            break;
-          case 'No Data':
-          case 'No Activity Data':
-            statusClass = 'status-awol';
-            statusText = 'No Data';
-            break;
-        }
-        
-        html += `
-          <tr>
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
-            <td>${escapeHtml(row.date)}</td>
-            <td>${row.scheduledEnd ? escapeHtml(formatTime(row.scheduledEnd)) : 'N/A'}</td>
-            <td>${row.actualOfflineTime ? escapeHtml(formatTime(row.actualOfflineTime)) : 'N/A'}</td>
-            <td><span class="${statusClass}">${statusText}</span></td>
-            <td>${row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m'}</td>
-            <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
-            <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
-          </tr>
-        `;
-      });
-      
-      html += `</tbody></table>`;
-      
-      contentContainer.innerHTML = html;
-      
-      addTimeOwedTableSorting();
+        <div class="metric-card" style="background: #dbeafe; border-color: #bfdbfe;">
+          <div class="metric-label">Time Owed TO AGENT</div>
+          <div class="metric-value" style="color: #1e40af;">${formatDuration(totalTimeOwedToAgent)}</div>
+          <div style="font-size: 12px; color: #1e40af;">(${workedOverCount} agents)</div>
+        </div>
+        <div class="metric-card" style="background: #f0f9ff; border-color: #e0f2fe;">
+          <div class="metric-label">Avg Owed to Business</div>
+          <div class="metric-value" style="color: #0c4a6e;">${formatDuration(avgTimeOwedToBusiness)}</div>
+          <div style="font-size: 12px; color: #0c4a6e;">per agent (left early)</div>
+        </div>
+        <div class="metric-card" style="background: #f0f9ff; border-color: #e0f2fe;">
+          <div class="metric-label">Avg Owed to Agent</div>
+          <div class="metric-value" style="color: #0c4a6e;">${formatDuration(avgTimeOwedToAgent)}</div>
+          <div style="font-size: 12px; color: #0c4a6e;">per agent (worked over)</div>
+        </div>
+      </div>
+    </div>
+    
+    <table class="schedule-table">
+      <thead>
+        <tr>
+          <th class="sortable" data-sort="userName">User</th>
+          <th class="sortable" data-sort="teamNames">Team</th>
+          <th class="sortable" data-sort="date">Date</th>
+          <th>Scheduled End</th>
+          <th>Actual Offline Time</th>
+          <th class="sortable" data-sort="status">Status</th>
+          <th class="sortable" data-sort="timeOwed">Time Owed</th>
+          <th>Owed To</th>
+          <th>Scheduled Activity</th>
+          <th>Actual Activity</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  data.forEach(row => {
+    let statusClass = '';
+    let statusText = '';
+    let owedToText = '';
+    let owedToClass = '';
+    
+    switch(row.status) {
+      case 'Left Early':
+        statusClass = 'status-logged-out-early';
+        statusText = `Left ${formatDuration(row.timeOwed)} early`;
+        owedToText = 'BUSINESS';
+        owedToClass = 'status-time-owed';
+        break;
+      case 'Completed':
+        statusClass = 'status-completed';
+        statusText = 'On Time';
+        owedToText = 'N/A';
+        owedToClass = '';
+        break;
+      case 'Worked Over':
+        statusClass = 'status-time-owed';
+        statusText = `Worked ${formatDuration(row.timeOwed)} over`;
+        owedToText = 'AGENT';
+        owedToClass = 'status-time-owed';
+        break;
+      case 'No Logoff Found':
+      case 'No Valid Logoff':
+        statusClass = 'status-awol';
+        statusText = 'No Logoff';
+        owedToText = 'N/A';
+        owedToClass = '';
+        break;
     }
+    
+    html += `
+      <tr>
+        <td>${escapeHtml(row.userName)}</td>
+        <td>${escapeHtml(row.teamNames || 'No Team')}</td>
+        <td>${escapeHtml(row.date)}</td>
+        <td>${row.scheduledEnd ? escapeHtml(formatTime(row.scheduledEnd)) : 'N/A'}</td>
+        <td>${row.actualOfflineTime ? escapeHtml(formatTime(row.actualOfflineTime)) : 'N/A'}</td>
+        <td><span class="${statusClass}">${statusText}</span></td>
+        <td>${row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m'}</td>
+        <td>${owedToText ? `<span class="${owedToClass}">${owedToText}</span>` : 'N/A'}</td>
+        <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
+        <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
+      </tr>
+    `;
+  });
+  
+  html += `</tbody></table>`;
+  
+  contentContainer.innerHTML = html;
+  
+  addTimeOwedTableSorting();
+}
 
     function addTimeOwedTableSorting() {
       const table = document.querySelector('#timeOwedResultsContent table');
@@ -4678,26 +4596,28 @@
       exportToCSV(csvData, `late_report_${new Date().toISOString().split('T')[0]}.csv`);
     }
 
-    function exportTimeOwedReportToCSV() {
-      if (currentDisplayedData.timeowed.length === 0) {
-        showMessage('No time owed data to export', 'error');
-        return;
-      }
+function exportTimeOwedReportToCSV() {
+  if (currentDisplayedData.timeowed.length === 0) {
+    showMessage('No time owed data to export', 'error');
+    return;
+  }
 
-      const csvData = currentDisplayedData.timeowed.map(row => ({
-        Date: row.date,
-        User: row.userName,
-        Team: row.teamNames || 'No Team',
-        'Scheduled End': row.scheduledEnd ? formatTime(row.scheduledEnd) : 'N/A',
-        'Actual Offline Time': row.actualOfflineTime ? formatTime(row.actualOfflineTime) : 'N/A',
-        Status: row.status,
-        'Time Owed': row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m',
-        'Scheduled Activity': row.scheduledActivity || 'N/A',
-        'Actual Activity': row.actualActivity || 'N/A'
-      }));
+  const csvData = currentDisplayedData.timeowed.map(row => ({
+    Date: row.date,
+    User: row.userName,
+    Team: row.teamNames || 'No Team',
+    'Scheduled End': row.scheduledEnd ? formatTime(row.scheduledEnd) : 'N/A',
+    'Actual Offline Time': row.actualOfflineTime ? formatTime(row.actualOfflineTime) : 'N/A',
+    Status: row.status,
+    'Time Owed': row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m',
+    'Owed To': row.timeOwedType === 'toBusiness' ? 'BUSINESS' : 
+               row.timeOwedType === 'toAgent' ? 'AGENT' : 'N/A',
+    'Scheduled Activity': row.scheduledActivity || 'N/A',
+    'Actual Activity': row.actualActivity || 'N/A'
+  }));
 
-      exportToCSV(csvData, `time_owed_${new Date().toISOString().split('T')[0]}.csv`);
-    }
+  exportToCSV(csvData, `time_owed_${new Date().toISOString().split('T')[0]}.csv`);
+}
   </script>
 </body>
 </html>
