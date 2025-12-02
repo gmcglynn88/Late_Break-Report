@@ -1256,12 +1256,11 @@
     let usersById = {};
     let allTeams = [];
     let teamsById = {};
-    let userTeams = {}; // New: Store team membership for each user
+    let userTeams = {};
     let activityCodesByBuId = {};
     let businessUnits = [];
-    let managementUnits = [];
     
-    // Data storage for exports and sorting
+    // Data storage
     let currentScheduleData = [];
     let currentActualActivityData = [];
     let currentOvertimeData = [];
@@ -1288,22 +1287,19 @@
     // Checkbox dropdown instances
     const dropdowns = {};
 
-    // ===== Date Formatting Functions =====
+    // ===== UTILITY FUNCTIONS (Common to all tabs) =====
     function formatDate(dateString) {
       if (!dateString) return '';
       
-      // If it's already in dd-mm-yyyy format, return as is
       if (dateString.match(/^\d{2}-\d{2}-\d{4}$/)) {
         return dateString;
       }
       
-      // Convert from yyyy-mm-dd to dd-mm-yyyy
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         const parts = dateString.split('-');
         return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
       
-      // Handle Date objects
       if (dateString instanceof Date) {
         const day = String(dateString.getDate()).padStart(2, '0');
         const month = String(dateString.getMonth() + 1).padStart(2, '0');
@@ -1322,7 +1318,6 @@
       return dateStr;
     }
 
-    // ===== Date Helper Functions =====
     function isToday(dateStr) {
       const inputDate = new Date(dateStr);
       const today = new Date();
@@ -1334,21 +1329,18 @@
     function getEndDateIso(dateStr) {
       const dateApi = convertToApiFormat(dateStr);
       if (isToday(dateApi)) {
-        // For today, return current time
         return new Date().toISOString();
       } else {
-        // For other dates, return end of day
         return `${dateApi}T23:59:59.999Z`;
       }
     }
 
-    // ===== Initialize with current week dates =====
     function getCurrentWeekDates() {
       const today = new Date();
       const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); // Monday
+      startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
       const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
       
       return {
         start: formatDate(startOfWeek.toISOString().split('T')[0]),
@@ -1356,52 +1348,27 @@
       };
     }
 
-    // ===== Tab Management =====
-    function initializeTabs() {
-      document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-          // Remove active class from all tabs and contents
-          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-          
-          // Add active class to clicked tab and corresponding content
-          tab.classList.add('active');
-          const tabId = tab.getAttribute('data-tab');
-          document.getElementById(`${tabId}-tab`).classList.add('active');
-        });
-      });
+    function formatTime(d) {
+      if (!d) return 'All Day';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    // ===== Auth bootstrap =====
-    document.addEventListener('DOMContentLoaded', () => {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const qparams = new URLSearchParams(window.location.search);
+    function formatDuration(mins) {
+      if (mins == null || isNaN(mins)) return '';
+      const total = Math.max(0, Math.round(mins));
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      if (h === 0) return `${m}m`;
+      if (m === 0) return `${h}h`;
+      return `${h}h ${m}m`;
+    }
 
-      const oauthError = params.get('error') || qparams.get('error');
-      const oauthErrorDesc = params.get('error_description') || qparams.get('error_description');
-
-      if (oauthError) {
-        const msg = document.getElementById('auth-message');
-        msg.textContent = `OAuth error: ${oauthErrorDesc || oauthError}`;
-        msg.className = 'error-message';
-        console.error('OAuth error details:', { error: oauthError, description: oauthErrorDesc });
-        return;
-      }
-
-      accessToken = params.get('access_token');
-
-      if (accessToken) {
-        sessionStorage.setItem('purecloud_token', accessToken);
-        window.location.hash = '';
-        initializeApplication();
-      } else if (sessionStorage.getItem('purecloud_token')) {
-        accessToken = sessionStorage.getItem('purecloud_token');
-        initializeApplication();
-      } else {
-        window.location.href = oauthUrl;
-      }
-    });
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
 
     function showMessage(msg, type = 'error') {
       const box = document.getElementById('messageContainer');
@@ -1410,21 +1377,6 @@
       if (type === 'success' || type === 'info') {
         setTimeout(() => { box.style.display = 'none'; }, 6000);
       }
-    }
-
-    function initializeApplication() {
-      console.log('Initializing application...');
-      document.getElementById('auth-message').textContent = 'Authenticated successfully!';
-      document.getElementById('authCard').style.display = 'none';
-      document.getElementById('appContent').style.display = 'block';
-
-      initializeTabs();
-      initializeDropdowns();
-      initializeEventListeners();
-      initializeViewToggle();
-      
-      // Load initial data
-      populateInitialData();
     }
 
     function authorizedFetch(url, options = {}) {
@@ -1465,7 +1417,7 @@
       return allItems;
     }
 
-    // ===== Checkbox Dropdown Implementation =====
+    // ===== CHECKBOX DROPDOWN FUNCTIONS (Common) =====
     function createCheckboxDropdown(containerId, { placeholder, searchPlaceholder, onSelectionChange } = {}){
       const root = document.getElementById(containerId);
       if (!root) {
@@ -1506,7 +1458,7 @@
       const selectAll = panel.querySelector('[data-cd="selectall"]');
       const summary = panel.querySelector('[data-cd="summary"]');
 
-      let options = []; // [{value, label}]
+      let options = [];
       let selected = new Set();
 
       function render(filter=''){
@@ -1528,7 +1480,6 @@
           cb.addEventListener('change', ()=>{
             if (cb.checked) selected.add(o.value); else selected.delete(o.value);
             updateSummary(); updateSelectAllState();
-            // Call selection change callback if provided
             if (onSelectionChange) {
               onSelectionChange(Array.from(selected));
             }
@@ -1588,9 +1539,213 @@
       return { setOptions, getSelectedValues, clearSelection };
     }
 
-    function initializeDropdowns() {
-      console.log('Initializing dropdowns...');
+    // ===== ACTIVITY CODE FUNCTIONS (Common) =====
+    async function loadActivityCodes(businessUnitId) {
+      try {
+        console.log(`Loading activity codes for business unit: ${businessUnitId}`);
+        const activityCodesResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(businessUnitId)}/activitycodes`
+        );
+        
+        let activityCodes = [];
+        
+        if (activityCodesResponse.activityCodes && typeof activityCodesResponse.activityCodes === 'object') {
+          activityCodes = Object.values(activityCodesResponse.activityCodes);
+        } else if (Array.isArray(activityCodesResponse.entities)) {
+          activityCodes = activityCodesResponse.entities;
+        } else if (Array.isArray(activityCodesResponse)) {
+          activityCodes = activityCodesResponse;
+        } else {
+          for (const key in activityCodesResponse) {
+            if (Array.isArray(activityCodesResponse[key])) {
+              activityCodes = activityCodesResponse[key];
+              break;
+            }
+          }
+        }
+        
+        const activityCodeMap = {};
+        activityCodes.forEach(code => {
+          if (code && code.id) {
+            activityCodeMap[code.id] = {
+              name: code.name ? code.name.trim() : code.id,
+              category: code.category || 'Unknown'
+            };
+          }
+        });
+        
+        activityCodesByBuId[businessUnitId] = activityCodeMap;
+        return activityCodeMap;
+      } catch (err) {
+        console.error('Error loading activity codes:', err);
+        activityCodesByBuId[businessUnitId] = {};
+        return {};
+      }
+    }
+
+    function getActivityName(businessUnitId, activityCodeId) {
+      if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
       
+      const systemCodes = {
+        '0': 'On Queue',
+        '1': 'Break', 
+        '2': 'Meal',
+        '3': 'Meeting',
+        '4': 'Off Queue',
+        '5': 'Time Off',
+        '6': 'Training',
+        '7': 'Agent Unavailable'
+      };
+      
+      if (systemCodes[activityCodeId]) {
+        return systemCodes[activityCodeId];
+      }
+      
+      const activityCodes = activityCodesByBuId[businessUnitId];
+      
+      if (activityCodes && activityCodes[activityCodeId]) {
+        return activityCodes[activityCodeId].name;
+      }
+      
+      return activityCodeId;
+    }
+
+    function getActivityCategory(businessUnitId, activityCodeId) {
+      if (!businessUnitId || !activityCodeId) return 'Unknown';
+      
+      const systemCodeCategories = {
+        '0': 'OnQueueWork',
+        '1': 'Break', 
+        '2': 'Meal',
+        '3': 'Meeting',
+        '4': 'OffQueueWork',
+        '5': 'TimeOff',
+        '6': 'Training',
+        '7': 'Unavailable'
+      };
+      
+      if (systemCodeCategories[activityCodeId]) {
+        return systemCodeCategories[activityCodeId];
+      }
+      
+      const activityCodes = activityCodesByBuId[businessUnitId];
+      
+      if (activityCodes && activityCodes[activityCodeId]) {
+        return activityCodes[activityCodeId].category;
+      }
+      
+      return 'Unknown';
+    }
+
+    // ===== CORS PROXY FUNCTIONS (Common) =====
+    async function fetchWithCorsProxy(url) {
+      const proxyUrls = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        `https://cors-anywhere.herokuapp.com/${url}`,
+        `https://cors.bridged.cc/${url}`
+      ];
+      
+      let lastError = null;
+      
+      for (const proxyUrl of proxyUrls) {
+        try {
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            timeout: 10000
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            return data;
+          } else {
+            lastError = new Error(`Proxy returned status: ${response.status}`);
+          }
+        } catch (err) {
+          lastError = err;
+          continue;
+        }
+      }
+      
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          return data;
+        } else {
+          throw new Error(`Direct fetch failed with status: ${response.status}`);
+        }
+      } catch (directErr) {
+        throw new Error(`All CORS proxies failed and direct fetch also failed: ${lastError?.message || directErr.message}`);
+      }
+    }
+
+    // ===== INITIALIZATION FUNCTIONS =====
+    document.addEventListener('DOMContentLoaded', () => {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const qparams = new URLSearchParams(window.location.search);
+
+      const oauthError = params.get('error') || qparams.get('error');
+      const oauthErrorDesc = params.get('error_description') || qparams.get('error_description');
+
+      if (oauthError) {
+        const msg = document.getElementById('auth-message');
+        msg.textContent = `OAuth error: ${oauthErrorDesc || oauthError}`;
+        msg.className = 'error-message';
+        return;
+      }
+
+      accessToken = params.get('access_token');
+
+      if (accessToken) {
+        sessionStorage.setItem('purecloud_token', accessToken);
+        window.location.hash = '';
+        initializeApplication();
+      } else if (sessionStorage.getItem('purecloud_token')) {
+        accessToken = sessionStorage.getItem('purecloud_token');
+        initializeApplication();
+      } else {
+        window.location.href = oauthUrl;
+      }
+    });
+
+    async function initializeApplication() {
+      document.getElementById('auth-message').textContent = 'Authenticated successfully!';
+      document.getElementById('authCard').style.display = 'none';
+      document.getElementById('appContent').style.display = 'block';
+
+      initializeTabs();
+      initializeDropdowns();
+      initializeEventListeners();
+      initializeViewToggle();
+      
+      populateInitialData();
+    }
+
+    function initializeTabs() {
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          
+          tab.classList.add('active');
+          const tabId = tab.getAttribute('data-tab');
+          document.getElementById(`${tabId}-tab`).classList.add('active');
+        });
+      });
+    }
+
+    function initializeDropdowns() {
       // Schedule tab dropdowns
       dropdowns.businessUnit = createCheckboxDropdown('businessUnitDropdown', { 
         placeholder: 'Select business units', 
@@ -1646,7 +1801,8 @@
       
       dropdowns.overtimeMu = createCheckboxDropdown('overtimeMuDropdown', { 
         placeholder: 'Select management units', 
-        searchPlaceholder: 'Search management units...' 
+        searchPlaceholder: 'Search management units...',
+        onSelectionChange: (selected) => handleOvertimeManagementUnitChange(selected)
       });
       
       dropdowns.overtimeTeam = createCheckboxDropdown('overtimeTeamDropdown', { 
@@ -1663,7 +1819,8 @@
       
       dropdowns.absenceMu = createCheckboxDropdown('absenceMuDropdown', { 
         placeholder: 'Select management units', 
-        searchPlaceholder: 'Search management units...' 
+        searchPlaceholder: 'Search management units...',
+        onSelectionChange: (selected) => handleAbsenceManagementUnitChange(selected)
       });
       
       dropdowns.absenceTeam = createCheckboxDropdown('absenceTeamDropdown', { 
@@ -1737,10 +1894,369 @@
         placeholder: 'Filter by absence type', 
         searchPlaceholder: 'Search absence types...' 
       });
-      
-      console.log('Dropdowns initialized:', dropdowns);
     }
 
+    async function populateInitialData() {
+      try {
+        const [users, businessUnitsResponse, teams] = await Promise.all([
+          fetchAllPages(`${apiBase}/api/v2/users`),
+          authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
+          fetchAllPages(`${apiBase}/api/v2/teams`)
+        ]);
+
+        allUsers = (users || []).filter(u => !u.deleted);
+        usersById = {};
+        allUsers.forEach(u => { 
+          usersById[u.id] = u;
+          u.teamNames = 'No Team';
+        });
+        
+        businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
+        
+        allTeams = teams || [];
+        teamsById = {};
+        allTeams.forEach(t => { teamsById[t.id] = t; });
+
+        await loadUserTeamMemberships();
+
+        populateUserDropdown(allUsers);
+        populateBusinessUnitDropdown(businessUnits);
+        populateTeamDropdown(allTeams);
+        
+        const currentWeek = getCurrentWeekDates();
+        
+        document.getElementById('startDate').value = currentWeek.start;
+        document.getElementById('endDate').value = currentWeek.end;
+        document.getElementById('actualStartDate').value = currentWeek.start;
+        document.getElementById('actualEndDate').value = currentWeek.end;
+        document.getElementById('overtimeStartDate').value = currentWeek.start;
+        document.getElementById('overtimeEndDate').value = currentWeek.end;
+        document.getElementById('absenceStartDate').value = currentWeek.start;
+        document.getElementById('absenceEndDate').value = currentWeek.end;
+        document.getElementById('lateStartDate').value = currentWeek.start;
+        document.getElementById('lateEndDate').value = currentWeek.end;
+        document.getElementById('timeOwedStartDate').value = currentWeek.start;
+        document.getElementById('timeOwedEndDate').value = currentWeek.end;
+        
+        showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
+      } catch (err) {
+        console.error('Error initialising app:', err);
+        showMessage(`Error loading initial data: ${err.message}`, 'error');
+      }
+    }
+
+    async function loadUserTeamMemberships() {
+      const batchSize = 10;
+      const teamBatches = [];
+      
+      for (let i = 0; i < allTeams.length; i += batchSize) {
+        teamBatches.push(allTeams.slice(i, i + batchSize));
+      }
+      
+      userTeams = {};
+      allUsers.forEach(user => {
+        userTeams[user.id] = [];
+      });
+      
+      for (const batch of teamBatches) {
+        await Promise.all(
+          batch.map(async (team) => {
+            try {
+              const members = await getTeamMembers(team.id);
+              members.forEach(member => {
+                if (userTeams[member.id]) {
+                  userTeams[member.id].push(team);
+                }
+              });
+            } catch (err) {
+              console.error(`Error loading members for team ${team.name}:`, err);
+            }
+          })
+        );
+      }
+      
+      allUsers.forEach(user => {
+        const teams = userTeams[user.id] || [];
+        if (teams.length > 0) {
+          user.teamNames = teams.map(team => team.name).join(', ');
+        } else {
+          user.teamNames = 'No Team';
+        }
+      });
+    }
+
+    async function getTeamMembers(teamId) {
+      try {
+        const teamMembersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
+        );
+        const members = teamMembersResponse.entities || teamMembersResponse.members || [];
+        
+        return members.map(member => ({
+          id: member.id,
+          name: member.name
+        }));
+      } catch (err) {
+        console.error(`Error fetching team members for team ${teamId}:`, err);
+        return [];
+      }
+    }
+
+    function populateUserDropdown(users) {
+      const validUsers = users
+        .filter(u => u.name && u.name.trim() && u.name !== 'Unknown User')
+        .map(u => ({ 
+          value: u.id, 
+          label: u.name || u.email || 'Unknown User',
+          teamNames: u.teamNames || 'No Team'
+        }))
+        .sort((a,b)=>a.label.localeCompare(b.label));
+      
+      if (dropdowns.user) dropdowns.user.setOptions(validUsers);
+      if (dropdowns.actualUser) dropdowns.actualUser.setOptions(validUsers);
+      if (dropdowns.lateUser) dropdowns.lateUser.setOptions(validUsers);
+      if (dropdowns.timeOwedUser) dropdowns.timeOwedUser.setOptions(validUsers);
+    }
+
+    function populateBusinessUnitDropdown(businessUnits) {
+      const buOpts = businessUnits
+        .map(bu => ({ value: bu.id, label: bu.name || bu.id }))
+        .sort((a,b)=>a.label.localeCompare(b.label));
+      
+      if (dropdowns.businessUnit) dropdowns.businessUnit.setOptions(buOpts);
+      if (dropdowns.actualBu) dropdowns.actualBu.setOptions(buOpts);
+      if (dropdowns.overtimeBu) dropdowns.overtimeBu.setOptions(buOpts);
+      if (dropdowns.absenceBu) dropdowns.absenceBu.setOptions(buOpts);
+      if (dropdowns.lateBu) dropdowns.lateBu.setOptions(buOpts);
+      if (dropdowns.timeOwedBu) dropdowns.timeOwedBu.setOptions(buOpts);
+    }
+
+    function populateTeamDropdown(teams) {
+      const teamOpts = (teams||[])
+        .map(t => ({ value: t.id, label: t.name }))
+        .sort((a,b)=>a.label.localeCompare(b.label));
+      
+      if (dropdowns.team) dropdowns.team.setOptions(teamOpts);
+      if (dropdowns.actualTeam) dropdowns.actualTeam.setOptions(teamOpts);
+      if (dropdowns.overtimeTeam) dropdowns.overtimeTeam.setOptions(teamOpts);
+      if (dropdowns.absenceTeam) dropdowns.absenceTeam.setOptions(teamOpts);
+      if (dropdowns.lateTeam) dropdowns.lateTeam.setOptions(teamOpts);
+      if (dropdowns.timeOwedTeam) dropdowns.timeOwedTeam.setOptions(teamOpts);
+    }
+
+    // ===== BUSINESS UNIT CHANGE HANDLERS =====
+    async function handleBusinessUnitChange(selectedBuIds) {
+      if (dropdowns.managementUnit) {
+        dropdowns.managementUnit.clearSelection();
+        dropdowns.managementUnit.setOptions([]);
+      }
+
+      if (selectedBuIds.length === 0) return;
+
+      try {
+        await loadActivityCodes(selectedBuIds[0]);
+        
+        const muResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(selectedBuIds[0])}`
+        );
+        const list = muResponse.entities || muResponse.managementUnits || [];
+        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
+        
+        if (dropdowns.managementUnit) {
+          dropdowns.managementUnit.setOptions(muOpts);
+        }
+      } catch (err) {
+        console.error('Error loading management units:', err);
+        showMessage(`Error loading management units: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleManagementUnitChange(selectedMuIds) {
+      if (selectedMuIds.length === 0) {
+        populateUserDropdown(allUsers);
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
+        );
+        const list = muUsersResponse.entities || muUsersResponse.users || [];
+        const enriched = list.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
+          return user;
+        });
+        populateUserDropdown(enriched);
+      } catch (err) {
+        console.error('Error loading MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleAnalyticsBuChange(selectedBuIds, tabType) {
+      let muDropdown;
+      switch(tabType) {
+        case 'actual': muDropdown = dropdowns.actualMu; break;
+        case 'overtime': muDropdown = dropdowns.overtimeMu; break;
+        case 'absence': muDropdown = dropdowns.absenceMu; break;
+        case 'late': muDropdown = dropdowns.lateMu; break;
+        case 'timeowed': muDropdown = dropdowns.timeOwedMu; break;
+      }
+      
+      if (muDropdown) {
+        muDropdown.clearSelection();
+        muDropdown.setOptions([]);
+      }
+
+      if (selectedBuIds.length === 0) return;
+
+      try {
+        await loadActivityCodes(selectedBuIds[0]);
+        
+        const muResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(selectedBuIds[0])}`
+        );
+        const list = muResponse.entities || muResponse.managementUnits || [];
+        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
+        
+        if (muDropdown) {
+          muDropdown.setOptions(muOpts);
+        }
+      } catch (err) {
+        console.error('Error loading management units for analytics:', err);
+        showMessage(`Error loading management units: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleActualManagementUnitChange(selectedMuIds) {
+      if (!selectedMuIds || selectedMuIds.length === 0) {
+        if (dropdowns.actualUser) {
+          dropdowns.actualUser.setOptions([]);
+        }
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
+        );
+        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
+                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
+                    : [];
+        const enriched = list.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
+          return user;
+        });
+        
+        const validUsers = enriched
+          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
+          .map(u => ({ 
+            value: u.id, 
+            label: u.name || u.email || 'Unknown User',
+            teamNames: u.teamNames || 'No Team'
+          }))
+          .sort((a,b)=>a.label.localeCompare(b.label));
+        
+        if (dropdowns.actualUser) {
+          dropdowns.actualUser.setOptions(validUsers);
+        }
+      } catch (err) {
+        console.error('Error loading actual activity MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleOvertimeManagementUnitChange(selectedMuIds) {
+      if (!selectedMuIds || selectedMuIds.length === 0) return;
+      // Overtime doesn't need user dropdown, but we could load users if needed
+    }
+
+    async function handleAbsenceManagementUnitChange(selectedMuIds) {
+      if (!selectedMuIds || selectedMuIds.length === 0) return;
+      // Absence doesn't need user dropdown directly
+    }
+
+    async function handleLateManagementUnitChange(selectedMuIds) {
+      if (!selectedMuIds || selectedMuIds.length === 0) {
+        if (dropdowns.lateUser) {
+          dropdowns.lateUser.setOptions([]);
+        }
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
+        );
+        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
+                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
+                    : [];
+        const enriched = list.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
+          return user;
+        });
+        
+        const validUsers = enriched
+          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
+          .map(u => ({ 
+            value: u.id, 
+            label: u.name || u.email || 'Unknown User',
+            teamNames: u.teamNames || 'No Team'
+          }))
+          .sort((a,b)=>a.label.localeCompare(b.label));
+        
+        if (dropdowns.lateUser) {
+          dropdowns.lateUser.setOptions(validUsers);
+        }
+      } catch (err) {
+        console.error('Error loading late report MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
+    async function handleTimeOwedManagementUnitChange(selectedMuIds) {
+      if (!selectedMuIds || selectedMuIds.length === 0) {
+        if (dropdowns.timeOwedUser) {
+          dropdowns.timeOwedUser.setOptions([]);
+        }
+        return;
+      }
+
+      try {
+        const muUsersResponse = await authorizedFetchJson(
+          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
+        );
+        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
+                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
+                    : [];
+        const enriched = list.map(uRef => {
+          const user = usersById[uRef.id] || uRef;
+          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
+          return user;
+        });
+        
+        const validUsers = enriched
+          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
+          .map(u => ({ 
+            value: u.id, 
+            label: u.name || u.email || 'Unknown User',
+            teamNames: u.teamNames || 'No Team'
+          }))
+          .sort((a,b)=>a.label.localeCompare(b.label));
+        
+        if (dropdowns.timeOwedUser) {
+          dropdowns.timeOwedUser.setOptions(validUsers);
+        }
+      } catch (err) {
+        console.error('Error loading time owed MU users:', err);
+        showMessage(`Error loading management unit users: ${err.message}`, 'error');
+      }
+    }
+
+    // ===== SCHEDULE TAB FUNCTIONS =====
     function initializeEventListeners() {
       // Schedule tab
       document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
@@ -1769,26 +2285,21 @@
       document.getElementById('generateLateReportBtn').addEventListener('click', generateLateReport);
       document.getElementById('exportLateReportBtn').addEventListener('click', exportLateReportToCSV);
       
-      // Time Owed tab - FIXED EVENT LISTENER
+      // Time Owed tab
       document.getElementById('generateTimeOwedReportBtn').addEventListener('click', generateTimeOwedReport);
       document.getElementById('exportTimeOwedReportBtn').addEventListener('click', exportTimeOwedReportToCSV);
       
-      // Initialize sorting
       initializeSorting();
     }
 
-    // ===== View Toggle =====
     function initializeViewToggle() {
       document.querySelectorAll('.view-toggle-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-          // Remove active class from all buttons
           document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
-          // Add active class to clicked button
           this.classList.add('active');
           
           currentAbsenceView = this.getAttribute('data-view');
           
-          // Re-render absence results with new view
           const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
           const startDate = document.getElementById('absenceStartDate').value;
           const endDate = document.getElementById('absenceEndDate').value;
@@ -1800,29 +2311,22 @@
       });
     }
 
-    // ===== Initialize Sorting =====
     function initializeSorting() {
-      // Schedule tab sorting
       document.getElementById('scheduleSort').addEventListener('change', () => applySorting('schedule'));
       document.getElementById('scheduleSortOrder').addEventListener('change', () => applySorting('schedule'));
       
-      // Actual Activity tab sorting
       document.getElementById('actualSort').addEventListener('change', () => applySorting('actual'));
       document.getElementById('actualSortOrder').addEventListener('change', () => applySorting('actual'));
       
-      // Overtime tab sorting
       document.getElementById('overtimeSort').addEventListener('change', () => applySorting('overtime'));
       document.getElementById('overtimeSortOrder').addEventListener('change', () => applySorting('overtime'));
       
-      // Absence tab sorting
       document.getElementById('absenceSort').addEventListener('change', () => applySorting('absence'));
       document.getElementById('absenceSortOrder').addEventListener('change', () => applySorting('absence'));
       
-      // Late Report tab sorting
       document.getElementById('lateSort').addEventListener('change', () => applyLateReportSorting());
       document.getElementById('lateSortOrder').addEventListener('change', () => applyLateReportSorting());
       
-      // Time Owed tab sorting
       document.getElementById('timeOwedSort').addEventListener('change', () => applyTimeOwedSorting());
       document.getElementById('timeOwedSortOrder').addEventListener('change', () => applyTimeOwedSorting());
     }
@@ -1860,6 +2364,7 @@
         
         switch(tabType) {
           case 'schedule':
+          case 'actual':
             switch(sortField) {
               case 'date': aVal = a.date; bVal = b.date; break;
               case 'user': aVal = a.userName; bVal = b.userName; break;
@@ -1867,16 +2372,7 @@
               case 'duration': aVal = a.durationMinutes; bVal = b.durationMinutes; break;
             }
             break;
-        case 'actual':
-          switch(sortField) {
-            case 'date': aVal = a.date; bVal = b.date; break;
-            case 'user': aVal = a.userName; bVal = b.userName; break;
-            case 'activity': aVal = a.activityLabel; bVal = b.activityLabel; break;
-            case 'duration': aVal = a.durationMinutes; bVal = b.durationMinutes; break;
-          }
-          break;
         case 'overtime':
-          aVal = a[sortField]; bVal = b[sortField]; break;
         case 'absence':
           aVal = a[sortField]; bVal = b[sortField]; break;
         }
@@ -1893,7 +2389,6 @@
       
       currentDisplayedData[tabType] = sortedData;
       
-      // Re-render the table
       switch(tabType) {
         case 'schedule':
           renderScheduleTable(sortedData);
@@ -1917,548 +2412,6 @@
       }
     }
 
-    // ===== Enhanced User Data Loading =====
-    async function populateInitialData() {
-      try {
-        console.log('Loading initial data...');
-        const [users, businessUnitsResponse, teams] = await Promise.all([
-          fetchAllPages(`${apiBase}/api/v2/users`),
-          authorizedFetchJson(`${apiBase}/api/v2/workforcemanagement/businessunits`),
-          fetchAllPages(`${apiBase}/api/v2/teams`)
-        ]);
-
-        allUsers = (users || []).filter(u => !u.deleted);
-        usersById = {};
-        allUsers.forEach(u => { 
-          usersById[u.id] = u;
-          // Initialize empty team names
-          u.teamNames = 'No Team';
-        });
-        
-        businessUnits = businessUnitsResponse.entities || businessUnitsResponse.businessUnits || businessUnitsResponse || [];
-        
-        allTeams = teams || [];
-        teamsById = {};
-        allTeams.forEach(t => { teamsById[t.id] = t; });
-
-        // Load team membership for all users
-        await loadUserTeamMemberships();
-
-        populateUserDropdown(allUsers);
-        populateBusinessUnitDropdown(businessUnits);
-        populateTeamDropdown(allTeams);
-        
-        // Set default dates for all tabs to current week
-        const currentWeek = getCurrentWeekDates();
-        
-        document.getElementById('startDate').value = currentWeek.start;
-        document.getElementById('endDate').value = currentWeek.end;
-        document.getElementById('actualStartDate').value = currentWeek.start;
-        document.getElementById('actualEndDate').value = currentWeek.end;
-        document.getElementById('overtimeStartDate').value = currentWeek.start;
-        document.getElementById('overtimeEndDate').value = currentWeek.end;
-        document.getElementById('absenceStartDate').value = currentWeek.start;
-        document.getElementById('absenceEndDate').value = currentWeek.end;
-        document.getElementById('lateStartDate').value = currentWeek.start;
-        document.getElementById('lateEndDate').value = currentWeek.end;
-        document.getElementById('timeOwedStartDate').value = currentWeek.start;
-        document.getElementById('timeOwedEndDate').value = currentWeek.end;
-        
-        showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
-      } catch (err) {
-        console.error('Error initialising app:', err);
-        showMessage(`Error loading initial data: ${err.message}`, 'error');
-      }
-    }
-
-    // ===== New Function to Load Team Memberships =====
-    async function loadUserTeamMemberships() {
-      console.log('Loading team memberships for all users...');
-      
-      // We'll process teams in batches to avoid overwhelming the API
-      const batchSize = 10;
-      const teamBatches = [];
-      
-      for (let i = 0; i < allTeams.length; i += batchSize) {
-        teamBatches.push(allTeams.slice(i, i + batchSize));
-      }
-      
-      // Initialize userTeams object
-      userTeams = {};
-      allUsers.forEach(user => {
-        userTeams[user.id] = [];
-      });
-      
-      // Process each batch of teams
-      for (const batch of teamBatches) {
-        await Promise.all(
-          batch.map(async (team) => {
-            try {
-              const members = await getTeamMembers(team.id);
-              console.log(`Team ${team.name} has ${members.length} members`);
-              
-              // Add team to each member's team list
-              members.forEach(member => {
-                if (userTeams[member.id]) {
-                  userTeams[member.id].push(team);
-                }
-              });
-            } catch (err) {
-              console.error(`Error loading members for team ${team.name}:`, err);
-            }
-          })
-        );
-      }
-      
-      // Update user objects with team names
-      allUsers.forEach(user => {
-        const teams = userTeams[user.id] || [];
-        if (teams.length > 0) {
-          user.teamNames = teams.map(team => team.name).join(', ');
-        } else {
-          user.teamNames = 'No Team';
-        }
-      });
-      
-      console.log('Team memberships loaded successfully');
-    }
-
-    // ===== Enhanced getTeamMembers function =====
-    async function getTeamMembers(teamId) {
-      try {
-        const teamMembersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/teams/${encodeURIComponent(teamId)}/members`
-        );
-        const members = teamMembersResponse.entities || teamMembersResponse.members || [];
-        
-        // Return member objects with id and name
-        return members.map(member => ({
-          id: member.id,
-          name: member.name
-        }));
-      } catch (err) {
-        console.error(`Error fetching team members for team ${teamId}:`, err);
-        return [];
-      }
-    }
-
-    function populateUserDropdown(users) {
-      const validUsers = users
-        .filter(u => u.name && u.name.trim() && u.name !== 'Unknown User')
-        .map(u => ({ 
-          value: u.id, 
-          label: u.name || u.email || 'Unknown User',
-          teamNames: u.teamNames || 'No Team'
-        }))
-        .sort((a,b)=>a.label.localeCompare(b.label));
-      
-      if (dropdowns.user) {
-        dropdowns.user.setOptions(validUsers);
-      }
-      if (dropdowns.actualUser) {
-        dropdowns.actualUser.setOptions(validUsers);
-      }
-      if (dropdowns.lateUser) {
-        dropdowns.lateUser.setOptions(validUsers);
-      }
-      if (dropdowns.timeOwedUser) {
-        dropdowns.timeOwedUser.setOptions(validUsers);
-      }
-    }
-
-    function populateBusinessUnitDropdown(businessUnits) {
-      const buOpts = businessUnits
-        .map(bu => ({ value: bu.id, label: bu.name || bu.id }))
-        .sort((a,b)=>a.label.localeCompare(b.label));
-      
-      if (dropdowns.businessUnit) dropdowns.businessUnit.setOptions(buOpts);
-      if (dropdowns.actualBu) dropdowns.actualBu.setOptions(buOpts);
-      if (dropdowns.overtimeBu) dropdowns.overtimeBu.setOptions(buOpts);
-      if (dropdowns.absenceBu) dropdowns.absenceBu.setOptions(buOpts);
-      if (dropdowns.lateBu) dropdowns.lateBu.setOptions(buOpts);
-      if (dropdowns.timeOwedBu) dropdowns.timeOwedBu.setOptions(buOpts);
-    }
-
-    function populateTeamDropdown(teams) {
-      const teamOpts = (teams||[])
-        .map(t => ({ value: t.id, label: t.name }))
-        .sort((a,b)=>a.label.localeCompare(b.label));
-      
-      if (dropdowns.team) dropdowns.team.setOptions(teamOpts);
-      if (dropdowns.actualTeam) dropdowns.actualTeam.setOptions(teamOpts);
-      if (dropdowns.overtimeTeam) dropdowns.overtimeTeam.setOptions(teamOpts);
-      if (dropdowns.absenceTeam) dropdowns.absenceTeam.setOptions(teamOpts);
-      if (dropdowns.lateTeam) dropdowns.lateTeam.setOptions(teamOpts);
-      if (dropdowns.timeOwedTeam) dropdowns.timeOwedTeam.setOptions(teamOpts);
-    }
-
-    // ===== Business Unit Change Handlers =====
-    async function handleBusinessUnitChange(selectedBuIds) {
-      console.log('Business Unit selection changed:', selectedBuIds);
-      
-      // Clear management unit dropdown
-      if (dropdowns.managementUnit) {
-        dropdowns.managementUnit.clearSelection();
-        dropdowns.managementUnit.setOptions([]);
-      }
-
-      if (selectedBuIds.length === 0) return;
-
-      try {
-        // Load activity codes for this business unit
-        await loadActivityCodes(selectedBuIds[0]);
-        
-        // Fetch management units for the selected business unit
-        const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(selectedBuIds[0])}`
-        );
-        const list = muResponse.entities || muResponse.managementUnits || [];
-        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
-        
-        console.log(`Loaded ${muOpts.length} management units for business unit ${selectedBuIds[0]}`);
-        
-        if (dropdowns.managementUnit) {
-          dropdowns.managementUnit.setOptions(muOpts);
-        }
-      } catch (err) {
-        console.error('Error loading management units:', err);
-        showMessage(`Error loading management units: ${err.message}`, 'error');
-      }
-    }
-
-    async function handleManagementUnitChange(selectedMuIds) {
-      console.log('Management Unit selection changed:', selectedMuIds);
-      
-      if (selectedMuIds.length === 0) {
-        populateUserDropdown(allUsers);
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = muUsersResponse.entities || muUsersResponse.users || [];
-        const enriched = list.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          // Use the pre-loaded team information
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-        console.log(`Loaded ${enriched.length} users for management unit ${selectedMuIds[0]}`);
-        populateUserDropdown(enriched);
-      } catch (err) {
-        console.error('Error loading MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
-    }
-
-    async function handleAnalyticsBuChange(selectedBuIds, tabType) {
-      console.log(`Analytics Business Unit selection changed for ${tabType}:`, selectedBuIds);
-      
-      let muDropdown;
-      switch(tabType) {
-        case 'actual':
-          muDropdown = dropdowns.actualMu;
-          break;
-        case 'overtime':
-          muDropdown = dropdowns.overtimeMu;
-          break;
-        case 'absence':
-          muDropdown = dropdowns.absenceMu;
-          break;
-        case 'late':
-          muDropdown = dropdowns.lateMu;
-          break;
-        case 'timeowed':
-          muDropdown = dropdowns.timeOwedMu;
-          break;
-      }
-      
-      if (muDropdown) {
-        muDropdown.clearSelection();
-        muDropdown.setOptions([]);
-      }
-
-      if (selectedBuIds.length === 0) return;
-
-      try {
-        // Load activity codes for this business unit
-        await loadActivityCodes(selectedBuIds[0]);
-        
-        const muResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits?businessUnitId=${encodeURIComponent(selectedBuIds[0])}`
-        );
-        const list = muResponse.entities || muResponse.managementUnits || [];
-        const muOpts = list.map(mu => ({ value: mu.id, label: mu.name || mu.id }));
-        
-        console.log(`Loaded ${muOpts.length} management units for analytics ${tabType} tab`);
-        
-        if (muDropdown) {
-          muDropdown.setOptions(muOpts);
-        }
-      } catch (err) {
-        console.error('Error loading management units for analytics:', err);
-        showMessage(`Error loading management units: ${err.message}`, 'error');
-      }
-    }
-
-    async function handleActualManagementUnitChange(selectedMuIds) {
-      console.log('Actual Activity Management Unit selection changed:', selectedMuIds);
-      
-      if (!selectedMuIds || selectedMuIds.length === 0) {
-        if (dropdowns.actualUser) {
-          dropdowns.actualUser.setOptions([]);
-        }
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
-                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
-                    : [];
-        const enriched = list.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          // Use the pre-loaded team information
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-        console.log(`Loaded ${enriched.length} users for actual activity management unit ${selectedMuIds[0]}`);
-        
-        const validUsers = enriched
-          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ 
-            value: u.id, 
-            label: u.name || u.email || 'Unknown User',
-            teamNames: u.teamNames || 'No Team'
-          }))
-          .sort((a,b)=>a.label.localeCompare(b.label));
-        
-        if (dropdowns.actualUser) {
-          dropdowns.actualUser.setOptions(validUsers);
-        }
-      } catch (err) {
-        console.error('Error loading actual activity MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
-    }
-
-    async function handleLateManagementUnitChange(selectedMuIds) {
-      console.log('Late Report Management Unit selection changed:', selectedMuIds);
-      
-      if (!selectedMuIds || selectedMuIds.length === 0) {
-        if (dropdowns.lateUser) {
-          dropdowns.lateUser.setOptions([]);
-        }
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
-                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
-                    : [];
-        const enriched = list.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          // Use the pre-loaded team information
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-        console.log(`Loaded ${enriched.length} users for late report management unit ${selectedMuIds[0]}`);
-        
-        const validUsers = enriched
-          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ 
-            value: u.id, 
-            label: u.name || u.email || 'Unknown User',
-            teamNames: u.teamNames || 'No Team'
-          }))
-          .sort((a,b)=>a.label.localeCompare(b.label));
-        
-        if (dropdowns.lateUser) {
-          dropdowns.lateUser.setOptions(validUsers);
-        }
-      } catch (err) {
-        console.error('Error loading late report MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
-    }
-
-    async function handleTimeOwedManagementUnitChange(selectedMuIds) {
-      console.log('Time Owed Management Unit selection changed:', selectedMuIds);
-      
-      if (!selectedMuIds || selectedMuIds.length === 0) {
-        if (dropdowns.timeOwedUser) {
-          dropdowns.timeOwedUser.setOptions([]);
-        }
-        return;
-      }
-
-      try {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(selectedMuIds[0])}/users`
-        );
-        const list = Array.isArray(muUsersResponse.entities) ? muUsersResponse.entities
-                    : Array.isArray(muUsersResponse.users) ? muUsersResponse.users
-                    : [];
-        const enriched = list.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          // Use the pre-loaded team information
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-        console.log(`Loaded ${enriched.length} users for time owed management unit ${selectedMuIds[0]}`);
-        
-        const validUsers = enriched
-          .filter(u => u && u.name && u.name.trim() && u.name !== 'Unknown User')
-          .map(u => ({ 
-            value: u.id, 
-            label: u.name || u.email || 'Unknown User',
-            teamNames: u.teamNames || 'No Team'
-          }))
-          .sort((a,b)=>a.label.localeCompare(b.label));
-        
-        if (dropdowns.timeOwedUser) {
-          dropdowns.timeOwedUser.setOptions(validUsers);
-        }
-      } catch (err) {
-        console.error('Error loading time owed MU users:', err);
-        showMessage(`Error loading management unit users: ${err.message}`, 'error');
-      }
-    }
-
-    // ===== Activity Codes =====
-    async function loadActivityCodes(businessUnitId) {
-      try {
-        console.log(`Loading activity codes for business unit: ${businessUnitId}`);
-        const activityCodesResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/businessunits/${encodeURIComponent(businessUnitId)}/activitycodes`
-        );
-        
-        console.log('Full activity codes API response:', activityCodesResponse);
-        
-        let activityCodes = [];
-        
-        // Try different response structures
-        if (activityCodesResponse.activityCodes && typeof activityCodesResponse.activityCodes === 'object') {
-          console.log('Found activityCodes object, converting to array...');
-          activityCodes = Object.values(activityCodesResponse.activityCodes);
-        } else if (Array.isArray(activityCodesResponse.entities)) {
-          console.log('Found entities array');
-          activityCodes = activityCodesResponse.entities;
-        } else if (Array.isArray(activityCodesResponse)) {
-          console.log('Response is array');
-          activityCodes = activityCodesResponse;
-        } else {
-          console.log('Unknown response structure, trying to extract any arrays...');
-          // Try to find any array in the response
-          for (const key in activityCodesResponse) {
-            if (Array.isArray(activityCodesResponse[key])) {
-              activityCodes = activityCodesResponse[key];
-              console.log(`Found array in key: ${key}`);
-              break;
-            }
-          }
-        }
-        
-        console.log(`Loaded ${activityCodes.length} activity codes:`, activityCodes);
-        
-        // Create a lookup map by ID - now storing both name and category
-        const activityCodeMap = {};
-        activityCodes.forEach(code => {
-          if (code && code.id) {
-            activityCodeMap[code.id] = {
-              name: code.name ? code.name.trim() : code.id,
-              category: code.category || 'Unknown'
-            };
-            console.log(`Mapped: ${code.id} -> "${code.name}" (Category: ${code.category})`);
-          } else {
-            console.log('Skipping invalid activity code:', code);
-          }
-        });
-        
-        // Cache the activity codes for this business unit
-        activityCodesByBuId[businessUnitId] = activityCodeMap;
-        
-        console.log('Final activity code map:', activityCodeMap);
-        return activityCodeMap;
-      } catch (err) {
-        console.error('Error loading activity codes:', err);
-        // Return empty map but don't fail completely
-        activityCodesByBuId[businessUnitId] = {};
-        return {};
-      }
-    }
-
-    // ===== Function to get activity name from code =====
-    function getActivityName(businessUnitId, activityCodeId) {
-      if (!businessUnitId || !activityCodeId) return 'Unknown Activity';
-      
-      // Default system activity codes - hardcoded
-      const systemCodes = {
-        '0': 'On Queue',
-        '1': 'Break', 
-        '2': 'Meal',
-        '3': 'Meeting',
-        '4': 'Off Queue',
-        '5': 'Time Off',
-        '6': 'Training',
-        '7': 'Agent Unavailable'
-      };
-      
-      // First check if it's a system code
-      if (systemCodes[activityCodeId]) {
-        return systemCodes[activityCodeId];
-      }
-      
-      // If it's a UUID, check business unit activity codes
-      const activityCodes = activityCodesByBuId[businessUnitId];
-      
-      if (activityCodes && activityCodes[activityCodeId]) {
-        return activityCodes[activityCodeId].name;
-      }
-      
-      // Return the code ID if not found anywhere
-      return activityCodeId;
-    }
-
-    // ===== Function to get activity category =====
-    function getActivityCategory(businessUnitId, activityCodeId) {
-      if (!businessUnitId || !activityCodeId) return 'Unknown';
-      
-      // System code categories
-      const systemCodeCategories = {
-        '0': 'OnQueueWork',
-        '1': 'Break', 
-        '2': 'Meal',
-        '3': 'Meeting',
-        '4': 'OffQueueWork',
-        '5': 'TimeOff',
-        '6': 'Training',
-        '7': 'Unavailable'
-      };
-      
-      // First check if it's a system code
-      if (systemCodeCategories[activityCodeId]) {
-        return systemCodeCategories[activityCodeId];
-      }
-      
-      // If it's a UUID, check business unit activity codes
-      const activityCodes = activityCodesByBuId[businessUnitId];
-      
-      if (activityCodes && activityCodes[activityCodeId]) {
-        return activityCodes[activityCodeId].category;
-      }
-      
-      return 'Unknown';
-    }
-
-    // ===== Schedule Functions =====
     async function loadSchedule() {
       const resultsDiv = document.getElementById('results');
       resultsDiv.style.display = 'block';
@@ -2469,7 +2422,6 @@
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
 
-      // Convert dd-mm-yyyy to yyyy-mm-dd for API
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
 
@@ -2499,26 +2451,22 @@
       button.disabled = true;
       button.textContent = 'Loading schedule...';
 
-      // Use the helper function for end date
       const startDateIso = `${startDateApi}T00:00:00.000Z`;
       const endDateIso = getEndDateIso(endDate);
 
       try {
-        // Get schedules for all selected users
         let allActivities = [];
         for (const userId of userIds) {
           try {
             const searchResult = await searchSchedules(muIds[0], userId, startDateIso, endDateIso, true);
-            console.log('Raw WFM search result:', searchResult);
             const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
-            console.log(`Extracted ${activities.length} activities for user ${userId}`);
             allActivities = allActivities.concat(activities);
           } catch (err) {
             console.error(`Error loading schedule for user ${userId}:`, err);
           }
         }
         
-        currentScheduleData = allActivities; // Store for export
+        currentScheduleData = allActivities;
         currentDisplayedData.schedule = [...allActivities];
         renderScheduleResults(resultsDiv, allActivities, userIds, startDateIso, endDateIso);
       } catch (err) {
@@ -2546,19 +2494,13 @@
       });
     }
 
-    // ===== Fixed function to extract activities from search result =====
     function extractUserActivitiesFromSearchResult(response, userId, businessUnitId) {
-      console.log('Full response structure:', response);
-      
       let userSchedule = null;
 
-      // Handle the nested structure from your sample data
       if (response && response.userSchedules) {
-        // Your data structure: userSchedules is an object keyed by userId
         if (response.userSchedules[userId]) {
           userSchedule = response.userSchedules[userId];
         } else {
-          // Fallback: take the first user schedule if userId doesn't match key
           const firstUserId = Object.keys(response.userSchedules)[0];
           userSchedule = response.userSchedules[firstUserId];
         }
@@ -2566,34 +2508,24 @@
 
       const rows = [];
 
-      // If we found a user schedule, extract shifts and full day time off markers
       if (userSchedule) {
-        // Process shifts (regular scheduled activities)
         const shifts = Array.isArray(userSchedule.shifts) ? userSchedule.shifts : [];
-        console.log(`Found ${shifts.length} shifts for user`, shifts);
-
         shifts.forEach(shift => {
           const shiftStartDate = shift.startDate ? new Date(shift.startDate) : null;
           const shiftDateStr = shiftStartDate ? formatDate(shiftStartDate.toISOString().slice(0, 10)) : null;
           
           const activities = Array.isArray(shift.activities) ? shift.activities : [];
-          console.log(`Shift ${shift.id} has ${activities.length} activities`, activities);
-
           activities.forEach(activity => {
             const startIso = activity.startDate;
             const lengthMin = activity.lengthInMinutes;
 
             if (!startIso || lengthMin == null) {
-              console.warn('Skipping activity missing startDate or lengthInMinutes:', activity);
               return;
             }
 
             const start = new Date(startIso);
             const end = new Date(start.getTime() + lengthMin * 60000);
-
-            // Use the API-based activity name lookup
             const activityLabel = getActivityName(businessUnitId, activity.activityCodeId);
-
             const dateStr = shiftDateStr || formatDate(start.toISOString().slice(0, 10));
 
             rows.push({
@@ -2608,40 +2540,33 @@
               userId: userId,
               userName: usersById[userId]?.name || userId,
               teamNames: usersById[userId]?.teamNames || 'No Team',
-              businessUnitId: businessUnitId // Add businessUnitId for reference
+              businessUnitId: businessUnitId
             });
           });
         });
 
-        // Process full day time off markers (like Sick days)
         const fullDayTimeOffMarkers = Array.isArray(userSchedule.fullDayTimeOffMarkers) ? userSchedule.fullDayTimeOffMarkers : [];
-        console.log(`Found ${fullDayTimeOffMarkers.length} full day time off markers`, fullDayTimeOffMarkers);
-
         fullDayTimeOffMarkers.forEach(marker => {
           const dateStr = marker.managementUnitDate ? formatDate(marker.managementUnitDate) : null;
-          const lengthMin = marker.lengthInMinutes || 480; // Default to 8 hours if not specified
+          const lengthMin = marker.lengthInMinutes || 480;
           
-          if (!dateStr) {
-            console.warn('Skipping marker missing managementUnitDate:', marker);
-            return;
-          }
+          if (!dateStr) return;
 
-          // Use the API-based activity name lookup
           const activityLabel = getActivityName(businessUnitId, marker.activityCodeId);
 
           rows.push({
             date: dateStr,
-            start: null, // No specific start time for full day off
-            end: null,   // No specific end time for full day off
+            start: null,
+            end: null,
             durationMinutes: lengthMin,
             activityLabel: activityLabel,
-            countsAsPaidTime: marker.isPaid !== false, // Default to true if not specified
+            countsAsPaidTime: marker.isPaid !== false,
             activityCodeId: marker.activityCodeId,
             type: 'fullDayOff',
             userId: userId,
             userName: usersById[userId]?.name || userId,
             teamNames: usersById[userId]?.teamNames || 'No Team',
-            businessUnitId: businessUnitId // Add businessUnitId for reference
+            businessUnitId: businessUnitId
           });
         });
       }
@@ -2653,12 +2578,10 @@
         return a.date.localeCompare(b.date);
       });
 
-      console.log(`Extracted ${rows.length} activities total (${rows.filter(r => r.type === 'shift').length} shifts + ${rows.filter(r => r.type === 'fullDayOff').length} full day off)`);
       return rows;
     }
 
     function renderScheduleResults(container, activities, userIds, startDateIso, endDateIso) {
-      // Convert ISO dates to dd-mm-yyyy for display
       const startDateStr = formatDate(startDateIso.slice(0, 10));
       const endDateStr = formatDate(endDateIso.slice(0, 10));
 
@@ -2710,14 +2633,12 @@
       const contentContainer = document.getElementById('scheduleResultsContent');
       contentContainer.innerHTML = html;
       
-      // Populate activity filter dropdown
       const allActivities = [...new Set(activities.map(a => a.activityLabel))].sort();
       if (dropdowns.activityFilter && allActivities.length > 0) {
         const activityOpts = allActivities.map(a => ({ value: a, label: a }));
         dropdowns.activityFilter.setOptions(activityOpts);
       }
       
-      // Apply initial sorting
       applySorting('schedule');
     }
 
@@ -2759,68 +2680,7 @@
       contentContainer.querySelector('table').outerHTML = html;
     }
 
-    // ===== Enhanced CORS Proxy Solution =====
-    async function fetchWithCorsProxy(url) {
-      // Try multiple CORS proxy options with better error handling
-      const proxyUrls = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        `https://cors-anywhere.herokuapp.com/${url}`,
-        `https://cors.bridged.cc/${url}`
-      ];
-      
-      let lastError = null;
-      
-      for (const proxyUrl of proxyUrls) {
-        try {
-          console.log(`Trying CORS proxy: ${proxyUrl}`);
-          const response = await fetch(proxyUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-            },
-            timeout: 10000 // 10 second timeout
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log('Successfully fetched data via CORS proxy');
-            return data;
-          } else {
-            console.warn(`CORS proxy returned non-OK status: ${response.status}`);
-            lastError = new Error(`Proxy returned status: ${response.status}`);
-          }
-        } catch (err) {
-          console.warn(`CORS proxy failed: ${err.message}`);
-          lastError = err;
-          continue;
-        }
-      }
-      
-      // If all proxies fail, try direct fetch as last resort
-      try {
-        console.log('All CORS proxies failed, trying direct fetch...');
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Successfully fetched data directly');
-          return data;
-        } else {
-          throw new Error(`Direct fetch failed with status: ${response.status}`);
-        }
-      } catch (directErr) {
-        console.error('Direct fetch also failed:', directErr);
-        throw new Error(`All CORS proxies failed and direct fetch also failed: ${lastError?.message || directErr.message}`);
-      }
-    }
-
-    // ===== Actual Activity Functions =====
+    // ===== ACTUAL ACTIVITY TAB FUNCTIONS =====
     async function loadActualActivity() {
       const buIds = dropdowns.actualBu ? dropdowns.actualBu.getSelectedValues() : [];
       const muIds = dropdowns.actualMu ? dropdowns.actualMu.getSelectedValues() : [];
@@ -2853,7 +2713,6 @@
       try {
         await loadActivityCodes(buIds[0]);
         
-        // Use helper function for end date
         const endDateIso = getEndDateIso(endDateRaw);
         
         const jobId = await createHistoricalAdherenceQuery(muIds[0], userIds, startDateApi, endDateApi);
@@ -2875,7 +2734,6 @@
     }
 
     async function createHistoricalAdherenceQuery(managementUnitId, userIds, startDate, endDate) {
-      // Use helper function for end date
       const endDateIso = getEndDateIso(endDate);
       const startDateIso = `${startDate}T00:00:00.000Z`;
 
@@ -2886,8 +2744,6 @@
         userIds: userIds
       };
 
-      console.log('Creating historical adherence query with body:', body);
-
       const url = `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(managementUnitId)}/historicaladherencequery`;
 
       try {
@@ -2896,10 +2752,7 @@
           body: JSON.stringify(body)
         });
 
-        console.log('Historical adherence query response:', response);
-
         if (response && response.id) {
-          console.log(`Historical adherence job created with ID: ${response.id}`);
           return response.id;
         } else {
           throw new Error('Failed to create historical adherence query job - no job ID returned');
@@ -2913,20 +2766,15 @@
     async function pollHistoricalAdherenceJob(jobId) {
       const url = `${apiBase}/api/v2/workforcemanagement/adherence/historical/jobs/${encodeURIComponent(jobId)}`;
       
-      console.log(`Starting to poll historical adherence job: ${jobId}`);
-      
       return new Promise((resolve, reject) => {
         let attempts = 0;
-        const maxAttempts = 90; // 3 minutes maximum (2 seconds * 90)
+        const maxAttempts = 90;
         
         const checkJobStatus = async () => {
           attempts++;
           
           try {
-            console.log(`Checking job status (attempt ${attempts})...`);
             const response = await authorizedFetchJson(url);
-            
-            console.log('Job status response:', response);
             
             if (!response) {
               reject(new Error('Empty response from job status check'));
@@ -2935,25 +2783,18 @@
             
             const jobState = response.queryState || response.state || response.status;
             
-            console.log(`Detected job state: ${jobState}`);
-            
             if (jobState === 'Complete' || jobState === 'COMPLETE' || jobState === 'Completed' || jobState === 'COMPLETED') {
-              console.log('Job completed successfully');
               resolve(response);
             } else if (jobState === 'Failed' || jobState === 'FAILED' || jobState === 'Error' || jobState === 'ERROR') {
               const errorMessage = response.errorMessage || response.message || 'Historical adherence job failed';
-              console.error('Job failed:', errorMessage);
               reject(new Error(errorMessage));
             } else if (jobState === 'Processing' || jobState === 'PROCESSING' || jobState === 'Running' || jobState === 'RUNNING') {
-              // Still processing, check again after delay
               if (attempts >= maxAttempts) {
                 reject(new Error('Job polling timeout - job took too long to complete'));
               } else {
                 setTimeout(checkJobStatus, 2000);
               }
             } else {
-              // Unknown state, log and continue polling
-              console.log(`Job in unknown state: ${jobState}, continuing to poll...`);
               if (attempts >= maxAttempts) {
                 reject(new Error(`Job polling timeout - stuck in state: ${jobState}`));
               } else {
@@ -2970,7 +2811,6 @@
           }
         };
         
-        // Start polling
         checkJobStatus();
       });
     }
@@ -2982,35 +2822,27 @@
 
       const allActualActivities = [];
       
-      // Download and process each URL using CORS proxy
       for (const downloadUrl of jobResult.downloadUrls) {
         try {
-          console.log('Downloading from:', downloadUrl);
-          
-          // Use CORS proxy to bypass CORS restrictions
           const data = await fetchWithCorsProxy(downloadUrl);
           
-          // Process the data
           if (data && data.data) {
             data.data.forEach(userData => {
               if (userData.actuals && userData.actuals.length > 0) {
                 const userName = usersById[userData.userId]?.name || userData.userId;
-                const teamNames = usersById[userData.userId]?.teamNames || 'No Team'; // Add team names
+                const teamNames = usersById[userData.userId]?.teamNames || 'No Team';
                 const startDate = new Date(userData.startDate);
                 
                 userData.actuals.forEach(actual => {
-                  // Skip if no start/end offsets
                   if (actual.startOffsetSeconds == null || actual.endOffsetSeconds == null) {
                     return;
                   }
                   
-                  // Calculate actual start and end times
                   const startTime = new Date(startDate.getTime() + (actual.startOffsetSeconds * 1000));
                   const endTime = new Date(startDate.getTime() + (actual.endOffsetSeconds * 1000));
                   
                   const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
                   
-                  // Get activity name
                   let activityName = actual.actualActivityCategory || 'Unknown Activity';
                   if (actual.actualActivityCodeId) {
                     const mappedName = getActivityName(businessUnitId, actual.actualActivityCodeId);
@@ -3022,7 +2854,7 @@
                   allActualActivities.push({
                     userId: userData.userId,
                     userName: userName,
-                    teamNames: teamNames, // Add team names
+                    teamNames: teamNames,
                     date: formatDate(startTime.toISOString().slice(0, 10)),
                     startTime: startTime,
                     endTime: endTime,
@@ -3031,7 +2863,7 @@
                     activityCodeId: actual.actualActivityCodeId,
                     activityCategory: actual.actualActivityCategory,
                     systemPresence: actual.systemPresence,
-                    businessUnitId: businessUnitId // Add businessUnitId for reference
+                    businessUnitId: businessUnitId
                   });
                 });
               }
@@ -3043,7 +2875,6 @@
         }
       }
       
-      console.log(`Processed ${allActualActivities.length} actual activities`);
       return allActualActivities;
     }
 
@@ -3061,7 +2892,6 @@
         return;
       }
       
-      // Apply initial sorting by date and time
       data.sort((a, b) => {
         if (a.date === b.date) {
           return a.startTime - b.startTime;
@@ -3115,13 +2945,11 @@
       
       contentContainer.innerHTML = html;
       
-      // Populate activity filter dropdown
       const allActivities = [...new Set(data.map(a => a.activityLabel))].sort();
       if (dropdowns.actualActivityFilter && allActivities.length > 0) {
         const activityOpts = allActivities.map(a => ({ value: a, label: a }));
         dropdowns.actualActivityFilter.setOptions(activityOpts);
         
-        // Add event listener for activity filtering
         dropdowns.actualActivityFilter.onSelectionChange = (selectedActivities) => {
           let filteredData = currentActualActivityData;
           if (selectedActivities.length > 0) {
@@ -3134,7 +2962,6 @@
         };
       }
       
-      // Add sorting functionality to table headers
       addTableSorting('actual');
     }
 
@@ -3150,10 +2977,8 @@
           const currentOrder = document.getElementById(`${tabType}SortOrder`).value;
           
           if (sortField === currentSort) {
-            // Toggle order if same field
             document.getElementById(`${tabType}SortOrder`).value = currentOrder === 'asc' ? 'desc' : 'asc';
           } else {
-            // New field, default to ascending
             document.getElementById(`${tabType}Sort`).value = sortField;
             document.getElementById(`${tabType}SortOrder`).value = 'asc';
           }
@@ -3163,7 +2988,7 @@
       });
     }
 
-    // ===== Overtime Analysis =====
+    // ===== OVERTIME TAB FUNCTIONS =====
     async function analyzeOvertime() {
       const buIds = dropdowns.overtimeBu ? dropdowns.overtimeBu.getSelectedValues() : [];
       const muIds = dropdowns.overtimeMu ? dropdowns.overtimeMu.getSelectedValues() : [];
@@ -3171,7 +2996,6 @@
       const startDate = document.getElementById('overtimeStartDate').value;
       const endDate = document.getElementById('overtimeEndDate').value;
 
-      // Convert dd-mm-yyyy to yyyy-mm-dd for API
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
 
@@ -3186,29 +3010,21 @@
       button.textContent = 'Analyzing...';
 
       try {
-        // Load activity codes first
         await loadActivityCodes(buIds[0]);
         
-        // Get users based on filters
         let users = await getUsersForAnalytics(muIds[0], teamIds);
         
         const overtimeData = [];
         
-        // Use helper function for end date
         const startDateIso = `${startDateApi}T00:00:00.000Z`;
         const endDateIso = getEndDateIso(endDate);
 
-        console.log(`Analyzing overtime for ${users.length} users from ${startDate} to ${endDate}`);
-
-        // Analyze each user's schedule for overtime activities
         for (const user of users) {
           try {
-            console.log(`Checking user: ${user.name}`);
             const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
             const userOvertime = extractOvertimeActivities(schedule, user.id, buIds[0]);
             
             if (userOvertime.totalHours > 0) {
-              console.log(`Found overtime for ${user.name}: ${userOvertime.totalHours}h`);
               overtimeData.push({
                 user: user.name,
                 teamNames: user.teamNames || 'No Team',
@@ -3218,16 +3034,13 @@
                 rate2Hours: userOvertime.rate2Hours,
                 activities: userOvertime.activities
               });
-            } else {
-              console.log(`No overtime found for ${user.name}`);
             }
           } catch (err) {
             console.error(`Error analyzing user ${user.name}:`, err);
           }
         }
 
-        console.log(`Overtime analysis complete. Found ${overtimeData.length} users with overtime`);
-        currentOvertimeData = overtimeData; // Store for export
+        currentOvertimeData = overtimeData;
         currentDisplayedData.overtime = [...overtimeData];
         renderOvertimeResults(overtimeData, startDate, endDate);
       } catch (err) {
@@ -3242,27 +3055,23 @@
     async function getUsersForAnalytics(muId, teamIds) {
       let users = [];
       
-      // Handle team selection
       if (teamIds && teamIds.length > 0) {
         const teamMembersArrays = await Promise.all(
           teamIds.map(teamId => getTeamMembers(teamId))
         );
         users = teamMembersArrays.flat();
         
-        // Enrich with full user data and team names
         users = users.map(member => {
           const user = usersById[member.id] || member;
           user.teamNames = usersById[member.id]?.teamNames || 'No Team';
           return user;
         });
       } else {
-        // Get all users from management unit
         const muUsersResponse = await authorizedFetchJson(
           `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
         );
         users = muUsersResponse.entities || muUsersResponse.users || [];
         
-        // Enrich with team names
         users = users.map(uRef => {
           const user = usersById[uRef.id] || uRef;
           user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
@@ -3281,15 +3090,10 @@
       let rate2Hours = 0;
       const overtimeActivities = [];
       
-      console.log(`Analyzing ${activities.length} activities for overtime for user ${userId}`);
-      
       activities.forEach(activity => {
         const activityName = getActivityName(businessUnitId, activity.activityCodeId);
         const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
         
-        console.log(`Activity: "${activityName}", Category: "${activityCategory}", Duration: ${activity.durationMinutes}min`);
-        
-        // Enhanced overtime detection - look for overtime indicators in name or category
         const isOvertime = activityName.toLowerCase().includes('overtime') || 
                           activityCategory.toLowerCase().includes('overtime') ||
                           activityName.toLowerCase().includes('ot ') ||
@@ -3303,7 +3107,6 @@
           const hours = activity.durationMinutes / 60;
           totalHours += hours;
           
-          // Determine rate based on activity name
           let rate = '1.0';
           if (activityName.toLowerCase().includes('1.5') || activityName.toLowerCase().includes('timehalf')) {
             rate = '1.5';
@@ -3315,7 +3118,6 @@
             rate1Hours += hours;
           }
           
-          // Store activity details - ONLY overtime activities
           overtimeActivities.push({
             date: formatDate(activity.date),
             activity: activityName,
@@ -3327,12 +3129,8 @@
             activityCodeId: activity.activityCodeId,
             category: activityCategory
           });
-          
-          console.log(`✓ Counted as overtime: ${activityName} (${hours}h, Rate: ${rate}, Category: ${activityCategory})`);
         }
       });
-      
-      console.log(`Total overtime: ${totalHours}h (1.0: ${rate1Hours}h, 1.5: ${rate1_5Hours}h, 2.0: ${rate2Hours}h)`);
       
       return {
         totalHours: parseFloat(totalHours.toFixed(1)),
@@ -3343,7 +3141,6 @@
       };
     }
 
-    // ===== Overtime Results Rendering =====
     function renderOvertimeResults(data, startDate, endDate) {
       const container = document.getElementById('overtimeResults');
       const contentContainer = document.getElementById('overtimeResultsContent');
@@ -3358,10 +3155,8 @@
         return;
       }
       
-      // Sort by total overtime hours (descending) by default
       data.sort((a, b) => b.totalHours - a.totalHours);
       
-      // Calculate overall metrics
       const totalOvertime = data.reduce((sum, item) => sum + item.totalHours, 0);
       const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
       const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
@@ -3378,7 +3173,6 @@
           <span class="pill">Total Overtime: ${totalOvertime.toFixed(1)}h</span>
         </div>
         
-        <!-- Overtime Metrics -->
         <div class="overtime-metrics">
           <div class="overtime-metric-card">
             <div class="metric-label">Total Overtime</div>
@@ -3402,7 +3196,6 @@
           </div>
         </div>
         
-        <!-- Overtime Chart -->
         <div class="chart-wrapper">
           <h4>Overtime Distribution</h4>
           <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
@@ -3410,7 +3203,6 @@
           </div>
       `;
       
-      // Create chart for top 10 users
       const topUsers = data.slice(0, 10);
       const maxHours = Math.max(...topUsers.map(u => u.totalHours), 1);
       
@@ -3431,7 +3223,6 @@
       
       html += `</div>`;
       
-      // Summary Table
       html += `
         <table class="schedule-table">
           <thead>
@@ -3468,7 +3259,6 @@
       
       contentContainer.innerHTML = html;
       
-      // Populate overtime activity filter dropdown
       const overtimeActivities = [...new Set(data.flatMap(u => u.activities.map(a => a.activity)))].sort();
       if (dropdowns.overtimeActivityFilter && overtimeActivities.length > 0) {
         const activityOpts = overtimeActivities.map(a => ({ value: a, label: a }));
@@ -3476,7 +3266,7 @@
       }
     }
 
-    // ===== Absence Analysis =====
+    // ===== ABSENCE TAB FUNCTIONS =====
     async function analyzeAbsence() {
       const buIds = dropdowns.absenceBu ? dropdowns.absenceBu.getSelectedValues() : [];
       const muIds = dropdowns.absenceMu ? dropdowns.absenceMu.getSelectedValues() : [];
@@ -3485,7 +3275,6 @@
       const endDate = document.getElementById('absenceEndDate').value;
       const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
 
-      // Convert dd-mm-yyyy to yyyy-mm-dd for API
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
 
@@ -3500,13 +3289,11 @@
       button.textContent = 'Analyzing...';
 
       try {
-        // Load activity codes for absence types
         await loadActivityCodes(buIds[0]);
         
         let users = await getUsersForAnalytics(muIds[0], teamIds);
         const absenceData = [];
         
-        // Use helper function for end date
         const startDateIso = `${startDateApi}T00:00:00.000Z`;
         const endDateIso = getEndDateIso(endDate);
 
@@ -3516,7 +3303,6 @@
             const absenceStats = calculateAbsenceStats(schedule, user.id, buIds[0]);
             
             if (absenceStats.totalHours > 0) {
-              // Convert threshold from days to hours (assuming 8-hour work day)
               const thresholdHours = thresholdDays * 8;
               absenceData.push({
                 user: user.name,
@@ -3534,7 +3320,7 @@
           }
         }
 
-        currentAbsenceData = absenceData; // Store for export
+        currentAbsenceData = absenceData;
         currentDisplayedData.absence = [...absenceData];
         renderAbsenceResults(absenceData, thresholdDays, startDate, endDate);
       } catch (err) {
@@ -3554,15 +3340,10 @@
       const absenceDetails = [];
       const absenceTypes = new Set();
       
-      console.log('Analyzing activities for absence:', activities);
-      
       activities.forEach(activity => {
         const activityName = getActivityName(businessUnitId, activity.activityCodeId);
         const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
         
-        console.log(`Activity: ${activityName}, Category: ${activityCategory}, Code: ${activity.activityCodeId}, Duration: ${activity.durationMinutes}min`);
-        
-        // Enhanced absence detection - look for absence indicators but exclude holidays and TOIL
         const isAbsence = (activity.type === 'fullDayOff' || 
                          activityCategory === 'TimeOff' ||
                          activityName.includes('Time Off') || 
@@ -3583,19 +3364,14 @@
           instances++;
           absenceTypes.add(activityName);
           
-          // Store details for each absence
           absenceDetails.push({
             date: formatDate(activity.date),
             type: activityName,
             duration: formatDuration(activity.durationMinutes),
             hours: (activity.durationMinutes / 60).toFixed(1)
           });
-          
-          console.log(`✓ Counted as absence: ${activityName} (${activity.durationMinutes/60}h, Category: ${activityCategory})`);
         }
       });
-      
-      console.log(`Total absence: ${totalHours}h over ${absenceDays.size} days, ${instances} instances`);
       
       return {
         totalHours: parseFloat(totalHours.toFixed(1)),
@@ -3606,7 +3382,6 @@
       };
     }
 
-    // ===== Enhanced Absence Results Rendering =====
     function renderAbsenceResults(data, thresholdDays, startDate, endDate) {
       const container = document.getElementById('absenceResults');
       const contentContainer = document.getElementById('absenceResultsContent');
@@ -3617,13 +3392,11 @@
         return;
       }
       
-      // Apply drill-down filter if active
       let filteredData = [...data];
       if (currentDrillDown.type === 'aboveThreshold') {
         filteredData = data.filter(item => item.exceedsThreshold);
       }
       
-      // Sort by absence hours (descending) by default
       filteredData.sort((a, b) => b.totalHours - a.totalHours);
       
       if (currentAbsenceView === 'detailed') {
@@ -3636,7 +3409,6 @@
     function renderAbsenceSummary(data, thresholdDays, startDate, endDate) {
       const contentContainer = document.getElementById('absenceResultsContent');
       
-      // Calculate enhanced analytics
       const usersAboveThreshold = data.filter(item => item.exceedsThreshold).length;
       const totalAbsenceHours = data.reduce((sum, item) => sum + item.totalHours, 0);
       const totalAbsenceDays = data.reduce((sum, item) => sum + item.absenceDays, 0);
@@ -3657,9 +3429,7 @@
         </div>
         
         <div class="analytics-grid">
-          <!-- Left column: Charts -->
           <div>
-            <!-- Absence Hours Chart -->
             <div class="chart-wrapper">
               <h4>Absence Hours Distribution</h4>
               <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
@@ -3667,7 +3437,6 @@
               </div>
       `;
       
-      // Create chart for top 10 users by hours
       const topUsersByHours = data.slice(0, 10);
       const maxHours = Math.max(...topUsersByHours.map(u => u.totalHours), 1);
       
@@ -3688,7 +3457,6 @@
       
       html += `</div>`;
       
-      // NEW: Days Absence Chart
       html += `
         <div class="chart-wrapper">
           <h4>Absence Days Distribution</h4>
@@ -3697,7 +3465,6 @@
           </div>
       `;
       
-      // Create chart for top 10 users by days
       const topUsersByDays = [...data].sort((a, b) => b.absenceDays - a.absenceDays).slice(0, 10);
       const maxDays = Math.max(...topUsersByDays.map(u => u.absenceDays), 1);
       
@@ -3716,9 +3483,8 @@
         `;
       });
       
-      html += `</div>`; // Close days chart
+      html += `</div>`;
       
-      // Absence Types Chart
       const chartAbsenceTypes = getAbsenceTypeDistribution(data);
       if (chartAbsenceTypes.length > 0) {
         html += `
@@ -3746,9 +3512,8 @@
         html += `</div>`;
       }
       
-      html += `</div>`; // Close left column
+      html += `</div>`;
       
-      // Right column: Summary metrics
       html += `
         <div>
           <div class="chart-wrapper">
@@ -3791,9 +3556,8 @@
         </div>
       `;
       
-      html += `</div>`; // Close analytics-grid
+      html += `</div>`;
       
-      // Summary Table
       html += `
         <table class="schedule-table">
           <thead>
@@ -3811,7 +3575,6 @@
       `;
       
       data.forEach(item => {
-        // Convert threshold from days to hours for comparison (assuming 8-hour days)
         const thresholdHours = thresholdDays * 8;
         const exceedsThreshold = item.totalHours >= thresholdHours;
         const rowClass = exceedsThreshold ? 'warning-row' : '';
@@ -3831,7 +3594,6 @@
           </tr>
         `;
         
-        // Add absence details
         if (item.absenceDetails && item.absenceDetails.length > 0) {
           html += `
             <tr>
@@ -3855,7 +3617,6 @@
       
       contentContainer.innerHTML = html;
       
-      // Populate absence activity filter dropdown
       const filterAbsenceTypes = [...new Set(data.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
       if (dropdowns.absenceActivityFilter && filterAbsenceTypes.length > 0) {
         const activityOpts = filterAbsenceTypes.map(a => ({ value: a, label: a }));
@@ -3866,7 +3627,6 @@
     function renderDetailedAbsenceTable(data, thresholdDays, startDate, endDate) {
       const contentContainer = document.getElementById('absenceResultsContent');
       
-      // Convert data to detailed format (similar to export)
       const detailedData = [];
       data.forEach(item => {
         item.absenceDetails.forEach(detail => {
@@ -3925,14 +3685,12 @@
       contentContainer.innerHTML = html;
     }
 
-    // ===== Drill Down Functions =====
     function drillDownToAboveThreshold() {
       currentDrillDown = {
         type: 'aboveThreshold',
         filter: 'Users above threshold'
       };
       
-      // Re-render the absence results with the filtered data
       const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
       const startDate = document.getElementById('absenceStartDate').value;
       const endDate = document.getElementById('absenceEndDate').value;
@@ -3946,7 +3704,6 @@
         filter: null
       };
       
-      // Re-render the absence results with all data
       const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
       const startDate = document.getElementById('absenceStartDate').value;
       const endDate = document.getElementById('absenceEndDate').value;
@@ -3954,7 +3711,6 @@
       renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
     }
 
-    // ===== Helper Functions for Enhanced Analytics =====
     function findMostCommonAbsenceType(data) {
       const typeCounts = {};
       data.forEach(user => {
@@ -3987,10 +3743,10 @@
       return Object.entries(typeCounts)
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count)
-        .slice(0, 10); // Top 10 types
+        .slice(0, 10);
     }
 
-    // ===== Late Report Functions =====
+    // ===== LATE REPORT TAB FUNCTIONS =====
     async function generateLateReport() {
       const buIds = dropdowns.lateBu ? dropdowns.lateBu.getSelectedValues() : [];
       const muIds = dropdowns.lateMu ? dropdowns.lateMu.getSelectedValues() : [];
@@ -4010,20 +3766,11 @@
       button.textContent = 'Generating late report...';
 
       try {
-        // Load activity codes first
         await loadActivityCodes(buIds[0]);
         
-        // Get schedule data
         const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        console.log('Schedule data for late report:', scheduleData);
-        
-        // Get actual activity data
         const actualData = await getActualActivityDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        console.log('Actual data for late report:', actualData);
-        
-        // Generate late report by comparing schedule vs actual
         const lateReportData = generateLateReportData(scheduleData, actualData, thresholdSeconds);
-        console.log('Generated late report data:', lateReportData);
         
         currentDisplayedData.late = [...lateReportData];
         renderLateReportResults(lateReportData);
@@ -4038,13 +3785,10 @@
       }
     }
 
-    // Get schedule data for late report - FIXED
     async function getScheduleDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      // Convert dd-mm-yyyy to yyyy-mm-dd for API
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
       
-      // Use helper function for end date
       const startDateIso = `${startDateApi}T00:00:00.000Z`;
       const endDateIso = getEndDateIso(endDate);
 
@@ -4052,9 +3796,7 @@
       for (const userId of userIds) {
         try {
           const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
-          console.log(`Schedule search result for user ${userId}:`, searchResult);
           const activities = extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
-          console.log(`Extracted ${activities.length} activities for user ${userId}:`, activities);
           allActivities = allActivities.concat(activities);
         } catch (err) {
           console.error(`Error loading schedule for user ${userId}:`, err);
@@ -4063,8 +3805,7 @@
       
       return allActivities;
     }
-
-    // Get actual activity data for late report - FIXED  
+    
     async function getActualActivityDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
@@ -4074,37 +3815,27 @@
         const jobResult = await pollHistoricalAdherenceJob(jobId);
         const actualData = await processJobResults(jobResult, businessUnitId);
         
-        // Filter out 'Unavailable' activities as requested
         const filteredActualData = actualData.filter(activity => 
           !activity.activityLabel.toLowerCase().includes('unavailable') &&
           !activity.activityCategory.toLowerCase().includes('unavailable')
         );
         
-        console.log(`Filtered actual data: ${filteredActualData.length} activities (removed ${actualData.length - filteredActualData.length} unavailable activities)`);
-        
         return filteredActualData;
       } catch (err) {
         console.error('Error getting actual activity data for late report:', err);
-        // Return empty array instead of throwing to allow schedule-only data
         return [];
       }
     }
 
-    // Generate late report by comparing schedule vs actual - FIXED
     function generateLateReportData(scheduleData, actualData, thresholdSeconds) {
       const lateReport = [];
       
-      console.log(`Generating late report with ${scheduleData.length} schedule items and ${actualData.length} actual items`);
-      
-      // Group schedule data by user and date to find first activity of each day
       const scheduleByUserDate = {};
       
-      // Filter out time-off activities from schedule data
       const filteredScheduleData = scheduleData.filter(scheduleItem => {
         const activityName = scheduleItem.activityLabel || '';
         const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
         
-        // Exclude time-off activities
         return !activityName.toLowerCase().includes('time off') &&
                !activityName.toLowerCase().includes('holiday') &&
                !activityName.toLowerCase().includes('sick') &&
@@ -4122,9 +3853,6 @@
         scheduleByUserDate[key].push(scheduleItem);
       });
       
-      console.log(`Grouped schedule into ${Object.keys(scheduleByUserDate).length} user/date combinations (after filtering time-off)`);
-      
-      // Group actual data by user and date for easier lookup
       const actualByUserDate = {};
       actualData.forEach(actualItem => {
         const key = `${actualItem.userId}_${actualItem.date}`;
@@ -4134,12 +3862,10 @@
         actualByUserDate[key].push(actualItem);
       });
       
-      // For each user/date combination in schedule, find matching actual data
       Object.keys(scheduleByUserDate).forEach(key => {
         const [userId, date] = key.split('_');
         const userSchedule = scheduleByUserDate[key];
         
-        // Sort by start time and get first activity of the day
         userSchedule.sort((a, b) => {
           const aTime = a.start ? a.start.getTime() : new Date(a.date).getTime();
           const bTime = b.start ? b.start.getTime() : new Date(b.date).getTime();
@@ -4150,11 +3876,9 @@
         
         if (!firstScheduledActivity) return;
         
-        // Find actual activities for this user/date
         const userActualActivities = actualByUserDate[key] || [];
         
         if (userActualActivities.length === 0) {
-          // No actual data found - label as AWOL
           lateReport.push({
             userId: userId,
             userName: firstScheduledActivity.userName,
@@ -4170,21 +3894,17 @@
           return;
         }
         
-        // Sort actual activities by start time and get first one
         userActualActivities.sort((a, b) => a.startTime - b.startTime);
         const firstActualActivity = userActualActivities[0];
         
         if (!firstActualActivity) return;
         
-        // Skip if scheduled start time is not available (full day off)
         if (!firstScheduledActivity.start) {
           return;
         }
         
-        // Calculate time difference in seconds
         const timeDiffSeconds = Math.round((firstActualActivity.startTime - firstScheduledActivity.start) / 1000);
         
-        // Determine status
         let status, durationLate;
         
         if (timeDiffSeconds <= thresholdSeconds && timeDiffSeconds >= -thresholdSeconds) {
@@ -4212,11 +3932,9 @@
         });
       });
       
-      console.log(`Generated ${lateReport.length} late report entries`);
       return lateReport;
     }
 
-    // Render late report results
     function renderLateReportResults(data) {
       const container = document.getElementById('lateResults');
       const contentContainer = document.getElementById('lateResultsContent');
@@ -4312,11 +4030,9 @@
       
       contentContainer.innerHTML = html;
       
-      // Add sorting functionality
       addLateReportTableSorting();
     }
 
-    // Add sorting to late report table
     function addLateReportTableSorting() {
       const table = document.querySelector('#lateResultsContent table');
       if (!table) return;
@@ -4340,7 +4056,6 @@
       });
     }
 
-    // Apply sorting to late report
     function applyLateReportSorting() {
       const data = currentDisplayedData.late;
       const sortField = document.getElementById('lateSort').value;
@@ -4371,7 +4086,7 @@
       renderLateReportResults(sortedData);
     }
 
-    // ===== Time Owed Functions =====
+    // ===== TIME OWED TAB FUNCTIONS =====
     async function generateTimeOwedReport() {
       const buIds = dropdowns.timeOwedBu ? dropdowns.timeOwedBu.getSelectedValues() : [];
       const muIds = dropdowns.timeOwedMu ? dropdowns.timeOwedMu.getSelectedValues() : [];
@@ -4390,20 +4105,11 @@
       button.textContent = 'Generating time owed report...';
 
       try {
-        // Load activity codes first
         await loadActivityCodes(buIds[0]);
         
-        // Get schedule data
         const scheduleData = await getScheduleDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        console.log('Schedule data for time owed:', scheduleData);
-        
-        // Get actual activity data
         const actualData = await getActualActivityDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        console.log('Actual data for time owed:', actualData);
-        
-        // Generate time owed report by comparing schedule end vs actual offline time
         const timeOwedData = generateTimeOwedData(scheduleData, actualData);
-        console.log('Generated time owed data:', timeOwedData);
         
         currentTimeOwedData = timeOwedData;
         currentDisplayedData.timeowed = [...timeOwedData];
@@ -4420,11 +4126,9 @@
     }
 
     async function getScheduleDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      // Convert dd-mm-yyyy to yyyy-mm-dd for API
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
       
-      // Use helper function for end date
       const startDateIso = `${startDateApi}T00:00:00.000Z`;
       const endDateIso = getEndDateIso(endDate);
 
@@ -4432,9 +4136,7 @@
       for (const userId of userIds) {
         try {
           const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
-          console.log(`Schedule search result for user ${userId}:`, searchResult);
           const activities = extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
-          console.log(`Extracted ${activities.length} activities for user ${userId}:`, activities);
           allActivities = allActivities.concat(activities);
         } catch (err) {
           console.error(`Error loading schedule for user ${userId}:`, err);
@@ -4444,7 +4146,6 @@
       return allActivities;
     }
 
-    // FIXED: Get actual activity data for time owed
     async function getActualActivityDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
       const startDateApi = convertToApiFormat(startDate);
       const endDateApi = convertToApiFormat(endDate);
@@ -4454,10 +4155,6 @@
         const jobResult = await pollHistoricalAdherenceJob(jobId);
         const actualData = await processJobResults(jobResult, businessUnitId);
         
-        // DON'T filter out activities - we need ALL activities to find the last one
-        console.log(`Total actual activities for time owed: ${actualData.length}`);
-        
-        // Group by user and date to find the last activity of each day
         const lastActivitiesByDay = {};
         
         actualData.forEach(activity => {
@@ -4470,21 +4167,16 @@
           lastActivitiesByDay[key].push(activity);
         });
         
-        // For each user/date, find the last activity (chronologically)
         const lastActivities = [];
         
         Object.keys(lastActivitiesByDay).forEach(key => {
           const activities = lastActivitiesByDay[key];
           
-          // Sort by end time descending to get the last activity
           activities.sort((a, b) => b.endTime - a.endTime);
           
           const lastActivity = activities[0];
           if (lastActivity) {
             lastActivities.push(lastActivity);
-            
-            // Log for debugging
-            console.log(`Last activity for ${key}: ${lastActivity.activityLabel} at ${formatTime(lastActivity.endTime)}`);
           }
         });
         
@@ -4495,21 +4187,15 @@
       }
     }
 
-    // FIXED: Time Owed Data Generation Function
     function generateTimeOwedData(scheduleData, actualData) {
       const timeOwedReport = [];
       
-      console.log(`Generating time owed report with ${scheduleData.length} schedule items and ${actualData.length} actual items`);
-      
-      // Group schedule data by user and date
       const scheduleByUserDate = {};
       
-      // Filter schedule to only include work activities (exclude time off)
       const filteredScheduleData = scheduleData.filter(scheduleItem => {
         const activityName = scheduleItem.activityLabel || '';
         const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
         
-        // Include only work activities (not time off)
         return !activityName.toLowerCase().includes('time off') &&
                !activityName.toLowerCase().includes('holiday') &&
                !activityName.toLowerCase().includes('sick') &&
@@ -4527,9 +4213,6 @@
         scheduleByUserDate[key].push(scheduleItem);
       });
       
-      console.log(`Grouped schedule into ${Object.keys(scheduleByUserDate).length} user/date combinations`);
-      
-      // Group actual data by user and date for easier lookup
       const actualByUserDate = {};
       actualData.forEach(actualItem => {
         const key = `${actualItem.userId}_${actualItem.date}`;
@@ -4539,33 +4222,27 @@
         actualByUserDate[key].push(actualItem);
       });
       
-      // Process each user/date combination
       Object.keys(scheduleByUserDate).forEach(key => {
         const [userId, date] = key.split('_');
         const userSchedule = scheduleByUserDate[key];
         
-        // Sort schedule by end time to find last scheduled activity
         userSchedule.sort((a, b) => {
           const aTime = a.end ? a.end.getTime() : 0;
           const bTime = b.end ? b.end.getTime() : 0;
-          return bTime - aTime; // Sort descending to get last activity first
+          return bTime - aTime;
         });
         
-        const lastScheduledActivity = userSchedule[0]; // First after sorting descending
+        const lastScheduledActivity = userSchedule[0];
         
         if (!lastScheduledActivity || !lastScheduledActivity.end) {
-          console.log(`No end time for user ${userId} on ${date}`);
           return;
         }
         
         const scheduledEndTime = lastScheduledActivity.end;
-        console.log(`Last scheduled activity for ${userId} on ${date}: ${lastScheduledActivity.activityLabel} ending at ${formatTime(scheduledEndTime)}`);
         
-        // Get actual activities for this user/date
         const userActualActivities = actualByUserDate[key] || [];
         
         if (userActualActivities.length === 0) {
-          console.log(`No actual data for user ${userId} on ${date}`);
           timeOwedReport.push({
             userId: userId,
             userName: lastScheduledActivity.userName,
@@ -4581,11 +4258,9 @@
           return;
         }
         
-        // Find the LAST activity of the day (already sorted by end time)
         const lastActualActivity = userActualActivities[0];
         
         if (!lastActualActivity) {
-          console.log(`No actual activity found for user ${userId} on ${date}`);
           timeOwedReport.push({
             userId: userId,
             userName: lastScheduledActivity.userName,
@@ -4602,25 +4277,18 @@
         }
         
         const actualOfflineTime = lastActualActivity.endTime;
-        console.log(`Last actual activity: ${lastActualActivity.activityLabel} ended at: ${formatTime(actualOfflineTime)}`);
         
-        // Calculate time difference in minutes
         const timeDiffMinutes = Math.round((scheduledEndTime - actualOfflineTime) / (1000 * 60));
-        console.log(`Time difference: ${timeDiffMinutes} minutes (Scheduled: ${formatTime(scheduledEndTime)}, Actual: ${formatTime(actualOfflineTime)})`);
         
-        // Determine status and time owed
         let status, timeOwed;
         
-        if (timeDiffMinutes > 5) { // Using 5-minute grace period
-          // Logged out significantly before scheduled end
+        if (timeDiffMinutes > 5) {
           status = 'Logged Out Early';
           timeOwed = timeDiffMinutes;
         } else if (timeDiffMinutes < -5) {
-          // Logged out after scheduled end (worked extra)
           status = 'Worked Extra';
           timeOwed = 0;
         } else {
-          // Within 5 minutes of scheduled time
           status = 'Completed';
           timeOwed = 0;
         }
@@ -4639,7 +4307,6 @@
         });
       });
       
-      console.log(`Generated ${timeOwedReport.length} time owed report entries`);
       return timeOwedReport;
     }
 
@@ -4735,7 +4402,6 @@
       
       contentContainer.innerHTML = html;
       
-      // Add sorting functionality
       addTimeOwedTableSorting();
     }
 
@@ -4792,27 +4458,24 @@
       renderTimeOwedResults(sortedData);
     }
 
-    // ===== Export Functions =====
+    // ===== EXPORT FUNCTIONS =====
     function exportToCSV(data, filename) {
       if (!data || data.length === 0) {
         showMessage('No data to export', 'error');
         return;
       }
 
-      // Convert data to CSV
       const headers = Object.keys(data[0]);
       const csvContent = [
         headers.join(','),
         ...data.map(row => 
           headers.map(header => {
             const value = row[header] || '';
-            // Handle values that might contain commas or quotes
             return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
           }).join(',')
         )
       ].join('\n');
 
-      // Create and download file
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -4830,7 +4493,6 @@
         return;
       }
 
-      // Apply activity filter if any
       let exportData = currentDisplayedData.schedule;
       const selectedActivities = dropdowns.activityFilter ? dropdowns.activityFilter.getSelectedValues() : [];
       if (selectedActivities.length > 0) {
@@ -4885,7 +4547,6 @@
         return;
       }
 
-      // Apply activity filter if any
       let exportData = currentDisplayedData.overtime;
       const selectedActivities = dropdowns.overtimeActivityFilter ? dropdowns.overtimeActivityFilter.getSelectedValues() : [];
       if (selectedActivities.length > 0) {
@@ -4912,7 +4573,6 @@
         return;
       }
 
-      // Apply activity filter if any
       let exportData = [];
       const selectedActivities = dropdowns.overtimeActivityFilter ? dropdowns.overtimeActivityFilter.getSelectedValues() : [];
       
@@ -4945,7 +4605,6 @@
         return;
       }
 
-      // Apply activity filter if any
       let exportData = currentDisplayedData.absence;
       const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
       if (selectedActivities.length > 0) {
@@ -4973,7 +4632,6 @@
         return;
       }
 
-      // Apply activity filter if any
       let exportData = [];
       const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
       
@@ -5039,29 +4697,6 @@
       }));
 
       exportToCSV(csvData, `time_owed_${new Date().toISOString().split('T')[0]}.csv`);
-    }
-
-    // ===== Utility Functions =====
-    function formatTime(d) {
-      if (!d) return 'All Day';
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
-    function formatDuration(mins) {
-      if (mins == null || isNaN(mins)) return '';
-      const total = Math.max(0, Math.round(mins));
-      const h = Math.floor(total / 60);
-      const m = total % 60;
-      if (h === 0) return `${m}m`;
-      if (m === 0) return `${h}h`;
-      return `${h}h ${m}m`;
-    }
-
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
     }
   </script>
 </body>
