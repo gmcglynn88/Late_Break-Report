@@ -4449,12 +4449,10 @@
               <th class="sortable" data-sort="teamNames">Team</th>
               <th class="sortable" data-sort="date">Date</th>
               <th>Scheduled End</th>
-              <th>Actual Offline Time</th>
+              <th>Actual Logout Time</th>
               <th class="sortable" data-sort="status">Status</th>
               <th class="sortable" data-sort="timeOwed">Time Owed</th>
               <th>Owed To</th>
-              <th>Scheduled Activity</th>
-              <th>Actual Activity</th>
             </tr>
           </thead>
           <tbody>
@@ -4801,7 +4799,7 @@
         User: row.userName,
         Team: row.teamNames || 'No Team',
         'Scheduled End': row.scheduledEnd ? formatTime(row.scheduledEnd) : 'N/A',
-        'Actual Offline Time': row.actualOfflineTime ? formatTime(row.actualOfflineTime) : 'N/A',
+        'Actual Logout Time': row.actualOfflineTime ? formatTime(row.actualOfflineTime) : 'N/A',
         Status: row.status,
         'Time Owed': row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m',
         'Owed To': row.timeOwedType === 'toBusiness' ? 'BUSINESS' : 
