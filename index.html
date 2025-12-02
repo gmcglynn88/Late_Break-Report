@@ -4274,40 +4274,49 @@
         
         const scheduledEndTime = lastScheduledActivity.end;
         
-        // Get offline activities for this user/date
-        const userOfflineActivities = offlineByUserDate[key] || [];
-        
-        if (userOfflineActivities.length === 0) {
-          // No offline activities found - agent didn't log off properly
-          timeOwedReport.push({
-            userId: userId,
-            userName: lastScheduledActivity.userName,
-            teamNames: lastScheduledActivity.teamNames || 'No Team',
-            date: date,
-            scheduledEnd: scheduledEndTime,
-            actualOfflineTime: null,
-            status: 'No Logoff Found',
-            timeOwed: 0, // No time owed if they didn't log off
-            timeOwedType: 'none',
-            scheduledActivity: lastScheduledActivity.activityLabel,
-            actualActivity: null
-          });
-          return;
-        }
-        
-        // Find the NEAREST offline activity to scheduled end time
-        let nearestOfflineActivity = null;
-        let minTimeDiff = Infinity;
-        
-        userOfflineActivities.forEach(offlineActivity => {
-          const offlineTime = offlineActivity.endTime;
-          const timeDiff = Math.abs(offlineTime - scheduledEndTime);
-          
-          if (timeDiff < minTimeDiff) {
-            minTimeDiff = timeDiff;
-            nearestOfflineActivity = offlineActivity;
-          }
-        });
+// Get offline activities for this user/date
+const userOfflineActivities = offlineByUserDate[key] || [];
+
+// Filter out 23:59 end times - these indicate agent hasn't logged in (default/placeholder)
+const validOfflineActivities = userOfflineActivities.filter(activity => {
+    const endTime = activity.endTime;
+    const endHours = endTime.getHours();
+    const endMinutes = endTime.getMinutes();
+    // Exclude 23:59 end times (these are default/placeholder values)
+    return !(endHours === 23 && endMinutes === 59);
+});
+
+if (validOfflineActivities.length === 0) {
+    // No valid offline activities found - agent didn't log off properly
+    timeOwedReport.push({
+        userId: userId,
+        userName: lastScheduledActivity.userName,
+        teamNames: lastScheduledActivity.teamNames || 'No Team',
+        date: date,
+        scheduledEnd: scheduledEndTime,
+        actualOfflineTime: null,
+        status: 'No Valid Logoff',
+        timeOwed: 0,
+        timeOwedType: 'none',
+        scheduledActivity: lastScheduledActivity.activityLabel,
+        actualActivity: null
+    });
+    return;
+}
+
+// Find the NEAREST offline activity to scheduled end time from VALID activities
+let nearestOfflineActivity = null;
+let minTimeDiff = Infinity;
+
+validOfflineActivities.forEach(offlineActivity => {
+    const offlineTime = offlineActivity.endTime;
+    const timeDiff = Math.abs(offlineTime - scheduledEndTime);
+    
+    if (timeDiff < minTimeDiff) {
+        minTimeDiff = timeDiff;
+        nearestOfflineActivity = offlineActivity;
+    }
+});
         
         if (!nearestOfflineActivity) {
           timeOwedReport.push({
