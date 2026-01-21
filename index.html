@@ -21,6 +21,8 @@
       --success-bg: #f6fef9;
       --success-border: #75e0a7;
       --success-text: #079455;
+      --progress-bg: #e9ecef;
+      --progress-fill: #63AB8F;
     }
     
     body {
@@ -384,11 +386,110 @@
       padding: 8px 16px;
       font-size: 14px
     }
+
+    /* Progress Bar Styles */
+    .progress-container {
+      width: 100%;
+      height: 8px;
+      background: var(--progress-bg);
+      border-radius: 4px;
+      margin: 10px 0 20px 0;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--progress-fill);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 4px;
+    }
+
+    .tab-loading {
+      position: relative;
+    }
+
+    .tab-loading::after {
+      content: '';
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--primary-color);
+      border-top: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      flex-direction: column;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .global-progress {
+      width: 300px;
+      max-width: 80%;
+      background: var(--progress-bg);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .global-progress-bar {
+      height: 8px;
+      background: var(--progress-fill);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .global-progress-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-color);
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
   <div id="authCard" class="card">
     <div id="auth-message" class="info-message">Authenticating with Genesys Cloud...</div>
+  </div>
+
+  <!-- Global Loading Overlay -->
+  <div id="globalLoadingOverlay" class="loading-overlay">
+    <div class="global-progress-text" id="globalProgressText">Loading all tab data...</div>
+    <div class="global-progress">
+      <div class="global-progress-bar" id="globalProgressBar"></div>
+    </div>
+    <div class="progress-text" id="globalProgressDetail">Initializing...</div>
   </div>
 
   <div id="appContent" style="display:none;">
@@ -472,7 +573,16 @@
           </div>
         </div>
 
-        <button id="loadScheduleBtn" class="full-width-btn">Load Schedule</button>
+        <!-- Progress bar for schedule tab -->
+        <div class="progress-container" id="scheduleProgressContainer">
+          <div class="progress-bar" id="scheduleProgressBar"></div>
+        </div>
+        <div class="progress-text" id="scheduleProgressText"></div>
+
+        <button id="loadScheduleBtn" class="full-width-btn">Load All Tab Data</button>
+        <div class="muted" style="text-align: center; margin-top: 8px;">
+          This will load data for ALL tabs using the selected parameters
+        </div>
       </div>
 
       <div id="results" class="card" style="display:none;">
@@ -592,6 +702,13 @@
             <input type="date" id="actualEndDate" />
           </div>
         </div>
+
+        <!-- Progress bar for actual activity tab -->
+        <div class="progress-container" id="actualProgressContainer">
+          <div class="progress-bar" id="actualProgressBar"></div>
+        </div>
+        <div class="progress-text" id="actualProgressText"></div>
+
         <button id="loadActualActivityBtn" class="full-width-btn">Load Actual Activity</button>
       </div>
 
@@ -764,6 +881,13 @@
             <input type="date" id="overtimeEndDate" />
           </div>
         </div>
+
+        <!-- Progress bar for overtime tab -->
+        <div class="progress-container" id="overtimeProgressContainer">
+          <div class="progress-bar" id="overtimeProgressBar"></div>
+        </div>
+        <div class="progress-text" id="overtimeProgressText"></div>
+
         <button id="analyzeOvertimeBtn" class="full-width-btn">Analyze Overtime</button>
       </div>
 
@@ -1005,6 +1129,13 @@
             <div class="muted">Threshold in days (e.g., 2 = 2 days)</div>
           </div>
         </div>
+
+        <!-- Progress bar for absence tab -->
+        <div class="progress-container" id="absenceProgressContainer">
+          <div class="progress-bar" id="absenceProgressBar"></div>
+        </div>
+        <div class="progress-text" id="absenceProgressText"></div>
+
         <button id="analyzeAbsenceBtn" class="full-width-btn">Analyze Absence</button>
       </div>
 
@@ -1115,6 +1246,13 @@
             <div class="muted">Seconds allowed before being marked late</div>
           </div>
         </div>
+
+        <!-- Progress bar for late tab -->
+        <div class="progress-container" id="lateProgressContainer">
+          <div class="progress-bar" id="lateProgressBar"></div>
+        </div>
+        <div class="progress-text" id="lateProgressText"></div>
+
         <button id="generateLateReportBtn" class="full-width-btn">Generate Late Report</button>
       </div>
 
@@ -1208,6 +1346,13 @@
             <input type="date" id="timeOwedEndDate" />
           </div>
         </div>
+
+        <!-- Progress bar for time owed tab -->
+        <div class="progress-container" id="timeOwedProgressContainer">
+          <div class="progress-bar" id="timeOwedProgressBar"></div>
+        </div>
+        <div class="progress-text" id="timeOwedProgressText"></div>
+
         <button id="generateTimeOwedReportBtn" class="full-width-btn">Generate Time Owed Report</button>
       </div>
 
@@ -1279,6 +1424,71 @@
     
     // Checkbox dropdown instances
     const dropdowns = {};
+
+    // ===== PROGRESS BAR FUNCTIONS =====
+    function showTabProgress(tabId, show = true) {
+      const container = document.getElementById(`${tabId}ProgressContainer`);
+      const progressBar = document.getElementById(`${tabId}ProgressBar`);
+      const progressText = document.getElementById(`${tabId}ProgressText`);
+      
+      if (container && progressBar && progressText) {
+        if (show) {
+          container.style.display = 'block';
+          progressBar.style.width = '0%';
+          progressText.textContent = 'Starting...';
+        } else {
+          container.style.display = 'none';
+          progressBar.style.width = '0%';
+          progressText.textContent = '';
+        }
+      }
+    }
+
+    function updateTabProgress(tabId, percentage, message) {
+      const progressBar = document.getElementById(`${tabId}ProgressBar`);
+      const progressText = document.getElementById(`${tabId}ProgressText`);
+      
+      if (progressBar) {
+        progressBar.style.width = `${percentage}%`;
+      }
+      if (progressText && message) {
+        progressText.textContent = message;
+      }
+    }
+
+    function showGlobalProgress(show = true) {
+      const overlay = document.getElementById('globalLoadingOverlay');
+      const progressBar = document.getElementById('globalProgressBar');
+      const progressText = document.getElementById('globalProgressText');
+      const progressDetail = document.getElementById('globalProgressDetail');
+      
+      if (overlay) {
+        if (show) {
+          overlay.classList.add('active');
+          if (progressBar) progressBar.style.width = '0%';
+          if (progressText) progressText.textContent = 'Loading all tab data...';
+          if (progressDetail) progressDetail.textContent = 'Initializing...';
+        } else {
+          overlay.classList.remove('active');
+        }
+      }
+    }
+
+    function updateGlobalProgress(percentage, message, detail = '') {
+      const progressBar = document.getElementById('globalProgressBar');
+      const progressText = document.getElementById('globalProgressText');
+      const progressDetail = document.getElementById('globalProgressDetail');
+      
+      if (progressBar) {
+        progressBar.style.width = `${percentage}%`;
+      }
+      if (progressText && message) {
+        progressText.textContent = message;
+      }
+      if (progressDetail && detail) {
+        progressDetail.textContent = detail;
+      }
+    }
 
     // ===== UTILITY FUNCTIONS (Common to all tabs) =====
     function formatDate(dateString) {
@@ -1691,6 +1901,7 @@
       const endDate = document.getElementById('endDate').value;
 
       if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDate || !endDate) {
+        showMessage('Please select business unit, management unit, users, and date range', 'error');
         return null;
       }
 
@@ -1699,13 +1910,95 @@
       const startDateIso = `${startDateApi}T00:00:00.000Z`;
       const endDateIso = getEndDateIso(endDate);
 
-      // Load all data in parallel
-      const [scheduleData, actualData] = await Promise.all([
-        loadScheduleDataForAllUsers(muIds[0], userIds, startDateIso, endDateIso, buIds[0]),
-        loadActualDataForAllUsers(muIds[0], userIds, startDateApi, endDateApi, buIds[0])
-      ]);
+      showGlobalProgress(true);
+      updateGlobalProgress(10, 'Starting data load...', 'Loading activity codes');
 
-      return { scheduleData, actualData, buIds, muIds, startDate, endDate };
+      try {
+        // Step 1: Load activity codes
+        await loadActivityCodes(buIds[0]);
+        updateGlobalProgress(20, 'Loading schedule data...', `Processing ${userIds.length} users`);
+
+        // Step 2: Load schedule data for all users
+        let allScheduleActivities = [];
+        for (let i = 0; i < userIds.length; i++) {
+          const userId = userIds[i];
+          try {
+            updateGlobalProgress(20 + (i / userIds.length * 20), 'Loading schedule data...', `User ${i + 1} of ${userIds.length}`);
+            const searchResult = await searchSchedules(muIds[0], userId, startDateIso, endDateIso, true);
+            const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
+            allScheduleActivities = allScheduleActivities.concat(activities);
+          } catch (err) {
+            console.error(`Error loading schedule for user ${userId}:`, err);
+          }
+        }
+
+        updateGlobalProgress(50, 'Loading actual activity data...', 'Creating historical adherence query');
+
+        // Step 3: Load actual activity data
+        let allActualActivities = [];
+        try {
+          const jobId = await createHistoricalAdherenceQuery(muIds[0], userIds, startDateApi, endDateApi);
+          updateGlobalProgress(60, 'Loading actual activity data...', 'Waiting for job completion');
+          const jobResult = await pollHistoricalAdherenceJob(jobId);
+          updateGlobalProgress(70, 'Processing actual activity data...', 'Downloading results');
+          allActualActivities = await processJobResults(jobResult, buIds[0]);
+        } catch (err) {
+          console.error('Error loading actual data:', err);
+        }
+
+        updateGlobalProgress(80, 'Processing data for all tabs...', 'Analyzing schedules');
+
+        // Store data globally
+        currentScheduleData = allScheduleActivities;
+        currentActualActivityData = allActualActivities;
+        currentDisplayedData.schedule = [...allScheduleActivities];
+        currentDisplayedData.actual = [...allActualActivities];
+        
+        // Process overtime
+        updateGlobalProgress(85, 'Processing data for all tabs...', 'Analyzing overtime');
+        const overtimeData = processOvertimeFromSchedule(allScheduleActivities, buIds[0]);
+        currentOvertimeData = overtimeData;
+        currentDisplayedData.overtime = [...overtimeData];
+        
+        // Process absence
+        updateGlobalProgress(90, 'Processing data for all tabs...', 'Analyzing absences');
+        const absenceData = processAbsenceFromSchedule(allScheduleActivities, buIds[0]);
+        currentAbsenceData = absenceData;
+        currentDisplayedData.absence = [...absenceData];
+        
+        // Process late report
+        updateGlobalProgress(93, 'Processing data for all tabs...', 'Generating late report');
+        const lateReportData = generateLateReportData(allScheduleActivities, allActualActivities, 30);
+        currentDisplayedData.late = [...lateReportData];
+        
+        // Process time owed
+        updateGlobalProgress(96, 'Processing data for all tabs...', 'Generating time owed report');
+        const timeOwedData = generateTimeOwedData(allScheduleActivities, allActualActivities);
+        currentTimeOwedData = timeOwedData;
+        currentDisplayedData.timeowed = [...timeOwedData];
+        
+        updateGlobalProgress(100, 'Data loaded successfully!', 'All tabs are now populated');
+        
+        return { 
+          scheduleData: allScheduleActivities, 
+          actualData: allActualActivities,
+          overtimeData,
+          absenceData,
+          lateReportData,
+          timeOwedData,
+          buIds, 
+          muIds, 
+          startDate, 
+          endDate 
+        };
+      } catch (err) {
+        console.error('Error loading all tabs data:', err);
+        throw err;
+      } finally {
+        setTimeout(() => {
+          showGlobalProgress(false);
+        }, 500);
+      }
     }
 
     async function loadScheduleDataForAllUsers(muId, userIds, startDateIso, endDateIso, buId) {
@@ -1983,11 +2276,42 @@
         document.getElementById('timeOwedStartDate').value = today;
         document.getElementById('timeOwedEndDate').value = today;
         
-        showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
+        // Sync all tab dates with schedule tab
+        syncTabDates();
+        
+        showMessage('Initial data loaded – set your filters and hit "Load All Tab Data".', 'info');
       } catch (err) {
         console.error('Error initialising app:', err);
         showMessage(`Error loading initial data: ${err.message}`, 'error');
       }
+    }
+
+    function syncTabDates() {
+      // Sync date changes across all tabs
+      const dateInputs = ['startDate', 'endDate', 'actualStartDate', 'actualEndDate', 
+                         'overtimeStartDate', 'overtimeEndDate', 'absenceStartDate', 
+                         'absenceEndDate', 'lateStartDate', 'lateEndDate', 
+                         'timeOwedStartDate', 'timeOwedEndDate'];
+      
+      dateInputs.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.addEventListener('change', function() {
+            // Update corresponding dates in other tabs
+            if (id === 'startDate') {
+              ['actualStartDate', 'overtimeStartDate', 'absenceStartDate', 'lateStartDate', 'timeOwedStartDate'].forEach(otherId => {
+                const otherElement = document.getElementById(otherId);
+                if (otherElement) otherElement.value = this.value;
+              });
+            } else if (id === 'endDate') {
+              ['actualEndDate', 'overtimeEndDate', 'absenceEndDate', 'lateEndDate', 'timeOwedEndDate'].forEach(otherId => {
+                const otherElement = document.getElementById(otherId);
+                if (otherElement) otherElement.value = this.value;
+              });
+            }
+          });
+        }
+      });
     }
 
     async function loadUserTeamMemberships() {
@@ -2360,7 +2684,7 @@
     // ===== SCHEDULE TAB FUNCTIONS =====
     function initializeEventListeners() {
       // Schedule tab
-      document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
+      document.getElementById('loadScheduleBtn').addEventListener('click', loadAllTabsDataAndRender);
       document.getElementById('exportScheduleBtn').addEventListener('click', exportScheduleToCSV);
       
       // Actual Activity tab
@@ -2411,6 +2735,68 @@
       document.getElementById('exportTimeOwedReportBtn').addEventListener('click', exportTimeOwedReportToCSV);
       
       initializeSorting();
+    }
+
+    async function loadAllTabsDataAndRender() {
+      showTabProgress('schedule', true);
+      updateTabProgress('schedule', 10, 'Starting data load...');
+      
+      try {
+        const allData = await loadAllTabsData();
+        if (!allData) {
+          showTabProgress('schedule', false);
+          return;
+        }
+
+        const { scheduleData, actualData, overtimeData, absenceData, lateReportData, timeOwedData, startDate, endDate } = allData;
+        
+        // Update progress for each tab rendering
+        updateTabProgress('schedule', 100, 'Rendering schedule tab...');
+        
+        // Render schedule tab
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.style.display = 'block';
+        renderScheduleResults(resultsDiv, scheduleData, [], startDate, endDate);
+        
+        // Show all results containers
+        document.getElementById('actualResults').style.display = 'block';
+        document.getElementById('overtimeResults').style.display = 'block';
+        document.getElementById('absenceResults').style.display = 'block';
+        document.getElementById('lateResults').style.display = 'block';
+        document.getElementById('timeOwedResults').style.display = 'block';
+        
+        // Render each tab
+        updateTabProgress('actual', 100, 'Rendering actual activity...');
+        renderActualActivityResults(actualData, startDate, endDate);
+        
+        updateTabProgress('overtime', 100, 'Rendering overtime analysis...');
+        renderOvertimeResults(overtimeData, startDate, endDate);
+        
+        updateTabProgress('absence', 100, 'Rendering absence analytics...');
+        const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
+        renderAbsenceResults(absenceData, thresholdDays, startDate, endDate);
+        
+        updateTabProgress('late', 100, 'Rendering late report...');
+        renderLateReportResults(lateReportData);
+        
+        updateTabProgress('timeOwed', 100, 'Rendering time owed report...');
+        renderTimeOwedResults(timeOwedData);
+        
+        showMessage('All tab data loaded and rendered successfully!', 'success');
+      } catch (err) {
+        console.error('Error loading all tabs data:', err);
+        showMessage(`Error loading data: ${err.message}`, 'error');
+      } finally {
+        // Hide progress bars after a short delay
+        setTimeout(() => {
+          showTabProgress('schedule', false);
+          showTabProgress('actual', false);
+          showTabProgress('overtime', false);
+          showTabProgress('absence', false);
+          showTabProgress('late', false);
+          showTabProgress('timeOwed', false);
+        }, 1000);
+      }
     }
 
     function initializeViewToggle() {
@@ -2530,62 +2916,6 @@
           const endDate = document.getElementById('absenceEndDate').value;
           renderAbsenceResults(sortedData, thresholdDays, startDate, endDate);
           break;
-      }
-    }
-
-    async function loadSchedule() {
-      const resultsDiv = document.getElementById('results');
-      resultsDiv.style.display = 'block';
-      
-      const button = document.getElementById('loadScheduleBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Loading all data...';
-
-      try {
-        const allData = await loadAllTabsData();
-        if (!allData) {
-          resultsDiv.innerHTML = `<div class="error-message">Please select business unit, management unit, users, and date range.</div>`;
-          return;
-        }
-
-        const { scheduleData, actualData, buIds, startDate, endDate } = allData;
-        
-        // Store data globally
-        currentScheduleData = scheduleData;
-        currentActualActivityData = actualData;
-        currentDisplayedData.schedule = [...scheduleData];
-        currentDisplayedData.actual = [...actualData];
-        
-        // Process overtime
-        const overtimeData = processOvertimeFromSchedule(scheduleData, buIds[0]);
-        currentOvertimeData = overtimeData;
-        currentDisplayedData.overtime = [...overtimeData];
-        
-        // Process absence
-        const absenceData = processAbsenceFromSchedule(scheduleData, buIds[0]);
-        currentAbsenceData = absenceData;
-        currentDisplayedData.absence = [...absenceData];
-        
-        // Process late report
-        const lateReportData = generateLateReportData(scheduleData, actualData, 30);
-        currentDisplayedData.late = [...lateReportData];
-        
-        // Process time owed
-        const timeOwedData = generateTimeOwedData(scheduleData, actualData);
-        currentTimeOwedData = timeOwedData;
-        currentDisplayedData.timeowed = [...timeOwedData];
-        
-        // Render current tab
-        renderScheduleResults(resultsDiv, scheduleData, [], startDate, endDate);
-        
-        showMessage('All data loaded successfully for all tabs', 'success');
-      } catch (err) {
-        console.error('Error loading data:', err);
-        resultsDiv.innerHTML = `<div class="error-message">Error loading data: ${err.message}</div>`;
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
       }
     }
 
@@ -2908,26 +3238,39 @@
       button.disabled = true;
       button.textContent = 'Loading actual activity...';
 
+      showTabProgress('actual', true);
+      updateTabProgress('actual', 10, 'Starting...');
+
       try {
+        updateTabProgress('actual', 20, 'Loading activity codes...');
         await loadActivityCodes(buIds[0]);
         
+        updateTabProgress('actual', 30, 'Creating historical adherence query...');
         const endDateIso = getEndDateIso(endDateRaw);
         
         const jobId = await createHistoricalAdherenceQuery(muIds[0], userIds, startDateApi, endDateApi);
+        updateTabProgress('actual', 40, 'Waiting for job completion...');
         const jobResult = await pollHistoricalAdherenceJob(jobId);
+        updateTabProgress('actual', 60, 'Processing results...');
         const actualActivityData = await processJobResults(jobResult, buIds[0]);
         
         currentActualActivityData = actualActivityData;
         currentDisplayedData.actual = [...actualActivityData];
+        updateTabProgress('actual', 90, 'Rendering results...');
         renderActualActivityResults(actualActivityData, startDateRaw, endDateRaw);
+        updateTabProgress('actual', 100, 'Complete!');
         
         showMessage('Actual activity data loaded successfully', 'success');
       } catch (err) {
         console.error('Error loading actual activity:', err);
+        updateTabProgress('actual', 0, `Error: ${err.message}`);
         throw err;
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
+        setTimeout(() => {
+          showTabProgress('actual', false);
+        }, 1000);
       }
     }
 
@@ -3207,9 +3550,14 @@
       button.disabled = true;
       button.textContent = 'Analyzing...';
 
+      showTabProgress('overtime', true);
+      updateTabProgress('overtime', 10, 'Starting analysis...');
+
       try {
+        updateTabProgress('overtime', 20, 'Loading activity codes...');
         await loadActivityCodes(buIds[0]);
         
+        updateTabProgress('overtime', 30, 'Loading users...');
         let users = await getUsersForAnalytics(muIds[0], teamIds);
         
         const overtimeData = [];
@@ -3217,7 +3565,11 @@
         const startDateIso = `${startDateApi}T00:00:00.000Z`;
         const endDateIso = getEndDateIso(endDate);
 
-        for (const user of users) {
+        for (let i = 0; i < users.length; i++) {
+          const user = users[i];
+          const progress = 30 + (i / users.length * 60);
+          updateTabProgress('overtime', progress, `Analyzing user ${i + 1} of ${users.length}`);
+          
           try {
             const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
             const userOvertime = extractOvertimeActivities(schedule, user.id, buIds[0]);
@@ -3240,13 +3592,19 @@
 
         currentOvertimeData = overtimeData;
         currentDisplayedData.overtime = [...overtimeData];
+        updateTabProgress('overtime', 95, 'Rendering results...');
         renderOvertimeResults(overtimeData, startDate, endDate);
+        updateTabProgress('overtime', 100, 'Complete!');
       } catch (err) {
         console.error('Error analyzing overtime:', err);
+        updateTabProgress('overtime', 0, `Error: ${err.message}`);
         showMessage(`Error analyzing overtime: ${err.message}`, 'error');
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
+        setTimeout(() => {
+          showTabProgress('overtime', false);
+        }, 1000);
       }
     }
 
@@ -3486,16 +3844,25 @@
       button.disabled = true;
       button.textContent = 'Analyzing...';
 
+      showTabProgress('absence', true);
+      updateTabProgress('absence', 10, 'Starting analysis...');
+
       try {
+        updateTabProgress('absence', 20, 'Loading activity codes...');
         await loadActivityCodes(buIds[0]);
         
+        updateTabProgress('absence', 30, 'Loading users...');
         let users = await getUsersForAnalytics(muIds[0], teamIds);
         const absenceData = [];
         
         const startDateIso = `${startDateApi}T00:00:00.000Z`;
         const endDateIso = getEndDateIso(endDate);
 
-        for (const user of users) {
+        for (let i = 0; i < users.length; i++) {
+          const user = users[i];
+          const progress = 30 + (i / users.length * 60);
+          updateTabProgress('absence', progress, `Analyzing user ${i + 1} of ${users.length}`);
+          
           try {
             const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
             const absenceStats = calculateAbsenceStats(schedule, user.id, buIds[0]);
@@ -3520,13 +3887,19 @@
 
         currentAbsenceData = absenceData;
         currentDisplayedData.absence = [...absenceData];
+        updateTabProgress('absence', 95, 'Rendering results...');
         renderAbsenceResults(absenceData, thresholdDays, startDate, endDate);
+        updateTabProgress('absence', 100, 'Complete!');
       } catch (err) {
         console.error('Error analyzing absence:', err);
+        updateTabProgress('absence', 0, `Error: ${err.message}`);
         showMessage(`Error analyzing absence: ${err.message}`, 'error');
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
+        setTimeout(() => {
+          showTabProgress('absence', false);
+        }, 1000);
       }
     }
 
@@ -3963,23 +4336,38 @@
       button.disabled = true;
       button.textContent = 'Generating late report...';
 
+      showTabProgress('late', true);
+      updateTabProgress('late', 10, 'Starting...');
+
       try {
+        updateTabProgress('late', 20, 'Loading activity codes...');
         await loadActivityCodes(buIds[0]);
         
+        updateTabProgress('late', 30, 'Loading schedule data...');
         const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+        
+        updateTabProgress('late', 60, 'Loading actual activity data...');
         const actualData = await getActualActivityDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+        
+        updateTabProgress('late', 90, 'Generating report...');
         const lateReportData = generateLateReportData(scheduleData, actualData, thresholdSeconds);
         
         currentDisplayedData.late = [...lateReportData];
+        updateTabProgress('late', 95, 'Rendering results...');
         renderLateReportResults(lateReportData);
+        updateTabProgress('late', 100, 'Complete!');
         
         showMessage('Late report generated successfully', 'success');
       } catch (err) {
         console.error('Error generating late report:', err);
+        updateTabProgress('late', 0, `Error: ${err.message}`);
         showMessage(`Failed to generate late report: ${err.message}`, 'error');
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
+        setTimeout(() => {
+          showTabProgress('late', false);
+        }, 1000);
       }
     }
 
@@ -4302,24 +4690,39 @@
       button.disabled = true;
       button.textContent = 'Generating time owed report...';
 
+      showTabProgress('timeOwed', true);
+      updateTabProgress('timeOwed', 10, 'Starting...');
+
       try {
+        updateTabProgress('timeOwed', 20, 'Loading activity codes...');
         await loadActivityCodes(buIds[0]);
         
+        updateTabProgress('timeOwed', 30, 'Loading schedule data...');
         const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+        
+        updateTabProgress('timeOwed', 60, 'Loading actual activity data...');
         const actualData = await getActualActivityDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+        
+        updateTabProgress('timeOwed', 90, 'Generating report...');
         const timeOwedData = generateTimeOwedData(scheduleData, actualData);
         
         currentTimeOwedData = timeOwedData;
         currentDisplayedData.timeowed = [...timeOwedData];
+        updateTabProgress('timeOwed', 95, 'Rendering results...');
         renderTimeOwedResults(timeOwedData);
+        updateTabProgress('timeOwed', 100, 'Complete!');
         
         showMessage('Time owed report generated successfully', 'success');
       } catch (err) {
         console.error('Error generating time owed report:', err);
+        updateTabProgress('timeOwed', 0, `Error: ${err.message}`);
         showMessage(`Failed to generate time owed report: ${err.message}`, 'error');
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
+        setTimeout(() => {
+          showTabProgress('timeOwed', false);
+        }, 1000);
       }
     }
 
@@ -4416,42 +4819,42 @@
         
         const scheduledEndTime = lastScheduledActivity.end;
         
-// Get offline activities for this user/date
-const userOfflineActivities = offlineByUserDate[key] || [];
+        // Get offline activities for this user/date
+        const userOfflineActivities = offlineByUserDate[key] || [];
+        
+        // Filter out 23:59 end times - these indicate agent hasn't logged in (default/placeholder)
+        const validOfflineActivities = userOfflineActivities.filter(activity => {
+            const endTime = activity.endTime;
+            const endHours = endTime.getHours();
+            const endMinutes = endTime.getMinutes();
+            // Exclude 23:59 end times (these are default/placeholder values)
+            return !(endHours === 23 && endMinutes === 59);
+        });
 
-// Filter out 23:59 end times - these indicate agent hasn't logged in (default/placeholder)
-const validOfflineActivities = userOfflineActivities.filter(activity => {
-    const endTime = activity.endTime;
-    const endHours = endTime.getHours();
-    const endMinutes = endTime.getMinutes();
-    // Exclude 23:59 end times (these are default/placeholder values)
-    return !(endHours === 23 && endMinutes === 59);
-});
+        if (validOfflineActivities.length === 0) {
+            // No valid offline activities found - agent didn't log off properly
+            // Skip this entry instead of adding it to the report
+            return;
+        }
 
-if (validOfflineActivities.length === 0) {
-    // No valid offline activities found - agent didn't log off properly
-    // Skip this entry instead of adding it to the report
-    return;
-}
+        // Find the NEAREST offline activity to scheduled end time from VALID activities
+        let nearestOfflineActivity = null;
+        let minTimeDiff = Infinity;
 
-// Find the NEAREST offline activity to scheduled end time from VALID activities
-let nearestOfflineActivity = null;
-let minTimeDiff = Infinity;
+        validOfflineActivities.forEach(offlineActivity => {
+            const offlineTime = offlineActivity.endTime;
+            const timeDiff = Math.abs(offlineTime - scheduledEndTime);
+            
+            if (timeDiff < minTimeDiff) {
+                minTimeDiff = timeDiff;
+                nearestOfflineActivity = offlineActivity;
+            }
+        });
 
-validOfflineActivities.forEach(offlineActivity => {
-    const offlineTime = offlineActivity.endTime;
-    const timeDiff = Math.abs(offlineTime - scheduledEndTime);
-    
-    if (timeDiff < minTimeDiff) {
-        minTimeDiff = timeDiff;
-        nearestOfflineActivity = offlineActivity;
-    }
-});
-
-if (!nearestOfflineActivity) {
-    // No nearest offline activity found - skip this entry
-    return;
-}
+        if (!nearestOfflineActivity) {
+            // No nearest offline activity found - skip this entry
+            return;
+        }
         
         const actualOfflineTime = nearestOfflineActivity.endTime;
         
