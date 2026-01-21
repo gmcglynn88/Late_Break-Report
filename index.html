@@ -1682,6 +1682,57 @@
       }
     }
 
+    // ===== SHARED DATA LOADING FUNCTIONS =====
+    async function loadAllTabsData() {
+      const buIds = dropdowns.businessUnit?.getSelectedValues() || [];
+      const muIds = dropdowns.managementUnit?.getSelectedValues() || [];
+      const userIds = dropdowns.user?.getSelectedValues() || [];
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDate || !endDate) {
+        return null;
+      }
+
+      const startDateApi = convertToApiFormat(startDate);
+      const endDateApi = convertToApiFormat(endDate);
+      const startDateIso = `${startDateApi}T00:00:00.000Z`;
+      const endDateIso = getEndDateIso(endDate);
+
+      // Load all data in parallel
+      const [scheduleData, actualData] = await Promise.all([
+        loadScheduleDataForAllUsers(muIds[0], userIds, startDateIso, endDateIso, buIds[0]),
+        loadActualDataForAllUsers(muIds[0], userIds, startDateApi, endDateApi, buIds[0])
+      ]);
+
+      return { scheduleData, actualData, buIds, muIds, startDate, endDate };
+    }
+
+    async function loadScheduleDataForAllUsers(muId, userIds, startDateIso, endDateIso, buId) {
+      let allActivities = [];
+      for (const userId of userIds) {
+        try {
+          const searchResult = await searchSchedules(muId, userId, startDateIso, endDateIso, true);
+          const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buId);
+          allActivities = allActivities.concat(activities);
+        } catch (err) {
+          console.error(`Error loading schedule for user ${userId}:`, err);
+        }
+      }
+      return allActivities;
+    }
+
+    async function loadActualDataForAllUsers(muId, userIds, startDateApi, endDateApi, buId) {
+      try {
+        const jobId = await createHistoricalAdherenceQuery(muId, userIds, startDateApi, endDateApi);
+        const jobResult = await pollHistoricalAdherenceJob(jobId);
+        return await processJobResults(jobResult, buId);
+      } catch (err) {
+        console.error('Error loading actual data:', err);
+        return [];
+      }
+    }
+
     // ===== INITIALIZATION FUNCTIONS =====
     document.addEventListener('DOMContentLoaded', () => {
       const hash = window.location.hash.substring(1);
@@ -1916,20 +1967,21 @@
         populateBusinessUnitDropdown(businessUnits);
         populateTeamDropdown(allTeams);
         
-        const currentWeek = getCurrentWeekDates();
+        // Set dates to today instead of current week
+        const today = new Date().toISOString().split('T')[0];
         
-        document.getElementById('startDate').value = currentWeek.start;
-        document.getElementById('endDate').value = currentWeek.end;
-        document.getElementById('actualStartDate').value = currentWeek.start;
-        document.getElementById('actualEndDate').value = currentWeek.end;
-        document.getElementById('overtimeStartDate').value = currentWeek.start;
-        document.getElementById('overtimeEndDate').value = currentWeek.end;
-        document.getElementById('absenceStartDate').value = currentWeek.start;
-        document.getElementById('absenceEndDate').value = currentWeek.end;
-        document.getElementById('lateStartDate').value = currentWeek.start;
-        document.getElementById('lateEndDate').value = currentWeek.end;
-        document.getElementById('timeOwedStartDate').value = currentWeek.start;
-        document.getElementById('timeOwedEndDate').value = currentWeek.end;
+        document.getElementById('startDate').value = today;
+        document.getElementById('endDate').value = today;
+        document.getElementById('actualStartDate').value = today;
+        document.getElementById('actualEndDate').value = today;
+        document.getElementById('overtimeStartDate').value = today;
+        document.getElementById('overtimeEndDate').value = today;
+        document.getElementById('absenceStartDate').value = today;
+        document.getElementById('absenceEndDate').value = today;
+        document.getElementById('lateStartDate').value = today;
+        document.getElementById('lateEndDate').value = today;
+        document.getElementById('timeOwedStartDate').value = today;
+        document.getElementById('timeOwedEndDate').value = today;
         
         showMessage('Initial data loaded – set your filters and hit "Load Schedule".', 'info');
       } catch (err) {
@@ -2330,9 +2382,29 @@
       document.getElementById('exportAbsenceBtn').addEventListener('click', exportAbsenceToCSV);
       document.getElementById('exportAbsenceDetailsBtn').addEventListener('click', exportAbsenceDetailsToCSV);
       
+      // Add dynamic threshold listener for absence
+      document.getElementById('absenceThreshold').addEventListener('input', function() {
+        if (currentAbsenceData.length > 0) {
+          const thresholdDays = parseFloat(this.value) || 2;
+          const startDate = document.getElementById('absenceStartDate').value;
+          const endDate = document.getElementById('absenceEndDate').value;
+          renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
+        }
+      });
+      
       // Late Report tab
       document.getElementById('generateLateReportBtn').addEventListener('click', generateLateReport);
       document.getElementById('exportLateReportBtn').addEventListener('click', exportLateReportToCSV);
+      
+      // Add dynamic threshold listener for late report
+      document.getElementById('lateThreshold').addEventListener('input', function() {
+        if (currentDisplayedData.late.length > 0 && currentScheduleData.length > 0 && currentActualActivityData.length > 0) {
+          const thresholdSeconds = parseInt(this.value) || 30;
+          const lateReportData = generateLateReportData(currentScheduleData, currentActualActivityData, thresholdSeconds);
+          currentDisplayedData.late = [...lateReportData];
+          renderLateReportResults(lateReportData);
+        }
+      });
       
       // Time Owed tab
       document.getElementById('generateTimeOwedReportBtn').addEventListener('click', generateTimeOwedReport);
@@ -2465,66 +2537,143 @@
       const resultsDiv = document.getElementById('results');
       resultsDiv.style.display = 'block';
       
-      const buIds = dropdowns.businessUnit ? dropdowns.businessUnit.getSelectedValues() : [];
-      const muIds = dropdowns.managementUnit ? dropdowns.managementUnit.getSelectedValues() : [];
-      const userIds = dropdowns.user ? dropdowns.user.getSelectedValues() : [];
-      const startDate = document.getElementById('startDate').value;
-      const endDate = document.getElementById('endDate').value;
-
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-
-      if (buIds.length === 0) {
-        resultsDiv.innerHTML = `<div class="error-message">Please select a business unit.</div>`;
-        return;
-      }
-      if (muIds.length === 0) {
-        resultsDiv.innerHTML = `<div class="error-message">Please select a management unit.</div>`;
-        return;
-      }
-      if (userIds.length === 0) {
-        resultsDiv.innerHTML = `<div class="error-message">Please select at least one user.</div>`;
-        return;
-      }
-      if (!startDate || !endDate) {
-        resultsDiv.innerHTML = `<div class="error-message">Please select both a start and end date.</div>`;
-        return;
-      }
-      if (endDate < startDate) {
-        resultsDiv.innerHTML = `<div class="error-message">End date must be on or after the start date.</div>`;
-        return;
-      }
-
       const button = document.getElementById('loadScheduleBtn');
       const originalLabel = button.textContent;
       button.disabled = true;
-      button.textContent = 'Loading schedule...';
-
-      const startDateIso = `${startDateApi}T00:00:00.000Z`;
-      const endDateIso = getEndDateIso(endDate);
+      button.textContent = 'Loading all data...';
 
       try {
-        let allActivities = [];
-        for (const userId of userIds) {
-          try {
-            const searchResult = await searchSchedules(muIds[0], userId, startDateIso, endDateIso, true);
-            const activities = extractUserActivitiesFromSearchResult(searchResult, userId, buIds[0]);
-            allActivities = allActivities.concat(activities);
-          } catch (err) {
-            console.error(`Error loading schedule for user ${userId}:`, err);
-          }
+        const allData = await loadAllTabsData();
+        if (!allData) {
+          resultsDiv.innerHTML = `<div class="error-message">Please select business unit, management unit, users, and date range.</div>`;
+          return;
         }
+
+        const { scheduleData, actualData, buIds, startDate, endDate } = allData;
         
-        currentScheduleData = allActivities;
-        currentDisplayedData.schedule = [...allActivities];
-        renderScheduleResults(resultsDiv, allActivities, userIds, startDateIso, endDateIso);
+        // Store data globally
+        currentScheduleData = scheduleData;
+        currentActualActivityData = actualData;
+        currentDisplayedData.schedule = [...scheduleData];
+        currentDisplayedData.actual = [...actualData];
+        
+        // Process overtime
+        const overtimeData = processOvertimeFromSchedule(scheduleData, buIds[0]);
+        currentOvertimeData = overtimeData;
+        currentDisplayedData.overtime = [...overtimeData];
+        
+        // Process absence
+        const absenceData = processAbsenceFromSchedule(scheduleData, buIds[0]);
+        currentAbsenceData = absenceData;
+        currentDisplayedData.absence = [...absenceData];
+        
+        // Process late report
+        const lateReportData = generateLateReportData(scheduleData, actualData, 30);
+        currentDisplayedData.late = [...lateReportData];
+        
+        // Process time owed
+        const timeOwedData = generateTimeOwedData(scheduleData, actualData);
+        currentTimeOwedData = timeOwedData;
+        currentDisplayedData.timeowed = [...timeOwedData];
+        
+        // Render current tab
+        renderScheduleResults(resultsDiv, scheduleData, [], startDate, endDate);
+        
+        showMessage('All data loaded successfully for all tabs', 'success');
       } catch (err) {
-        console.error('Error loading schedule:', err);
-        resultsDiv.innerHTML = `<div class="error-message">Error loading schedule: ${err.message}</div>`;
+        console.error('Error loading data:', err);
+        resultsDiv.innerHTML = `<div class="error-message">Error loading data: ${err.message}</div>`;
       } finally {
         button.disabled = false;
         button.textContent = originalLabel;
       }
+    }
+
+    function processOvertimeFromSchedule(scheduleData, businessUnitId) {
+      const userOvertimeMap = {};
+      
+      scheduleData.forEach(activity => {
+        const activityName = activity.activityLabel.toLowerCase();
+        const isOvertime = activityName.includes('overtime') || activityName.includes('ot ') || 
+                      activityName.includes('1.5') || activityName.includes('2.0');
+        
+        if (isOvertime) {
+          if (!userOvertimeMap[activity.userId]) {
+            userOvertimeMap[activity.userId] = {
+              user: activity.userName,
+              teamNames: activity.teamNames,
+              totalHours: 0,
+              rate1Hours: 0,
+              rate1_5Hours: 0,
+              rate2Hours: 0,
+              activities: []
+            };
+          }
+          
+          const hours = activity.durationMinutes / 60;
+          userOvertimeMap[activity.userId].totalHours += hours;
+          
+          if (activityName.includes('1.5')) {
+            userOvertimeMap[activity.userId].rate1_5Hours += hours;
+          } else if (activityName.includes('2.0')) {
+            userOvertimeMap[activity.userId].rate2Hours += hours;
+          } else {
+            userOvertimeMap[activity.userId].rate1Hours += hours;
+          }
+          
+          userOvertimeMap[activity.userId].activities.push({
+            date: activity.date,
+            activity: activity.activityLabel,
+            startTime: formatTime(activity.start),
+            endTime: formatTime(activity.end),
+            duration: formatDuration(activity.durationMinutes),
+            hours: hours.toFixed(1)
+          });
+        }
+      });
+      
+      return Object.values(userOvertimeMap);
+    }
+
+    function processAbsenceFromSchedule(scheduleData, businessUnitId) {
+      const userAbsenceMap = {};
+      
+      scheduleData.forEach(activity => {
+        const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
+        const isAbsence = activityCategory === 'TimeOff' && 
+                     !activity.activityLabel.includes('Holiday') &&
+                     !activity.activityLabel.includes('TOIL');
+        
+        if (isAbsence) {
+          if (!userAbsenceMap[activity.userId]) {
+            userAbsenceMap[activity.userId] = {
+              user: activity.userName,
+              teamNames: activity.teamNames,
+              totalHours: 0,
+              absenceDays: new Set(),
+              instances: 0,
+              absenceDetails: []
+            };
+          }
+          
+          const hours = activity.durationMinutes / 60;
+          userAbsenceMap[activity.userId].totalHours += hours;
+          userAbsenceMap[activity.userId].absenceDays.add(activity.date);
+          userAbsenceMap[activity.userId].instances++;
+          userAbsenceMap[activity.userId].absenceDetails.push({
+            date: activity.date,
+            type: activity.activityLabel,
+            duration: formatDuration(activity.durationMinutes),
+            hours: hours.toFixed(1)
+          });
+        }
+      });
+      
+      return Object.values(userAbsenceMap).map(user => ({
+        ...user,
+        absenceDays: user.absenceDays.size,
+        averageHoursPerInstance: (user.totalHours / user.instances).toFixed(1)
+      }));
     }
 
     async function searchSchedules(managementUnitId, userId, startDateIso, endDateIso, loadFullWeeks) {
