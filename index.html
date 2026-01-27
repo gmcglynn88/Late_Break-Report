@@ -2211,25 +2211,80 @@
         searchPlaceholder: 'Search users...' 
       });
       
-      // Activity filter dropdowns
+      // Activity filter dropdowns - FIXED: Added onSelectionChange handlers
       dropdowns.activityFilter = createCheckboxDropdown('activityFilterDropdown', { 
         placeholder: 'Filter by activity type', 
-        searchPlaceholder: 'Search activities...' 
+        searchPlaceholder: 'Search activities...',
+        onSelectionChange: (selectedActivities) => {
+          if (currentDisplayedData.schedule.length === 0) return;
+          
+          let filteredData = currentScheduleData;
+          if (selectedActivities.length > 0) {
+            filteredData = currentScheduleData.filter(activity => 
+              selectedActivities.includes(activity.activityLabel)
+            );
+          }
+          currentDisplayedData.schedule = filteredData;
+          renderScheduleTable(filteredData);
+        }
       });
       
       dropdowns.actualActivityFilter = createCheckboxDropdown('actualActivityFilterDropdown', { 
         placeholder: 'Filter by activity type', 
-        searchPlaceholder: 'Search activities...' 
+        searchPlaceholder: 'Search activities...',
+        onSelectionChange: (selectedActivities) => {
+          if (currentDisplayedData.actual.length === 0) return;
+          
+          let filteredData = currentActualActivityData;
+          if (selectedActivities.length > 0) {
+            filteredData = currentActualActivityData.filter(activity => 
+              selectedActivities.includes(activity.activityLabel)
+            );
+          }
+          currentDisplayedData.actual = filteredData;
+          const startDate = document.getElementById('actualStartDate').value;
+          const endDate = document.getElementById('actualEndDate').value;
+          renderActualActivityResults(filteredData, startDate, endDate);
+        }
       });
       
       dropdowns.overtimeActivityFilter = createCheckboxDropdown('overtimeActivityFilterDropdown', { 
         placeholder: 'Filter by overtime activity', 
-        searchPlaceholder: 'Search overtime activities...' 
+        searchPlaceholder: 'Search overtime activities...',
+        onSelectionChange: (selectedActivities) => {
+          if (currentDisplayedData.overtime.length === 0) return;
+          
+          let filteredData = currentOvertimeData;
+          if (selectedActivities.length > 0) {
+            filteredData = currentOvertimeData.filter(user => 
+              user.activities.some(activity => selectedActivities.includes(activity.activity))
+            );
+          }
+          currentDisplayedData.overtime = filteredData;
+          const startDate = document.getElementById('overtimeStartDate').value;
+          const endDate = document.getElementById('overtimeEndDate').value;
+          renderOvertimeResults(filteredData, startDate, endDate);
+        }
       });
       
       dropdowns.absenceActivityFilter = createCheckboxDropdown('absenceActivityFilterDropdown', { 
         placeholder: 'Filter by absence type', 
-        searchPlaceholder: 'Search absence types...' 
+        searchPlaceholder: 'Search absence types...',
+        onSelectionChange: (selectedActivities) => {
+          if (currentDisplayedData.absence.length === 0) return;
+          
+          let filteredData = currentAbsenceData;
+          if (selectedActivities.length > 0) {
+            filteredData = currentAbsenceData.filter(user => 
+              user.absenceDetails.some(detail => selectedActivities.includes(detail.type))
+            );
+          }
+          currentDisplayedData.absence = filteredData;
+          const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
+          const startDate = document.getElementById('absenceStartDate').value;
+          const endDate = document.getElementById('absenceEndDate').value;
+          renderAbsenceResults(filteredData, thresholdDays, startDate, endDate);
+        }
       });
     }
 
@@ -3367,1979 +3422,1966 @@
         try {
           const data = await fetchWithCorsProxy(downloadUrl);
           
-          if (data && data.data) {
-            data.data.forEach(userData => {
-              if (userData.actuals && userData.actuals.length > 0) {
-                const userName = usersById[userData.userId]?.name || userData.userId;
-                const teamNames = usersById[userData.userId]?.teamNames || 'No Team';
-                const startDate = new Date(userData.startDate);
+        if (data && data.data) {
+          data.data.forEach(userData => {
+            if (userData.actuals && userData.actuals.length > 0) {
+              const userName = usersById[userData.userId]?.name || userData.userId;
+              const teamNames = usersById[userData.userId]?.teamNames || 'No Team';
+              const startDate = new Date(userData.startDate);
+              
+              userData.actuals.forEach(actual => {
+                if (actual.startOffsetSeconds == null || actual.endOffsetSeconds == null) {
+                  return;
+                }
                 
-                userData.actuals.forEach(actual => {
-                  if (actual.startOffsetSeconds == null || actual.endOffsetSeconds == null) {
-                    return;
+                const startTime = new Date(startDate.getTime() + (actual.startOffsetSeconds * 1000));
+                const endTime = new Date(startDate.getTime() + (actual.endOffsetSeconds * 1000));
+                
+                const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
+                
+                let activityName = actual.actualActivityCategory || 'Unknown Activity';
+                if (actual.actualActivityCodeId) {
+                  const mappedName = getActivityName(businessUnitId, actual.actualActivityCodeId);
+                  if (mappedName && mappedName !== actual.actualActivityCodeId) {
+                    activityName = mappedName;
                   }
-                  
-                  const startTime = new Date(startDate.getTime() + (actual.startOffsetSeconds * 1000));
-                  const endTime = new Date(startDate.getTime() + (actual.endOffsetSeconds * 1000));
-                  
-                  const durationMinutes = Math.round((endTime - startTime) / (1000 * 60));
-                  
-                  let activityName = actual.actualActivityCategory || 'Unknown Activity';
-                  if (actual.actualActivityCodeId) {
-                    const mappedName = getActivityName(businessUnitId, actual.actualActivityCodeId);
-                    if (mappedName && mappedName !== actual.actualActivityCodeId) {
-                      activityName = mappedName;
-                    }
-                  }
-                  
-                  allActualActivities.push({
-                    userId: userData.userId,
-                    userName: userName,
-                    teamNames: teamNames,
-                    date: formatDate(startTime.toISOString().slice(0, 10)),
-                    startTime: startTime,
-                    endTime: endTime,
-                    durationMinutes: durationMinutes,
-                    activityLabel: activityName,
-                    activityCodeId: actual.actualActivityCodeId,
-                    activityCategory: actual.actualActivityCategory,
-                    systemPresence: actual.systemPresence,
-                    businessUnitId: businessUnitId
-                  });
+                }
+                
+                allActualActivities.push({
+                  userId: userData.userId,
+                  userName: userName,
+                  teamNames: teamNames,
+                  date: formatDate(startTime.toISOString().slice(0, 10)),
+                  startTime: startTime,
+                  endTime: endTime,
+                  durationMinutes: durationMinutes,
+                  activityLabel: activityName,
+                  activityCodeId: actual.actualActivityCodeId,
+                  activityCategory: actual.actualActivityCategory,
+                  systemPresence: actual.systemPresence,
+                  businessUnitId: businessUnitId
                 });
-              }
-            });
-          }
-        } catch (error) {
-          console.error('Error processing download URL:', error);
-          throw new Error(`Failed to download results: ${error.message}`);
-        }
-      }
-      
-      return allActualActivities;
-    }
-
-    function renderActualActivityResults(data, startDateInputFormat, endDateInputFormat) {
-      const container = document.getElementById('actualResults');
-      const contentContainer = document.getElementById('actualResultsContent');
-      container.style.display = 'block';
-      
-      if (!data || data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No actual activity data found for the selected period.
-          </div>
-        `;
-        return;
-      }
-      
-      data.sort((a, b) => {
-        if (a.date === b.date) {
-          return a.startTime - b.startTime;
-        }
-        return a.date.localeCompare(b.date);
-      });
-
-      const niceStart = formatDate(convertToApiFormat(startDateInputFormat));
-      const niceEnd = formatDate(convertToApiFormat(endDateInputFormat));
-      
-      let html = `
-        <h3 class="section-title">Actual Activity (Historical Adherence)</h3>
-        <div class="schedule-meta">
-          <span class="pill">Period: ${niceStart} to ${niceEnd}</span>
-          &nbsp;
-          <span class="pill">Total Activities: ${data.length}</span>
-          &nbsp;
-          <span class="pill">Source: Historical Adherence API</span>
-        </div>
-        
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="userName">User</th>
-              <th class="sortable" data-sort="teamNames">Team</th>
-              <th class="sortable" data-sort="date">Date</th>
-              <th class="sortable" data-sort="activityLabel">Activity</th>
-              <th>Start Time</th>
-              <th>End Time</th>
-              <th class="sortable" data-sort="durationMinutes">Duration</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(row => {
-        html += `
-          <tr>
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
-            <td>${escapeHtml(row.date)}</td>
-            <td>${escapeHtml(row.activityLabel || '')}</td>
-            <td>${escapeHtml(formatTime(row.startTime))}</td>
-            <td>${escapeHtml(formatTime(row.endTime))}</td>
-            <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
-          </tr>
-        `;
-      });
-      
-      html += `</tbody></table>`;
-      
-      contentContainer.innerHTML = html;
-      
-      const allActivities = [...new Set(data.map(a => a.activityLabel))].sort();
-      if (dropdowns.actualActivityFilter && allActivities.length > 0) {
-        const activityOpts = allActivities.map(a => ({ value: a, label: a }));
-        dropdowns.actualActivityFilter.setOptions(activityOpts);
-        
-        dropdowns.actualActivityFilter.onSelectionChange = (selectedActivities) => {
-          let filteredData = currentActualActivityData;
-          if (selectedActivities.length > 0) {
-            filteredData = currentActualActivityData.filter(activity => 
-              selectedActivities.includes(activity.activityLabel)
-            );
-          }
-          currentDisplayedData.actual = filteredData;
-          renderActualActivityResults(filteredData, startDateInputFormat, endDateInputFormat);
-        };
-      }
-      
-      addTableSorting('actual');
-    }
-
-    function addTableSorting(tabType) {
-      const table = document.querySelector(`#${tabType}ResultsContent table`);
-      if (!table) return;
-      
-      const headers = table.querySelectorAll('th.sortable');
-      headers.forEach(header => {
-        header.addEventListener('click', () => {
-          const sortField = header.getAttribute('data-sort');
-          const currentSort = document.getElementById(`${tabType}Sort`).value;
-          const currentOrder = document.getElementById(`${tabType}SortOrder`).value;
-          
-          if (sortField === currentSort) {
-            document.getElementById(`${tabType}SortOrder`).value = currentOrder === 'asc' ? 'desc' : 'asc';
-          } else {
-            document.getElementById(`${tabType}Sort`).value = sortField;
-            document.getElementById(`${tabType}SortOrder`).value = 'asc';
-          }
-          
-          applySorting(tabType);
-        });
-      });
-    }
-
-    // ===== OVERTIME TAB FUNCTIONS =====
-    async function analyzeOvertime() {
-      const buIds = dropdowns.overtimeBu ? dropdowns.overtimeBu.getSelectedValues() : [];
-      const muIds = dropdowns.overtimeMu ? dropdowns.overtimeMu.getSelectedValues() : [];
-      const teamIds = dropdowns.overtimeTeam ? dropdowns.overtimeTeam.getSelectedValues() : [];
-      const startDate = document.getElementById('overtimeStartDate').value;
-      const endDate = document.getElementById('overtimeEndDate').value;
-
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-
-      if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
-        showMessage('Please select business unit, management unit, and date range', 'error');
-        return;
-      }
-
-      const button = document.getElementById('analyzeOvertimeBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Analyzing...';
-
-      showTabProgress('overtime', true);
-      updateTabProgress('overtime', 10, 'Starting analysis...');
-
-      try {
-        updateTabProgress('overtime', 20, 'Loading activity codes...');
-        await loadActivityCodes(buIds[0]);
-        
-        updateTabProgress('overtime', 30, 'Loading users...');
-        let users = await getUsersForAnalytics(muIds[0], teamIds);
-        
-        const overtimeData = [];
-        
-        const startDateIso = `${startDateApi}T00:00:00.000Z`;
-        const endDateIso = getEndDateIso(endDate);
-
-        for (let i = 0; i < users.length; i++) {
-          const user = users[i];
-          const progress = 30 + (i / users.length * 60);
-          updateTabProgress('overtime', progress, `Analyzing user ${i + 1} of ${users.length}`);
-          
-          try {
-            const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
-            const userOvertime = extractOvertimeActivities(schedule, user.id, buIds[0]);
-            
-            if (userOvertime.totalHours > 0) {
-              overtimeData.push({
-                user: user.name,
-                teamNames: user.teamNames || 'No Team',
-                totalHours: userOvertime.totalHours,
-                rate1Hours: userOvertime.rate1Hours,
-                rate1_5Hours: userOvertime.rate1_5Hours,
-                rate2Hours: userOvertime.rate2Hours,
-                activities: userOvertime.activities
               });
             }
-          } catch (err) {
-            console.error(`Error analyzing user ${user.name}:`, err);
-          }
-        }
-
-        currentOvertimeData = overtimeData;
-        currentDisplayedData.overtime = [...overtimeData];
-        updateTabProgress('overtime', 95, 'Rendering results...');
-        renderOvertimeResults(overtimeData, startDate, endDate);
-        updateTabProgress('overtime', 100, 'Complete!');
-      } catch (err) {
-        console.error('Error analyzing overtime:', err);
-        updateTabProgress('overtime', 0, `Error: ${err.message}`);
-        showMessage(`Error analyzing overtime: ${err.message}`, 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-        setTimeout(() => {
-          showTabProgress('overtime', false);
-        }, 1000);
-      }
-    }
-
-    async function getUsersForAnalytics(muId, teamIds) {
-      let users = [];
-      
-      if (teamIds && teamIds.length > 0) {
-        const teamMembersArrays = await Promise.all(
-          teamIds.map(teamId => getTeamMembers(teamId))
-        );
-        users = teamMembersArrays.flat();
-        
-        users = users.map(member => {
-          const user = usersById[member.id] || member;
-          user.teamNames = usersById[member.id]?.teamNames || 'No Team';
-          return user;
-        });
-      } else {
-        const muUsersResponse = await authorizedFetchJson(
-          `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
-        );
-        users = muUsersResponse.entities || muUsersResponse.users || [];
-        
-        users = users.map(uRef => {
-          const user = usersById[uRef.id] || uRef;
-          user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
-          return user;
-        });
-      }
-      
-      return users.filter(u => u && u.name);
-    }
-
-    function extractOvertimeActivities(schedule, userId, businessUnitId) {
-      const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
-      let totalHours = 0;
-      let rate1Hours = 0;
-      let rate1_5Hours = 0;
-      let rate2Hours = 0;
-      const overtimeActivities = [];
-      
-      activities.forEach(activity => {
-        const activityName = getActivityName(businessUnitId, activity.activityCodeId);
-        const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
-        
-        const isOvertime = activityName.toLowerCase().includes('overtime') || 
-                          activityCategory.toLowerCase().includes('overtime') ||
-                          activityName.toLowerCase().includes('ot ') ||
-                          activityName.toLowerCase().includes('o/t') ||
-                          activityName.toLowerCase().includes('1.5') ||
-                          activityName.toLowerCase().includes('2.0') ||
-                          activityName.toLowerCase().includes('timehalf') ||
-                          activityName.toLowerCase().includes('double');
-        
-        if (isOvertime) {
-          const hours = activity.durationMinutes / 60;
-          totalHours += hours;
-          
-          let rate = '1.0';
-          if (activityName.toLowerCase().includes('1.5') || activityName.toLowerCase().includes('timehalf')) {
-            rate = '1.5';
-            rate1_5Hours += hours;
-          } else if (activityName.toLowerCase().includes('2.0') || activityName.toLowerCase().includes('double')) {
-            rate = '2.0';
-            rate2Hours += hours;
-          } else {
-            rate1Hours += hours;
-          }
-          
-          overtimeActivities.push({
-            date: formatDate(activity.date),
-            activity: activityName,
-            startTime: formatTime(activity.start),
-            endTime: formatTime(activity.end),
-            duration: formatDuration(activity.durationMinutes),
-            hours: hours.toFixed(1),
-            rate: rate,
-            activityCodeId: activity.activityCodeId,
-            category: activityCategory
           });
         }
-      });
-      
-      return {
-        totalHours: parseFloat(totalHours.toFixed(1)),
-        rate1Hours: parseFloat(rate1Hours.toFixed(1)),
-        rate1_5Hours: parseFloat(rate1_5Hours.toFixed(1)),
-        rate2Hours: parseFloat(rate2Hours.toFixed(1)),
-        activities: overtimeActivities
-      };
-    }
-
-    function renderOvertimeResults(data, startDate, endDate) {
-      const container = document.getElementById('overtimeResults');
-      const contentContainer = document.getElementById('overtimeResultsContent');
-      container.style.display = 'block';
-      
-      if (data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No overtime activities found for the selected period.
-          </div>
-        `;
-        return;
+      } catch (error) {
+        console.error('Error processing download URL:', error);
+        throw new Error(`Failed to download results: ${error.message}`);
       }
-      
-      data.sort((a, b) => b.totalHours - a.totalHours);
-      
-      const totalOvertime = data.reduce((sum, item) => sum + item.totalHours, 0);
-      const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
-      const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
-      const totalRate2 = data.reduce((sum, item) => sum + item.rate2Hours, 0);
-      const avgOvertimePerUser = totalOvertime / data.length;
-      
-      let html = `
-        <h3 class="section-title">Overtime Report</h3>
-        <div class="schedule-meta">
-          <span class="pill">Period: ${startDate} to ${endDate}</span>
-          &nbsp;
-          <span class="pill">Total Agents: ${data.length}</span>
-          &nbsp;
-          <span class="pill">Total Overtime: ${totalOvertime.toFixed(1)}h</span>
+    }
+    
+    return allActualActivities;
+  }
+
+  function renderActualActivityResults(data, startDateInputFormat, endDateInputFormat) {
+    const container = document.getElementById('actualResults');
+    const contentContainer = document.getElementById('actualResultsContent');
+    container.style.display = 'block';
+    
+    if (!data || data.length === 0) {
+      contentContainer.innerHTML = `
+        <div class="info-message">
+          No actual activity data found for the selected period.
         </div>
-        
-        <div class="overtime-metrics">
-          <div class="overtime-metric-card">
-            <div class="metric-label">Total Overtime</div>
-            <div class="metric-value">${totalOvertime.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">1.0 Rate</div>
-            <div class="metric-value">${totalRate1.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">1.5 Rate</div>
-            <div class="metric-value">${totalRate1_5.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">2.0 Rate</div>
-            <div class="metric-value">${totalRate2.toFixed(1)}h</div>
-          </div>
-          <div class="overtime-metric-card">
-            <div class="metric-label">Avg per User</div>
-            <div class="metric-value">${avgOvertimePerUser.toFixed(1)}h</div>
-          </div>
-        </div>
-        
-        <div class="chart-wrapper">
-          <h4>Overtime Distribution</h4>
-          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
-            Showing top ${Math.min(10, data.length)} users by overtime hours
-          </div>
       `;
+      return;
+    }
+    
+    data.sort((a, b) => {
+      if (a.date === b.date) {
+        return a.startTime - b.startTime;
+      }
+      return a.date.localeCompare(b.date);
+    });
+
+    const niceStart = formatDate(convertToApiFormat(startDateInputFormat));
+    const niceEnd = formatDate(convertToApiFormat(endDateInputFormat));
+    
+    let html = `
+      <h3 class="section-title">Actual Activity (Historical Adherence)</h3>
+      <div class="schedule-meta">
+        <span class="pill">Period: ${niceStart} to ${niceEnd}</span>
+        &nbsp;
+        <span class="pill">Total Activities: ${data.length}</span>
+        &nbsp;
+        <span class="pill">Source: Historical Adherence API</span>
+      </div>
       
-      const topUsers = data.slice(0, 10);
-      const maxHours = Math.max(...topUsers.map(u => u.totalHours), 1);
-      
-      topUsers.forEach(user => {
-        const percentage = (user.totalHours / maxHours) * 100;
-        html += `
-          <div class="chart-bar">
-            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
-            <div class="chart-bar-container">
-              <div class="chart-bar-fill" style="width: ${percentage}%">
-                ${user.totalHours.toFixed(1)}h
-              </div>
-            </div>
-            <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
-          </div>
-        `;
-      });
-      
-      html += `</div>`;
-      
-      html += `
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="user">Agent</th>
-              <th class="sortable" data-sort="teamNames">Team</th>
-              <th class="sortable" data-sort="totalHours">Total Overtime</th>
-              <th class="sortable" data-sort="rate1Hours">1.0 Rate</th>
-              <th class="sortable" data-sort="rate1_5Hours">1.5 Rate</th>
-              <th class="sortable" data-sort="rate2Hours">2.0 Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(item => {
-        html += `
+      <table class="schedule-table">
+        <thead>
           <tr>
-            <td>${escapeHtml(item.user)}</td>
-            <td>${escapeHtml(item.teamNames || 'No Team')}</td>
-            <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
-            <td>${item.rate1Hours.toFixed(1)}h</td>
-            <td>${item.rate1_5Hours.toFixed(1)}h</td>
-            <td>${item.rate2Hours.toFixed(1)}h</td>
+            <th class="sortable" data-sort="userName">User</th>
+            <th class="sortable" data-sort="teamNames">Team</th>
+            <th class="sortable" data-sort="date">Date</th>
+            <th class="sortable" data-sort="activityLabel">Activity</th>
+            <th>Start Time</th>
+            <th>End Time</th>
+            <th class="sortable" data-sort="durationMinutes">Duration</th>
           </tr>
-        `;
-      });
-      
+        </thead>
+        <tbody>
+    `;
+    
+    data.forEach(row => {
       html += `
-            </tbody>
-          </table>
-        </div>
+        <tr>
+          <td>${escapeHtml(row.userName)}</td>
+          <td>${escapeHtml(row.teamNames || 'No Team')}</td>
+          <td>${escapeHtml(row.date)}</td>
+          <td>${escapeHtml(row.activityLabel || '')}</td>
+          <td>${escapeHtml(formatTime(row.startTime))}</td>
+          <td>${escapeHtml(formatTime(row.endTime))}</td>
+          <td>${escapeHtml(formatDuration(row.durationMinutes))}</td>
+        </tr>
       `;
-      
-      contentContainer.innerHTML = html;
-      
-      const overtimeActivities = [...new Set(data.flatMap(u => u.activities.map(a => a.activity)))].sort();
-      if (dropdowns.overtimeActivityFilter && overtimeActivities.length > 0) {
-        const activityOpts = overtimeActivities.map(a => ({ value: a, label: a }));
-        dropdowns.overtimeActivityFilter.setOptions(activityOpts);
-      }
+    });
+    
+    html += `</tbody></table>`;
+    
+    contentContainer.innerHTML = html;
+    
+    const allActivities = [...new Set(data.map(a => a.activityLabel))].sort();
+    if (dropdowns.actualActivityFilter && allActivities.length > 0) {
+      const activityOpts = allActivities.map(a => ({ value: a, label: a }));
+      dropdowns.actualActivityFilter.setOptions(activityOpts);
     }
+    
+    addTableSorting('actual');
+  }
 
-    // ===== ABSENCE TAB FUNCTIONS =====
-    async function analyzeAbsence() {
-      const buIds = dropdowns.absenceBu ? dropdowns.absenceBu.getSelectedValues() : [];
-      const muIds = dropdowns.absenceMu ? dropdowns.absenceMu.getSelectedValues() : [];
-      const teamIds = dropdowns.absenceTeam ? dropdowns.absenceTeam.getSelectedValues() : [];
-      const startDate = document.getElementById('absenceStartDate').value;
-      const endDate = document.getElementById('absenceEndDate').value;
-      const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
-
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-
-      if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
-        showMessage('Please select business unit, management unit, and date range', 'error');
-        return;
-      }
-
-      const button = document.getElementById('analyzeAbsenceBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Analyzing...';
-
-      showTabProgress('absence', true);
-      updateTabProgress('absence', 10, 'Starting analysis...');
-
-      try {
-        updateTabProgress('absence', 20, 'Loading activity codes...');
-        await loadActivityCodes(buIds[0]);
+  function addTableSorting(tabType) {
+    const table = document.querySelector(`#${tabType}ResultsContent table`);
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th.sortable');
+    headers.forEach(header => {
+      header.addEventListener('click', () => {
+        const sortField = header.getAttribute('data-sort');
+        const currentSort = document.getElementById(`${tabType}Sort`).value;
+        const currentOrder = document.getElementById(`${tabType}SortOrder`).value;
         
-        updateTabProgress('absence', 30, 'Loading users...');
-        let users = await getUsersForAnalytics(muIds[0], teamIds);
-        const absenceData = [];
-        
-        const startDateIso = `${startDateApi}T00:00:00.000Z`;
-        const endDateIso = getEndDateIso(endDate);
-
-        for (let i = 0; i < users.length; i++) {
-          const user = users[i];
-          const progress = 30 + (i / users.length * 60);
-          updateTabProgress('absence', progress, `Analyzing user ${i + 1} of ${users.length}`);
-          
-          try {
-            const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
-            const absenceStats = calculateAbsenceStats(schedule, user.id, buIds[0]);
-            
-            if (absenceStats.totalHours > 0) {
-              const thresholdHours = thresholdDays * 8;
-              absenceData.push({
-                user: user.name,
-                teamNames: user.teamNames || 'No Team',
-                totalHours: absenceStats.totalHours,
-                absenceDays: absenceStats.days,
-                instances: absenceStats.instances,
-                exceedsThreshold: absenceStats.totalHours >= thresholdHours,
-                absenceDetails: absenceStats.details,
-                averageHoursPerInstance: parseFloat((absenceStats.totalHours / absenceStats.instances).toFixed(1))
-              });
-            }
-          } catch (err) {
-            console.error(`Error analyzing user ${user.name}:`, err);
-          }
+        if (sortField === currentSort) {
+          document.getElementById(`${tabType}SortOrder`).value = currentOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+          document.getElementById(`${tabType}Sort`).value = sortField;
+          document.getElementById(`${tabType}SortOrder`).value = 'asc';
         }
-
-        currentAbsenceData = absenceData;
-        currentDisplayedData.absence = [...absenceData];
-        updateTabProgress('absence', 95, 'Rendering results...');
-        renderAbsenceResults(absenceData, thresholdDays, startDate, endDate);
-        updateTabProgress('absence', 100, 'Complete!');
-      } catch (err) {
-        console.error('Error analyzing absence:', err);
-        updateTabProgress('absence', 0, `Error: ${err.message}`);
-        showMessage(`Error analyzing absence: ${err.message}`, 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-        setTimeout(() => {
-          showTabProgress('absence', false);
-        }, 1000);
-      }
-    }
-
-    function calculateAbsenceStats(schedule, userId, businessUnitId) {
-      const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
-      let totalHours = 0;
-      const absenceDays = new Set();
-      let instances = 0;
-      const absenceDetails = [];
-      const absenceTypes = new Set();
-      
-      activities.forEach(activity => {
-        const activityName = getActivityName(businessUnitId, activity.activityCodeId);
-        const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
         
-        const isAbsence = (activity.type === 'fullDayOff' || 
-                         activityCategory === 'TimeOff' ||
-                         activityName.includes('Time Off') || 
-                         activityName.includes('Sick') || 
-                         activityName.includes('Absence') || 
-                         activityName.includes('Vacation') ||
-                         activityName.includes('Leave') ||
-                         activityName.includes('Personal') ||
-                         activityName.includes('Family') ||
-                         activityName.includes('Medical')) &&
-                         !activityName.includes('Holiday') &&
-                         !activityName.includes('TOIL') &&
-                         !activityName.includes('Bank Holiday');
-        
-        if (isAbsence) {
-          totalHours += activity.durationMinutes / 60;
-          absenceDays.add(formatDate(activity.date));
-          instances++;
-          absenceTypes.add(activityName);
-          
-          absenceDetails.push({
-            date: formatDate(activity.date),
-            type: activityName,
-            duration: formatDuration(activity.durationMinutes),
-            hours: (activity.durationMinutes / 60).toFixed(1)
-          });
-        }
+        applySorting(tabType);
       });
-      
-      return {
-        totalHours: parseFloat(totalHours.toFixed(1)),
-        days: absenceDays.size,
-        instances: instances,
-        details: absenceDetails,
-        types: Array.from(absenceTypes)
-      };
+    });
+  }
+
+  // ===== OVERTIME TAB FUNCTIONS =====
+  async function analyzeOvertime() {
+    const buIds = dropdowns.overtimeBu ? dropdowns.overtimeBu.getSelectedValues() : [];
+    const muIds = dropdowns.overtimeMu ? dropdowns.overtimeMu.getSelectedValues() : [];
+    const teamIds = dropdowns.overtimeTeam ? dropdowns.overtimeTeam.getSelectedValues() : [];
+    const startDate = document.getElementById('overtimeStartDate').value;
+    const endDate = document.getElementById('overtimeEndDate').value;
+
+    const startDateApi = convertToApiFormat(startDate);
+    const endDateApi = convertToApiFormat(endDate);
+
+    if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
+      showMessage('Please select business unit, management unit, and date range', 'error');
+      return;
     }
 
-    function renderAbsenceResults(data, thresholdDays, startDate, endDate) {
-      const container = document.getElementById('absenceResults');
-      const contentContainer = document.getElementById('absenceResultsContent');
-      container.style.display = 'block';
-      
-      if (data.length === 0) {
-        contentContainer.innerHTML = `<div class="info-message">No absence recorded for the selected period.</div>`;
-        return;
-      }
-      
-      let filteredData = [...data];
-      if (currentDrillDown.type === 'aboveThreshold') {
-        filteredData = data.filter(item => item.exceedsThreshold);
-      }
-      
-      filteredData.sort((a, b) => b.totalHours - a.totalHours);
-      
-      if (currentAbsenceView === 'detailed') {
-        renderDetailedAbsenceTable(filteredData, thresholdDays, startDate, endDate);
-      } else {
-        renderAbsenceSummary(filteredData, thresholdDays, startDate, endDate);
-      }
-    }
+    const button = document.getElementById('analyzeOvertimeBtn');
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Analyzing...';
 
-    function renderAbsenceSummary(data, thresholdDays, startDate, endDate) {
-      const contentContainer = document.getElementById('absenceResultsContent');
-      
-      const usersAboveThreshold = data.filter(item => item.exceedsThreshold).length;
-      const totalAbsenceHours = data.reduce((sum, item) => sum + item.totalHours, 0);
-      const totalAbsenceDays = data.reduce((sum, item) => sum + item.absenceDays, 0);
-      const totalInstances = data.reduce((sum, item) => sum + item.instances, 0);
-      const avgHoursPerUser = totalAbsenceHours / data.length;
-      const avgDaysPerUser = totalAbsenceDays / data.length;
-      const mostCommonType = findMostCommonAbsenceType(data);
-      
-      let html = `
-        <h3 class="section-title">Absence Analytics</h3>
-        <div class="schedule-meta">
-          <span class="pill">Period: ${startDate} to ${endDate}</span>
-          &nbsp;
-          <span class="pill">Alert Threshold: ${thresholdDays} days</span>
-          &nbsp;
-          <span class="pill">Total Agents: ${data.length}</span>
-          ${currentDrillDown.type ? `<span class="pill drilldown-badge">Filtered View</span>` : ''}
-        </div>
-        
-        <div class="analytics-grid">
-          <div>
-            <div class="chart-wrapper">
-              <h4>Absence Hours Distribution</h4>
-              <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
-                Showing top ${Math.min(10, data.length)} users by absence hours
-              </div>
-      `;
-      
-      const topUsersByHours = data.slice(0, 10);
-      const maxHours = Math.max(...topUsersByHours.map(u => u.totalHours), 1);
-      
-      topUsersByHours.forEach(user => {
-        const percentage = (user.totalHours / maxHours) * 100;
-        html += `
-          <div class="chart-bar">
-            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
-            <div class="chart-bar-container">
-              <div class="chart-bar-fill" style="width: ${percentage}%">
-                ${user.totalHours.toFixed(1)}h
-              </div>
-            </div>
-            <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
-          </div>
-        `;
-      });
-      
-      html += `</div>`;
-      
-      html += `
-        <div class="chart-wrapper">
-          <h4>Absence Days Distribution</h4>
-          <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
-            Showing top ${Math.min(10, data.length)} users by absence days
-          </div>
-      `;
-      
-      const topUsersByDays = [...data].sort((a, b) => b.absenceDays - a.absenceDays).slice(0, 10);
-      const maxDays = Math.max(...topUsersByDays.map(u => u.absenceDays), 1);
-      
-      topUsersByDays.forEach(user => {
-        const percentage = (user.absenceDays / maxDays) * 100;
-        html += `
-          <div class="chart-bar">
-            <div class="chart-bar-label">${escapeHtml(user.user)}</div>
-            <div class="chart-bar-container">
-              <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #ea580c, #c2410c);">
-                ${user.absenceDays}d
-              </div>
-            </div>
-            <div class="chart-bar-value">${user.absenceDays}d</div>
-          </div>
-        `;
-      });
-      
-      html += `</div>`;
-      
-      const chartAbsenceTypes = getAbsenceTypeDistribution(data);
-      if (chartAbsenceTypes.length > 0) {
-        html += `
-          <div class="chart-wrapper">
-            <h4>Absence Types</h4>
-        `;
-        
-        const maxTypeCount = Math.max(...chartAbsenceTypes.map(t => t.count), 1);
-        
-        chartAbsenceTypes.forEach(type => {
-          const percentage = (type.count / maxTypeCount) * 100;
-          html += `
-            <div class="chart-bar">
-              <div class="chart-bar-label">${escapeHtml(type.name)}</div>
-              <div class="chart-bar-container">
-                <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #8b5cf6, #7c3aed);">
-                  ${type.count}
-                </div>
-              </div>
-              <div class="chart-bar-value">${type.count}</div>
-            </div>
-          `;
-        });
-        
-        html += `</div>`;
-      }
-      
-      html += `</div>`;
-      
-      html += `
-        <div>
-          <div class="chart-wrapper">
-            <h4>Summary Metrics ${currentDrillDown.type ? '<span class="drilldown-badge">Filtered</span>' : ''}</h4>
-            <div style="display: grid; gap: 12px;">
-              <div class="metric-card ${currentDrillDown.type ? 'drilldown-active' : ''}" onclick="clearDrillDown()" style="cursor: pointer;">
-                <div class="metric-label">Total Agents</div>
-                <div class="metric-value">${data.length}</div>
-              </div>
-              <div class="metric-card">
-                <div class="metric-label">Total Absence Hours</div>
-                <div class="metric-value">${totalAbsenceHours.toFixed(1)}h</div>
-              </div>
-              <div class="metric-card">
-                <div class="metric-label">Total Absence Days</div>
-                <div class="metric-value">${totalAbsenceDays}</div>
-              </div>
-              <div class="metric-card">
-                <div class="metric-label">Total Instances</div>
-                <div class="metric-value">${totalInstances}</div>
-              </div>
-              <div class="metric-card">
-                <div class="metric-label">Avg Hours per User</div>
-                <div class="metric-value">${avgHoursPerUser.toFixed(1)}h</div>
-              </div>
-              <div class="metric-card">
-                <div class="metric-label">Avg Days per User</div>
-                <div class="metric-value">${avgDaysPerUser.toFixed(1)}</div>
-              </div>
-              <div class="metric-card clickable ${currentDrillDown.type === 'aboveThreshold' ? 'drilldown-active' : ''}" onclick="drillDownToAboveThreshold()">
-                <div class="metric-label">Users Above Threshold</div>
-                <div class="metric-value">${usersAboveThreshold}</div>
-              </div>
-              <div class="metric-card">
-                <div class="metric-label">Most Common Type</div>
-                <div class="metric-value">${mostCommonType || 'N/A'}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-      
-      html += `</div>`;
-      
-      html += `
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="user">Agent</th>
-              <th class="sortable" data-sort="teamNames">Team</th>
-              <th class="sortable" data-sort="totalHours">Total Hours</th>
-              <th class="sortable" data-sort="absenceDays">Days</th>
-              <th class="sortable" data-sort="instances">Instances</th>
-              <th class="sortable" data-sort="averageHoursPerInstance">Avg/Instance</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(item => {
-        const thresholdHours = thresholdDays * 8;
-        const exceedsThreshold = item.totalHours >= thresholdHours;
-        const rowClass = exceedsThreshold ? 'warning-row' : '';
-        const status = exceedsThreshold ? 
-          `<span class="absence-badge">Above Threshold</span>` : 
-          '<span style="color: var(--success-text)">Within Limits</span>';
-        
-        html += `
-          <tr class="${rowClass}">
-            <td>${escapeHtml(item.user)}</td>
-            <td>${escapeHtml(item.teamNames || 'No Team')}</td>
-            <td><strong>${item.totalHours}h</strong></td>
-            <td>${item.absenceDays}</td>
-            <td>${item.instances}</td>
-            <td>${item.averageHoursPerInstance}h</td>
-            <td>${status}</td>
-          </tr>
-        `;
-        
-        if (item.absenceDetails && item.absenceDetails.length > 0) {
-          html += `
-            <tr>
-              <td colspan="7">
-                <div class="absence-details">
-                  <strong>Absence Details:</strong>
-                  ${item.absenceDetails.map(detail => `
-                    <div class="absence-day">
-                      <span class="absence-date">${detail.date} - ${detail.type}</span>
-                      <span class="absence-duration">${detail.duration} (${detail.hours}h)</span>
-                    </div>
-                  `).join('')}
-                </div>
-              </td>
-            </tr>
-          `;
-        }
-      });
-      
-      html += `</tbody></table>`;
-      
-      contentContainer.innerHTML = html;
-      
-      const filterAbsenceTypes = [...new Set(data.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
-      if (dropdowns.absenceActivityFilter && filterAbsenceTypes.length > 0) {
-        const activityOpts = filterAbsenceTypes.map(a => ({ value: a, label: a }));
-        dropdowns.absenceActivityFilter.setOptions(activityOpts);
-      }
-    }
+    showTabProgress('overtime', true);
+    updateTabProgress('overtime', 10, 'Starting analysis...');
 
-    function renderDetailedAbsenceTable(data, thresholdDays, startDate, endDate) {
-      const contentContainer = document.getElementById('absenceResultsContent');
+    try {
+      updateTabProgress('overtime', 20, 'Loading activity codes...');
+      await loadActivityCodes(buIds[0]);
       
-      const detailedData = [];
-      data.forEach(item => {
-        item.absenceDetails.forEach(detail => {
-          detailedData.push({
-            agent: item.user,
-            team: item.teamNames || 'No Team',
-            date: detail.date,
-            type: detail.type,
-            duration: detail.duration,
-            hours: detail.hours
-          });
-        });
-      });
+      updateTabProgress('overtime', 30, 'Loading users...');
+      let users = await getUsersForAnalytics(muIds[0], teamIds);
       
-      let html = `
-        <h3 class="section-title">Detailed Absence Records</h3>
-        <div class="schedule-meta">
-          <span class="pill">Period: ${startDate} to ${endDate}</span>
-          &nbsp;
-          <span class="pill">Alert Threshold: ${thresholdDays} days</span>
-          &nbsp;
-          <span class="pill">Total Records: ${detailedData.length}</span>
-          &nbsp;
-          <span class="pill">Total Agents: ${data.length}</span>
-        </div>
-        
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="agent">Agent</th>
-              <th class="sortable" data-sort="team">Team</th>
-              <th class="sortable" data-sort="date">Date</th>
-              <th class="sortable" data-sort="type">Absence Type</th>
-              <th class="sortable" data-sort="duration">Duration</th>
-              <th class="sortable" data-sort="hours">Hours</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      detailedData.forEach(record => {
-        html += `
-          <tr>
-            <td>${escapeHtml(record.agent)}</td>
-            <td>${escapeHtml(record.team)}</td>
-            <td>${escapeHtml(record.date)}</td>
-            <td>${escapeHtml(record.type)}</td>
-            <td>${escapeHtml(record.duration)}</td>
-            <td>${escapeHtml(record.hours)}h</td>
-          </tr>
-        `;
-      });
-      
-      html += `</tbody></table>`;
-      
-      contentContainer.innerHTML = html;
-    }
-
-    function drillDownToAboveThreshold() {
-      currentDrillDown = {
-        type: 'aboveThreshold',
-        filter: 'Users above threshold'
-      };
-      
-      const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
-      const startDate = document.getElementById('absenceStartDate').value;
-      const endDate = document.getElementById('absenceEndDate').value;
-      
-      renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
-    }
-
-    function clearDrillDown() {
-      currentDrillDown = {
-        type: null,
-        filter: null
-      };
-      
-      const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
-      const startDate = document.getElementById('absenceStartDate').value;
-      const endDate = document.getElementById('absenceEndDate').value;
-      
-      renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
-    }
-
-    function findMostCommonAbsenceType(data) {
-      const typeCounts = {};
-      data.forEach(user => {
-        user.absenceDetails.forEach(detail => {
-          typeCounts[detail.type] = (typeCounts[detail.type] || 0) + 1;
-        });
-      });
-      
-      let mostCommon = null;
-      let maxCount = 0;
-      
-      for (const [type, count] of Object.entries(typeCounts)) {
-        if (count > maxCount) {
-          mostCommon = type;
-          maxCount = count;
-        }
-      }
-      
-      return mostCommon;
-    }
-
-    function getAbsenceTypeDistribution(data) {
-      const typeCounts = {};
-      data.forEach(user => {
-        user.absenceDetails.forEach(detail => {
-          typeCounts[detail.type] = (typeCounts[detail.type] || 0) + 1;
-        });
-      });
-      
-      return Object.entries(typeCounts)
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10);
-    }
-
-    // ===== LATE REPORT TAB FUNCTIONS =====
-    async function generateLateReport() {
-      const buIds = dropdowns.lateBu ? dropdowns.lateBu.getSelectedValues() : [];
-      const muIds = dropdowns.lateMu ? dropdowns.lateMu.getSelectedValues() : [];
-      const userIds = dropdowns.lateUser ? dropdowns.lateUser.getSelectedValues() : [];
-      const startDateRaw = document.getElementById('lateStartDate').value;
-      const endDateRaw = document.getElementById('lateEndDate').value;
-      const thresholdSeconds = parseInt(document.getElementById('lateThreshold').value) || 30;
-
-      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
-        showMessage('Please select business unit, management unit, users, and date range', 'error');
-        return;
-      }
-
-      const button = document.getElementById('generateLateReportBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Generating late report...';
-
-      showTabProgress('late', true);
-      updateTabProgress('late', 10, 'Starting...');
-
-      try {
-        updateTabProgress('late', 20, 'Loading activity codes...');
-        await loadActivityCodes(buIds[0]);
-        
-        updateTabProgress('late', 30, 'Loading schedule data...');
-        const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        
-        updateTabProgress('late', 60, 'Loading actual activity data...');
-        const actualData = await getActualActivityDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        
-        updateTabProgress('late', 90, 'Generating report...');
-        const lateReportData = generateLateReportData(scheduleData, actualData, thresholdSeconds);
-        
-        currentDisplayedData.late = [...lateReportData];
-        updateTabProgress('late', 95, 'Rendering results...');
-        renderLateReportResults(lateReportData);
-        updateTabProgress('late', 100, 'Complete!');
-        
-        showMessage('Late report generated successfully', 'success');
-      } catch (err) {
-        console.error('Error generating late report:', err);
-        updateTabProgress('late', 0, `Error: ${err.message}`);
-        showMessage(`Failed to generate late report: ${err.message}`, 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-        setTimeout(() => {
-          showTabProgress('late', false);
-        }, 1000);
-      }
-    }
-
-    async function getScheduleDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
+      const overtimeData = [];
       
       const startDateIso = `${startDateApi}T00:00:00.000Z`;
       const endDateIso = getEndDateIso(endDate);
 
-      let allActivities = [];
-      for (const userId of userIds) {
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i];
+        const progress = 30 + (i / users.length * 60);
+        updateTabProgress('overtime', progress, `Analyzing user ${i + 1} of ${users.length}`);
+        
         try {
-          const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
-          const activities = extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
-          allActivities = allActivities.concat(activities);
+          const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
+          const userOvertime = extractOvertimeActivities(schedule, user.id, buIds[0]);
+          
+          if (userOvertime.totalHours > 0) {
+            overtimeData.push({
+              user: user.name,
+              teamNames: user.teamNames || 'No Team',
+              totalHours: userOvertime.totalHours,
+              rate1Hours: userOvertime.rate1Hours,
+              rate1_5Hours: userOvertime.rate1_5Hours,
+              rate2Hours: userOvertime.rate2Hours,
+              activities: userOvertime.activities
+            });
+          }
         } catch (err) {
-          console.error(`Error loading schedule for user ${userId}:`, err);
+          console.error(`Error analyzing user ${user.name}:`, err);
         }
       }
+
+      currentOvertimeData = overtimeData;
+      currentDisplayedData.overtime = [...overtimeData];
+      updateTabProgress('overtime', 95, 'Rendering results...');
+      renderOvertimeResults(overtimeData, startDate, endDate);
+      updateTabProgress('overtime', 100, 'Complete!');
+    } catch (err) {
+      console.error('Error analyzing overtime:', err);
+      updateTabProgress('overtime', 0, `Error: ${err.message}`);
+      showMessage(`Error analyzing overtime: ${err.message}`, 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+      setTimeout(() => {
+        showTabProgress('overtime', false);
+      }, 1000);
+    }
+  }
+
+  async function getUsersForAnalytics(muId, teamIds) {
+    let users = [];
+    
+    if (teamIds && teamIds.length > 0) {
+      const teamMembersArrays = await Promise.all(
+        teamIds.map(teamId => getTeamMembers(teamId))
+      );
+      users = teamMembersArrays.flat();
       
-      return allActivities;
+      users = users.map(member => {
+        const user = usersById[member.id] || member;
+        user.teamNames = usersById[member.id]?.teamNames || 'No Team';
+        return user;
+      });
+    } else {
+      const muUsersResponse = await authorizedFetchJson(
+        `${apiBase}/api/v2/workforcemanagement/managementunits/${encodeURIComponent(muId)}/users`
+      );
+      users = muUsersResponse.entities || muUsersResponse.users || [];
+      
+      users = users.map(uRef => {
+        const user = usersById[uRef.id] || uRef;
+        user.teamNames = usersById[uRef.id]?.teamNames || 'No Team';
+        return user;
+      });
     }
     
-    async function getActualActivityDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
+    return users.filter(u => u && u.name);
+  }
 
-      try {
-        const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
-        const jobResult = await pollHistoricalAdherenceJob(jobId);
-        const actualData = await processJobResults(jobResult, businessUnitId);
+  function extractOvertimeActivities(schedule, userId, businessUnitId) {
+    const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
+    let totalHours = 0;
+    let rate1Hours = 0;
+    let rate1_5Hours = 0;
+    let rate2Hours = 0;
+    const overtimeActivities = [];
+    
+    activities.forEach(activity => {
+      const activityName = getActivityName(businessUnitId, activity.activityCodeId);
+      const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
+      
+      const isOvertime = activityName.toLowerCase().includes('overtime') || 
+                        activityCategory.toLowerCase().includes('overtime') ||
+                        activityName.toLowerCase().includes('ot ') ||
+                        activityName.toLowerCase().includes('o/t') ||
+                        activityName.toLowerCase().includes('1.5') ||
+                        activityName.toLowerCase().includes('2.0') ||
+                        activityName.toLowerCase().includes('timehalf') ||
+                        activityName.toLowerCase().includes('double');
+      
+      if (isOvertime) {
+        const hours = activity.durationMinutes / 60;
+        totalHours += hours;
         
-        const filteredActualData = actualData.filter(activity => 
-          !activity.activityLabel.toLowerCase().includes('unavailable') &&
-          !activity.activityCategory.toLowerCase().includes('unavailable')
-        );
+        let rate = '1.0';
+        if (activityName.toLowerCase().includes('1.5') || activityName.toLowerCase().includes('timehalf')) {
+          rate = '1.5';
+          rate1_5Hours += hours;
+        } else if (activityName.toLowerCase().includes('2.0') || activityName.toLowerCase().includes('double')) {
+          rate = '2.0';
+          rate2Hours += hours;
+        } else {
+          rate1Hours += hours;
+        }
         
-        return filteredActualData;
-      } catch (err) {
-        console.error('Error getting actual activity data for late report:', err);
-        return [];
+        overtimeActivities.push({
+          date: formatDate(activity.date),
+          activity: activityName,
+          startTime: formatTime(activity.start),
+          endTime: formatTime(activity.end),
+          duration: formatDuration(activity.durationMinutes),
+          hours: hours.toFixed(1),
+          rate: rate,
+          activityCodeId: activity.activityCodeId,
+          category: activityCategory
+        });
       }
+    });
+    
+    return {
+      totalHours: parseFloat(totalHours.toFixed(1)),
+      rate1Hours: parseFloat(rate1Hours.toFixed(1)),
+      rate1_5Hours: parseFloat(rate1_5Hours.toFixed(1)),
+      rate2Hours: parseFloat(rate2Hours.toFixed(1)),
+      activities: overtimeActivities
+    };
+  }
+
+  function renderOvertimeResults(data, startDate, endDate) {
+    const container = document.getElementById('overtimeResults');
+    const contentContainer = document.getElementById('overtimeResultsContent');
+    container.style.display = 'block';
+    
+    if (data.length === 0) {
+      contentContainer.innerHTML = `
+        <div class="info-message">
+          No overtime activities found for the selected period.
+        </div>
+      `;
+      return;
+    }
+    
+    data.sort((a, b) => b.totalHours - a.totalHours);
+    
+    const totalOvertime = data.reduce((sum, item) => sum + item.totalHours, 0);
+    const totalRate1 = data.reduce((sum, item) => sum + item.rate1Hours, 0);
+    const totalRate1_5 = data.reduce((sum, item) => sum + item.rate1_5Hours, 0);
+    const totalRate2 = data.reduce((sum, item) => sum + item.rate2Hours, 0);
+    const avgOvertimePerUser = totalOvertime / data.length;
+    
+    let html = `
+      <h3 class="section-title">Overtime Report</h3>
+      <div class="schedule-meta">
+        <span class="pill">Period: ${startDate} to ${endDate}</span>
+        &nbsp;
+        <span class="pill">Total Agents: ${data.length}</span>
+        &nbsp;
+        <span class="pill">Total Overtime: ${totalOvertime.toFixed(1)}h</span>
+      </div>
+      
+      <div class="overtime-metrics">
+        <div class="overtime-metric-card">
+          <div class="metric-label">Total Overtime</div>
+          <div class="metric-value">${totalOvertime.toFixed(1)}h</div>
+        </div>
+        <div class="overtime-metric-card">
+          <div class="metric-label">1.0 Rate</div>
+          <div class="metric-value">${totalRate1.toFixed(1)}h</div>
+        </div>
+        <div class="overtime-metric-card">
+          <div class="metric-label">1.5 Rate</div>
+          <div class="metric-value">${totalRate1_5.toFixed(1)}h</div>
+        </div>
+        <div class="overtime-metric-card">
+          <div class="metric-label">2.0 Rate</div>
+          <div class="metric-value">${totalRate2.toFixed(1)}h</div>
+        </div>
+        <div class="overtime-metric-card">
+          <div class="metric-label">Avg per User</div>
+          <div class="metric-value">${avgOvertimePerUser.toFixed(1)}h</div>
+        </div>
+      </div>
+      
+      <div class="chart-wrapper">
+        <h4>Overtime Distribution</h4>
+        <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+          Showing top ${Math.min(10, data.length)} users by overtime hours
+        </div>
+    `;
+    
+    const topUsers = data.slice(0, 10);
+    const maxHours = Math.max(...topUsers.map(u => u.totalHours), 1);
+    
+    topUsers.forEach(user => {
+      const percentage = (user.totalHours / maxHours) * 100;
+      html += `
+        <div class="chart-bar">
+          <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+          <div class="chart-bar-container">
+            <div class="chart-bar-fill" style="width: ${percentage}%">
+              ${user.totalHours.toFixed(1)}h
+            </div>
+          </div>
+          <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
+        </div>
+      `;
+    });
+    
+    html += `</div>`;
+    
+    html += `
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="user">Agent</th>
+            <th class="sortable" data-sort="teamNames">Team</th>
+            <th class="sortable" data-sort="totalHours">Total Overtime</th>
+            <th class="sortable" data-sort="rate1Hours">1.0 Rate</th>
+            <th class="sortable" data-sort="rate1_5Hours">1.5 Rate</th>
+            <th class="sortable" data-sort="rate2Hours">2.0 Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    data.forEach(item => {
+      html += `
+        <tr>
+          <td>${escapeHtml(item.user)}</td>
+          <td>${escapeHtml(item.teamNames || 'No Team')}</td>
+          <td><strong>${item.totalHours.toFixed(1)}h</strong></td>
+          <td>${item.rate1Hours.toFixed(1)}h</td>
+          <td>${item.rate1_5Hours.toFixed(1)}h</td>
+          <td>${item.rate2Hours.toFixed(1)}h</td>
+        </tr>
+      `;
+    });
+    
+    html += `
+          </tbody>
+        </table>
+      </div>
+    `;
+    
+    contentContainer.innerHTML = html;
+    
+    const overtimeActivities = [...new Set(data.flatMap(u => u.activities.map(a => a.activity)))].sort();
+    if (dropdowns.overtimeActivityFilter && overtimeActivities.length > 0) {
+      const activityOpts = overtimeActivities.map(a => ({ value: a, label: a }));
+      dropdowns.overtimeActivityFilter.setOptions(activityOpts);
+    }
+  }
+
+  // ===== ABSENCE TAB FUNCTIONS =====
+  async function analyzeAbsence() {
+    const buIds = dropdowns.absenceBu ? dropdowns.absenceBu.getSelectedValues() : [];
+    const muIds = dropdowns.absenceMu ? dropdowns.absenceMu.getSelectedValues() : [];
+    const teamIds = dropdowns.absenceTeam ? dropdowns.absenceTeam.getSelectedValues() : [];
+    const startDate = document.getElementById('absenceStartDate').value;
+    const endDate = document.getElementById('absenceEndDate').value;
+    const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
+
+    const startDateApi = convertToApiFormat(startDate);
+    const endDateApi = convertToApiFormat(endDate);
+
+    if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
+      showMessage('Please select business unit, management unit, and date range', 'error');
+      return;
     }
 
-    function generateLateReportData(scheduleData, actualData, thresholdSeconds) {
-      const lateReport = [];
+    const button = document.getElementById('analyzeAbsenceBtn');
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Analyzing...';
+
+    showTabProgress('absence', true);
+    updateTabProgress('absence', 10, 'Starting analysis...');
+
+    try {
+      updateTabProgress('absence', 20, 'Loading activity codes...');
+      await loadActivityCodes(buIds[0]);
       
-      const scheduleByUserDate = {};
+      updateTabProgress('absence', 30, 'Loading users...');
+      let users = await getUsersForAnalytics(muIds[0], teamIds);
+      const absenceData = [];
       
-      const filteredScheduleData = scheduleData.filter(scheduleItem => {
-        const activityName = scheduleItem.activityLabel || '';
-        const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
+      const startDateIso = `${startDateApi}T00:00:00.000Z`;
+      const endDateIso = getEndDateIso(endDate);
+
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i];
+        const progress = 30 + (i / users.length * 60);
+        updateTabProgress('absence', progress, `Analyzing user ${i + 1} of ${users.length}`);
         
-        return !activityName.toLowerCase().includes('time off') &&
-               !activityName.toLowerCase().includes('holiday') &&
-               !activityName.toLowerCase().includes('sick') &&
-               !activityName.toLowerCase().includes('absence') &&
-               !activityName.toLowerCase().includes('vacation') &&
-               !activityName.toLowerCase().includes('leave') &&
-               activityCategory !== 'TimeOff';
-      });
-      
-      filteredScheduleData.forEach(scheduleItem => {
-        const key = `${scheduleItem.userId}_${scheduleItem.date}`;
-        if (!scheduleByUserDate[key]) {
-          scheduleByUserDate[key] = [];
+        try {
+          const schedule = await searchSchedules(muIds[0], user.id, startDateIso, endDateIso, true);
+          const absenceStats = calculateAbsenceStats(schedule, user.id, buIds[0]);
+          
+          if (absenceStats.totalHours > 0) {
+            const thresholdHours = thresholdDays * 8;
+            absenceData.push({
+              user: user.name,
+              teamNames: user.teamNames || 'No Team',
+              totalHours: absenceStats.totalHours,
+              absenceDays: absenceStats.days,
+              instances: absenceStats.instances,
+              exceedsThreshold: absenceStats.totalHours >= thresholdHours,
+              absenceDetails: absenceStats.details,
+              averageHoursPerInstance: parseFloat((absenceStats.totalHours / absenceStats.instances).toFixed(1))
+            });
+          }
+        } catch (err) {
+          console.error(`Error analyzing user ${user.name}:`, err);
         }
-        scheduleByUserDate[key].push(scheduleItem);
-      });
+      }
+
+      currentAbsenceData = absenceData;
+      currentDisplayedData.absence = [...absenceData];
+      updateTabProgress('absence', 95, 'Rendering results...');
+      renderAbsenceResults(absenceData, thresholdDays, startDate, endDate);
+      updateTabProgress('absence', 100, 'Complete!');
+    } catch (err) {
+      console.error('Error analyzing absence:', err);
+      updateTabProgress('absence', 0, `Error: ${err.message}`);
+      showMessage(`Error analyzing absence: ${err.message}`, 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+      setTimeout(() => {
+        showTabProgress('absence', false);
+      }, 1000);
+    }
+  }
+
+  function calculateAbsenceStats(schedule, userId, businessUnitId) {
+    const activities = extractUserActivitiesFromSearchResult(schedule, userId, businessUnitId);
+    let totalHours = 0;
+    const absenceDays = new Set();
+    let instances = 0;
+    const absenceDetails = [];
+    const absenceTypes = new Set();
+    
+    activities.forEach(activity => {
+      const activityName = getActivityName(businessUnitId, activity.activityCodeId);
+      const activityCategory = getActivityCategory(businessUnitId, activity.activityCodeId);
       
-      const actualByUserDate = {};
-      actualData.forEach(actualItem => {
-        const key = `${actualItem.userId}_${actualItem.date}`;
-        if (!actualByUserDate[key]) {
-          actualByUserDate[key] = [];
-        }
-        actualByUserDate[key].push(actualItem);
-      });
+      const isAbsence = (activity.type === 'fullDayOff' || 
+                       activityCategory === 'TimeOff' ||
+                       activityName.includes('Time Off') || 
+                       activityName.includes('Sick') || 
+                       activityName.includes('Absence') || 
+                       activityName.includes('Vacation') ||
+                       activityName.includes('Leave') ||
+                       activityName.includes('Personal') ||
+                       activityName.includes('Family') ||
+                       activityName.includes('Medical')) &&
+                       !activityName.includes('Holiday') &&
+                       !activityName.includes('TOIL') &&
+                       !activityName.includes('Bank Holiday');
       
-      Object.keys(scheduleByUserDate).forEach(key => {
-        const [userId, date] = key.split('_');
-        const userSchedule = scheduleByUserDate[key];
+      if (isAbsence) {
+        totalHours += activity.durationMinutes / 60;
+        absenceDays.add(formatDate(activity.date));
+        instances++;
+        absenceTypes.add(activityName);
         
-        userSchedule.sort((a, b) => {
-          const aTime = a.start ? a.start.getTime() : new Date(a.date).getTime();
-          const bTime = b.start ? b.start.getTime() : new Date(b.date).getTime();
-          return aTime - bTime;
+        absenceDetails.push({
+          date: formatDate(activity.date),
+          type: activityName,
+          duration: formatDuration(activity.durationMinutes),
+          hours: (activity.durationMinutes / 60).toFixed(1)
         });
-        
-        const firstScheduledActivity = userSchedule[0];
-        
-        if (!firstScheduledActivity) return;
-        
-        const userActualActivities = actualByUserDate[key] || [];
-        
-        if (userActualActivities.length === 0) {
-          lateReport.push({
-            userId: userId,
-            userName: firstScheduledActivity.userName,
-            teamNames: firstScheduledActivity.teamNames || 'No Team',
-            date: date,
-            scheduledStart: firstScheduledActivity.start,
-            actualStart: null,
-            status: 'AWOL',
-            durationLate: null,
-            scheduledActivity: firstScheduledActivity.activityLabel,
-            actualActivity: null
-          });
-          return;
-        }
-        
-        userActualActivities.sort((a, b) => a.startTime - b.startTime);
-        const firstActualActivity = userActualActivities[0];
-        
-        if (!firstActualActivity) return;
-        
-        if (!firstScheduledActivity.start) {
-          return;
-        }
-        
-        const timeDiffSeconds = Math.round((firstActualActivity.startTime - firstScheduledActivity.start) / 1000);
-        
-        let status, durationLate;
-        
-        if (timeDiffSeconds <= thresholdSeconds && timeDiffSeconds >= -thresholdSeconds) {
-          status = 'Adherent';
-          durationLate = 0;
-        } else if (timeDiffSeconds > thresholdSeconds) {
-          status = 'Late';
-          durationLate = timeDiffSeconds;
-        } else {
-          status = 'Early';
-          durationLate = Math.abs(timeDiffSeconds);
-        }
-        
+      }
+    });
+    
+    return {
+      totalHours: parseFloat(totalHours.toFixed(1)),
+      days: absenceDays.size,
+      instances: instances,
+      details: absenceDetails,
+      types: Array.from(absenceTypes)
+    };
+  }
+
+  function renderAbsenceResults(data, thresholdDays, startDate, endDate) {
+    const container = document.getElementById('absenceResults');
+    const contentContainer = document.getElementById('absenceResultsContent');
+    container.style.display = 'block';
+    
+    if (data.length === 0) {
+      contentContainer.innerHTML = `<div class="info-message">No absence recorded for the selected period.</div>`;
+      return;
+    }
+    
+    let filteredData = [...data];
+    if (currentDrillDown.type === 'aboveThreshold') {
+      filteredData = data.filter(item => item.exceedsThreshold);
+    }
+    
+    filteredData.sort((a, b) => b.totalHours - a.totalHours);
+    
+    if (currentAbsenceView === 'detailed') {
+      renderDetailedAbsenceTable(filteredData, thresholdDays, startDate, endDate);
+    } else {
+      renderAbsenceSummary(filteredData, thresholdDays, startDate, endDate);
+    }
+  }
+
+  function renderAbsenceSummary(data, thresholdDays, startDate, endDate) {
+    const contentContainer = document.getElementById('absenceResultsContent');
+    
+    const usersAboveThreshold = data.filter(item => item.exceedsThreshold).length;
+    const totalAbsenceHours = data.reduce((sum, item) => sum + item.totalHours, 0);
+    const totalAbsenceDays = data.reduce((sum, item) => sum + item.absenceDays, 0);
+    const totalInstances = data.reduce((sum, item) => sum + item.instances, 0);
+    const avgHoursPerUser = totalAbsenceHours / data.length;
+    const avgDaysPerUser = totalAbsenceDays / data.length;
+    const mostCommonType = findMostCommonAbsenceType(data);
+    
+    let html = `
+      <h3 class="section-title">Absence Analytics</h3>
+      <div class="schedule-meta">
+        <span class="pill">Period: ${startDate} to ${endDate}</span>
+        &nbsp;
+        <span class="pill">Alert Threshold: ${thresholdDays} days</span>
+        &nbsp;
+        <span class="pill">Total Agents: ${data.length}</span>
+        ${currentDrillDown.type ? `<span class="pill drilldown-badge">Filtered View</span>` : ''}
+      </div>
+      
+      <div class="analytics-grid">
+        <div>
+          <div class="chart-wrapper">
+            <h4>Absence Hours Distribution</h4>
+            <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+              Showing top ${Math.min(10, data.length)} users by absence hours
+            </div>
+    `;
+    
+    const topUsersByHours = data.slice(0, 10);
+    const maxHours = Math.max(...topUsersByHours.map(u => u.totalHours), 1);
+    
+    topUsersByHours.forEach(user => {
+      const percentage = (user.totalHours / maxHours) * 100;
+      html += `
+        <div class="chart-bar">
+          <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+          <div class="chart-bar-container">
+            <div class="chart-bar-fill" style="width: ${percentage}%">
+              ${user.totalHours.toFixed(1)}h
+            </div>
+          </div>
+          <div class="chart-bar-value">${user.totalHours.toFixed(1)}h</div>
+        </div>
+      `;
+    });
+    
+    html += `</div>`;
+    
+    html += `
+      <div class="chart-wrapper">
+        <h4>Absence Days Distribution</h4>
+        <div style="margin-bottom: 16px; font-size: 14px; color: var(--text-light)">
+          Showing top ${Math.min(10, data.length)} users by absence days
+        </div>
+    `;
+    
+    const topUsersByDays = [...data].sort((a, b) => b.absenceDays - a.absenceDays).slice(0, 10);
+    const maxDays = Math.max(...topUsersByDays.map(u => u.absenceDays), 1);
+    
+    topUsersByDays.forEach(user => {
+      const percentage = (user.absenceDays / maxDays) * 100;
+      html += `
+        <div class="chart-bar">
+          <div class="chart-bar-label">${escapeHtml(user.user)}</div>
+          <div class="chart-bar-container">
+            <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #ea580c, #c2410c);">
+              ${user.absenceDays}d
+            </div>
+          </div>
+          <div class="chart-bar-value">${user.absenceDays}d</div>
+        </div>
+      `;
+    });
+    
+    html += `</div>`;
+    
+    const chartAbsenceTypes = getAbsenceTypeDistribution(data);
+    if (chartAbsenceTypes.length > 0) {
+      html += `
+        <div class="chart-wrapper">
+          <h4>Absence Types</h4>
+      `;
+      
+      const maxTypeCount = Math.max(...chartAbsenceTypes.map(t => t.count), 1);
+      
+      chartAbsenceTypes.forEach(type => {
+        const percentage = (type.count / maxTypeCount) * 100;
+        html += `
+          <div class="chart-bar">
+            <div class="chart-bar-label">${escapeHtml(type.name)}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #8b5cf6, #7c3aed);">
+                ${type.count}
+              </div>
+            </div>
+            <div class="chart-bar-value">${type.count}</div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
+    }
+    
+    html += `</div>`;
+    
+    html += `
+      <div>
+        <div class="chart-wrapper">
+          <h4>Summary Metrics ${currentDrillDown.type ? '<span class="drilldown-badge">Filtered</span>' : ''}</h4>
+          <div style="display: grid; gap: 12px;">
+            <div class="metric-card ${currentDrillDown.type ? 'drilldown-active' : ''}" onclick="clearDrillDown()" style="cursor: pointer;">
+              <div class="metric-label">Total Agents</div>
+              <div class="metric-value">${data.length}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Total Absence Hours</div>
+              <div class="metric-value">${totalAbsenceHours.toFixed(1)}h</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Total Absence Days</div>
+              <div class="metric-value">${totalAbsenceDays}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Total Instances</div>
+              <div class="metric-value">${totalInstances}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Avg Hours per User</div>
+              <div class="metric-value">${avgHoursPerUser.toFixed(1)}h</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Avg Days per User</div>
+              <div class="metric-value">${avgDaysPerUser.toFixed(1)}</div>
+            </div>
+            <div class="metric-card clickable ${currentDrillDown.type === 'aboveThreshold' ? 'drilldown-active' : ''}" onclick="drillDownToAboveThreshold()">
+              <div class="metric-label">Users Above Threshold</div>
+              <div class="metric-value">${usersAboveThreshold}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Most Common Type</div>
+              <div class="metric-value">${mostCommonType || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    html += `</div>`;
+    
+    html += `
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="user">Agent</th>
+            <th class="sortable" data-sort="teamNames">Team</th>
+            <th class="sortable" data-sort="totalHours">Total Hours</th>
+            <th class="sortable" data-sort="absenceDays">Days</th>
+            <th class="sortable" data-sort="instances">Instances</th>
+            <th class="sortable" data-sort="averageHoursPerInstance">Avg/Instance</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    data.forEach(item => {
+      const thresholdHours = thresholdDays * 8;
+      const exceedsThreshold = item.totalHours >= thresholdHours;
+      const rowClass = exceedsThreshold ? 'warning-row' : '';
+      const status = exceedsThreshold ? 
+        `<span class="absence-badge">Above Threshold</span>` : 
+        '<span style="color: var(--success-text)">Within Limits</span>';
+      
+      html += `
+        <tr class="${rowClass}">
+          <td>${escapeHtml(item.user)}</td>
+          <td>${escapeHtml(item.teamNames || 'No Team')}</td>
+          <td><strong>${item.totalHours}h</strong></td>
+          <td>${item.absenceDays}</td>
+          <td>${item.instances}</td>
+          <td>${item.averageHoursPerInstance}h</td>
+          <td>${status}</td>
+        </tr>
+      `;
+      
+      if (item.absenceDetails && item.absenceDetails.length > 0) {
+        html += `
+          <tr>
+            <td colspan="7">
+              <div class="absence-details">
+                <strong>Absence Details:</strong>
+                ${item.absenceDetails.map(detail => `
+                  <div class="absence-day">
+                    <span class="absence-date">${detail.date} - ${detail.type}</span>
+                    <span class="absence-duration">${detail.duration} (${detail.hours}h)</span>
+                  </div>
+                `).join('')}
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+    });
+    
+    html += `</tbody></table>`;
+    
+    contentContainer.innerHTML = html;
+    
+    const filterAbsenceTypes = [...new Set(data.flatMap(u => u.absenceDetails.map(a => a.type)))].sort();
+    if (dropdowns.absenceActivityFilter && filterAbsenceTypes.length > 0) {
+      const activityOpts = filterAbsenceTypes.map(a => ({ value: a, label: a }));
+      dropdowns.absenceActivityFilter.setOptions(activityOpts);
+    }
+  }
+
+  function renderDetailedAbsenceTable(data, thresholdDays, startDate, endDate) {
+    const contentContainer = document.getElementById('absenceResultsContent');
+    
+    const detailedData = [];
+    data.forEach(item => {
+      item.absenceDetails.forEach(detail => {
+        detailedData.push({
+          agent: item.user,
+          team: item.teamNames || 'No Team',
+          date: detail.date,
+          type: detail.type,
+          duration: detail.duration,
+          hours: detail.hours
+        });
+      });
+    });
+    
+    let html = `
+      <h3 class="section-title">Detailed Absence Records</h3>
+      <div class="schedule-meta">
+        <span class="pill">Period: ${startDate} to ${endDate}</span>
+        &nbsp;
+        <span class="pill">Alert Threshold: ${thresholdDays} days</span>
+        &nbsp;
+        <span class="pill">Total Records: ${detailedData.length}</span>
+        &nbsp;
+        <span class="pill">Total Agents: ${data.length}</span>
+      </div>
+      
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="agent">Agent</th>
+            <th class="sortable" data-sort="team">Team</th>
+            <th class="sortable" data-sort="date">Date</th>
+            <th class="sortable" data-sort="type">Absence Type</th>
+            <th class="sortable" data-sort="duration">Duration</th>
+            <th class="sortable" data-sort="hours">Hours</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    detailedData.forEach(record => {
+      html += `
+        <tr>
+          <td>${escapeHtml(record.agent)}</td>
+          <td>${escapeHtml(record.team)}</td>
+          <td>${escapeHtml(record.date)}</td>
+          <td>${escapeHtml(record.type)}</td>
+          <td>${escapeHtml(record.duration)}</td>
+          <td>${escapeHtml(record.hours)}h</td>
+        </tr>
+      `;
+    });
+    
+    html += `</tbody></table>`;
+    
+    contentContainer.innerHTML = html;
+  }
+
+  function drillDownToAboveThreshold() {
+    currentDrillDown = {
+      type: 'aboveThreshold',
+      filter: 'Users above threshold'
+    };
+    
+    const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
+    const startDate = document.getElementById('absenceStartDate').value;
+    const endDate = document.getElementById('absenceEndDate').value;
+    
+    renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
+  }
+
+  function clearDrillDown() {
+    currentDrillDown = {
+      type: null,
+      filter: null
+    };
+    
+    const thresholdDays = parseFloat(document.getElementById('absenceThreshold').value) || 2;
+    const startDate = document.getElementById('absenceStartDate').value;
+    const endDate = document.getElementById('absenceEndDate').value;
+    
+    renderAbsenceResults(currentAbsenceData, thresholdDays, startDate, endDate);
+  }
+
+  function findMostCommonAbsenceType(data) {
+    const typeCounts = {};
+    data.forEach(user => {
+      user.absenceDetails.forEach(detail => {
+        typeCounts[detail.type] = (typeCounts[detail.type] || 0) + 1;
+      });
+    });
+    
+    let mostCommon = null;
+    let maxCount = 0;
+    
+    for (const [type, count] of Object.entries(typeCounts)) {
+      if (count > maxCount) {
+        mostCommon = type;
+        maxCount = count;
+      }
+    }
+    
+    return mostCommon;
+  }
+
+  function getAbsenceTypeDistribution(data) {
+    const typeCounts = {};
+    data.forEach(user => {
+      user.absenceDetails.forEach(detail => {
+        typeCounts[detail.type] = (typeCounts[detail.type] || 0) + 1;
+      });
+    });
+    
+    return Object.entries(typeCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }
+
+  // ===== LATE REPORT TAB FUNCTIONS =====
+  async function generateLateReport() {
+    const buIds = dropdowns.lateBu ? dropdowns.lateBu.getSelectedValues() : [];
+    const muIds = dropdowns.lateMu ? dropdowns.lateMu.getSelectedValues() : [];
+    const userIds = dropdowns.lateUser ? dropdowns.lateUser.getSelectedValues() : [];
+    const startDateRaw = document.getElementById('lateStartDate').value;
+    const endDateRaw = document.getElementById('lateEndDate').value;
+    const thresholdSeconds = parseInt(document.getElementById('lateThreshold').value) || 30;
+
+    if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
+      showMessage('Please select business unit, management unit, users, and date range', 'error');
+      return;
+    }
+
+    const button = document.getElementById('generateLateReportBtn');
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Generating late report...';
+
+    showTabProgress('late', true);
+    updateTabProgress('late', 10, 'Starting...');
+
+    try {
+      updateTabProgress('late', 20, 'Loading activity codes...');
+      await loadActivityCodes(buIds[0]);
+      
+      updateTabProgress('late', 30, 'Loading schedule data...');
+      const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+      
+      updateTabProgress('late', 60, 'Loading actual activity data...');
+      const actualData = await getActualActivityDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+      
+      updateTabProgress('late', 90, 'Generating report...');
+      const lateReportData = generateLateReportData(scheduleData, actualData, thresholdSeconds);
+      
+      currentDisplayedData.late = [...lateReportData];
+      updateTabProgress('late', 95, 'Rendering results...');
+      renderLateReportResults(lateReportData);
+      updateTabProgress('late', 100, 'Complete!');
+      
+      showMessage('Late report generated successfully', 'success');
+    } catch (err) {
+      console.error('Error generating late report:', err);
+      updateTabProgress('late', 0, `Error: ${err.message}`);
+      showMessage(`Failed to generate late report: ${err.message}`, 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+      setTimeout(() => {
+        showTabProgress('late', false);
+      }, 1000);
+    }
+  }
+
+  async function getScheduleDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
+    const startDateApi = convertToApiFormat(startDate);
+    const endDateApi = convertToApiFormat(endDate);
+    
+    const startDateIso = `${startDateApi}T00:00:00.000Z`;
+    const endDateIso = getEndDateIso(endDate);
+
+    let allActivities = [];
+    for (const userId of userIds) {
+      try {
+        const searchResult = await searchSchedules(managementUnitId, userId, startDateIso, endDateIso, true);
+        const activities = extractUserActivitiesFromSearchResult(searchResult, userId, businessUnitId);
+        allActivities = allActivities.concat(activities);
+      } catch (err) {
+        console.error(`Error loading schedule for user ${userId}:`, err);
+      }
+    }
+    
+    return allActivities;
+  }
+  
+  async function getActualActivityDataForLateReport(managementUnitId, userIds, startDate, endDate, businessUnitId) {
+    const startDateApi = convertToApiFormat(startDate);
+    const endDateApi = convertToApiFormat(endDate);
+
+    try {
+      const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
+      const jobResult = await pollHistoricalAdherenceJob(jobId);
+      const actualData = await processJobResults(jobResult, businessUnitId);
+      
+      const filteredActualData = actualData.filter(activity => 
+        !activity.activityLabel.toLowerCase().includes('unavailable') &&
+        !activity.activityCategory.toLowerCase().includes('unavailable')
+      );
+      
+      return filteredActualData;
+    } catch (err) {
+      console.error('Error getting actual activity data for late report:', err);
+      return [];
+    }
+  }
+
+  function generateLateReportData(scheduleData, actualData, thresholdSeconds) {
+    const lateReport = [];
+    
+    const scheduleByUserDate = {};
+    
+    const filteredScheduleData = scheduleData.filter(scheduleItem => {
+      const activityName = scheduleItem.activityLabel || '';
+      const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
+      
+      return !activityName.toLowerCase().includes('time off') &&
+             !activityName.toLowerCase().includes('holiday') &&
+             !activityName.toLowerCase().includes('sick') &&
+             !activityName.toLowerCase().includes('absence') &&
+             !activityName.toLowerCase().includes('vacation') &&
+             !activityName.toLowerCase().includes('leave') &&
+             activityCategory !== 'TimeOff';
+    });
+    
+    filteredScheduleData.forEach(scheduleItem => {
+      const key = `${scheduleItem.userId}_${scheduleItem.date}`;
+      if (!scheduleByUserDate[key]) {
+        scheduleByUserDate[key] = [];
+      }
+      scheduleByUserDate[key].push(scheduleItem);
+    });
+    
+    const actualByUserDate = {};
+    actualData.forEach(actualItem => {
+      const key = `${actualItem.userId}_${actualItem.date}`;
+      if (!actualByUserDate[key]) {
+        actualByUserDate[key] = [];
+      }
+      actualByUserDate[key].push(actualItem);
+    });
+    
+    Object.keys(scheduleByUserDate).forEach(key => {
+      const [userId, date] = key.split('_');
+      const userSchedule = scheduleByUserDate[key];
+      
+      userSchedule.sort((a, b) => {
+        const aTime = a.start ? a.start.getTime() : new Date(a.date).getTime();
+        const bTime = b.start ? b.start.getTime() : new Date(b.date).getTime();
+        return aTime - bTime;
+      });
+      
+      const firstScheduledActivity = userSchedule[0];
+      
+      if (!firstScheduledActivity) return;
+      
+      const userActualActivities = actualByUserDate[key] || [];
+      
+      if (userActualActivities.length === 0) {
         lateReport.push({
           userId: userId,
           userName: firstScheduledActivity.userName,
           teamNames: firstScheduledActivity.teamNames || 'No Team',
           date: date,
           scheduledStart: firstScheduledActivity.start,
-          actualStart: firstActualActivity.startTime,
-          status: status,
-          durationLate: durationLate,
+          actualStart: null,
+          status: 'AWOL',
+          durationLate: null,
           scheduledActivity: firstScheduledActivity.activityLabel,
-          actualActivity: firstActualActivity.activityLabel
+          actualActivity: null
         });
-      });
-      
-      return lateReport;
-    }
-
-    function renderLateReportResults(data) {
-      const container = document.getElementById('lateResults');
-      const contentContainer = document.getElementById('lateResultsContent');
-      container.style.display = 'block';
-      
-      if (!data || data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No late report data found for the selected period.
-          </div>
-        `;
         return;
       }
       
-      const thresholdSeconds = parseInt(document.getElementById('lateThreshold').value) || 30;
-      const lateCount = data.filter(item => item.status === 'Late').length;
-      const earlyCount = data.filter(item => item.status === 'Early').length;
-      const adherentCount = data.filter(item => item.status === 'Adherent').length;
-      const awolCount = data.filter(item => item.status === 'AWOL').length;
+      userActualActivities.sort((a, b) => a.startTime - b.startTime);
+      const firstActualActivity = userActualActivities[0];
       
-      let html = `
-        <h3 class="section-title">Late Report</h3>
-        <div class="schedule-meta">
-          <span class="pill">Total Shifts: ${data.length}</span>
-          <span class="pill" style="background: #fee2e2; color: #b42318;">Late: ${lateCount}</span>
-          <span class="pill" style="background: #fffbeb; color: #b45309;">Early: ${earlyCount}</span>
-          <span class="pill" style="background: #f0f9ff; color: #0c4a6e;">Adherent: ${adherentCount}</span>
-          <span class="pill" style="background: #f3e8ff; color: #7e22ce;">AWOL: ${awolCount}</span>
-          <span class="pill">Threshold: ${thresholdSeconds}s</span>
+      if (!firstActualActivity) return;
+      
+      if (!firstScheduledActivity.start) {
+        return;
+      }
+      
+      const timeDiffSeconds = Math.round((firstActualActivity.startTime - firstScheduledActivity.start) / 1000);
+      
+      let status, durationLate;
+      
+      if (timeDiffSeconds <= thresholdSeconds && timeDiffSeconds >= -thresholdSeconds) {
+        status = 'Adherent';
+        durationLate = 0;
+      } else if (timeDiffSeconds > thresholdSeconds) {
+        status = 'Late';
+        durationLate = timeDiffSeconds;
+      } else {
+        status = 'Early';
+        durationLate = Math.abs(timeDiffSeconds);
+      }
+      
+      lateReport.push({
+        userId: userId,
+        userName: firstScheduledActivity.userName,
+        teamNames: firstScheduledActivity.teamNames || 'No Team',
+        date: date,
+        scheduledStart: firstScheduledActivity.start,
+        actualStart: firstActualActivity.startTime,
+        status: status,
+        durationLate: durationLate,
+        scheduledActivity: firstScheduledActivity.activityLabel,
+        actualActivity: firstActualActivity.activityLabel
+      });
+    });
+    
+    return lateReport;
+  }
+
+  function renderLateReportResults(data) {
+    const container = document.getElementById('lateResults');
+    const contentContainer = document.getElementById('lateResultsContent');
+    container.style.display = 'block';
+    
+    if (!data || data.length === 0) {
+      contentContainer.innerHTML = `
+        <div class="info-message">
+          No late report data found for the selected period.
         </div>
-        
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="userName">User</th>
-              <th class="sortable" data-sort="teamNames">Team</th>
-              <th class="sortable" data-sort="date">Date</th>
-              <th>Scheduled Start</th>
-              <th>Actual Start</th>
-              <th class="sortable" data-sort="status">Status</th>
-              <th class="sortable" data-sort="durationLate">Duration</th>
-              <th>Scheduled Activity</th>
-              <th>Actual Activity</th>
-            </tr>
-          </thead>
-          <tbody>
       `;
+      return;
+    }
+    
+    const thresholdSeconds = parseInt(document.getElementById('lateThreshold').value) || 30;
+    const lateCount = data.filter(item => item.status === 'Late').length;
+    const earlyCount = data.filter(item => item.status === 'Early').length;
+    const adherentCount = data.filter(item => item.status === 'Adherent').length;
+    const awolCount = data.filter(item => item.status === 'AWOL').length;
+    
+    let html = `
+      <h3 class="section-title">Late Report</h3>
+      <div class="schedule-meta">
+        <span class="pill">Total Shifts: ${data.length}</span>
+        <span class="pill" style="background: #fee2e2; color: #b42318;">Late: ${lateCount}</span>
+        <span class="pill" style="background: #fffbeb; color: #b45309;">Early: ${earlyCount}</span>
+        <span class="pill" style="background: #f0f9ff; color: #0c4a6e;">Adherent: ${adherentCount}</span>
+        <span class="pill" style="background: #f3e8ff; color: #7e22ce;">AWOL: ${awolCount}</span>
+        <span class="pill">Threshold: ${thresholdSeconds}s</span>
+      </div>
       
-      data.forEach(row => {
-        let statusClass = '';
-        let statusText = '';
-        let durationText = '';
-        
-        switch(row.status) {
-          case 'Late':
-            statusClass = 'status-late';
-            statusText = `Late by ${formatDuration(Math.ceil(row.durationLate / 60))}`;
-            durationText = `+${formatDuration(Math.ceil(row.durationLate / 60))}`;
-            break;
-          case 'Early':
-            statusClass = 'status-early';
-            statusText = `Early by ${formatDuration(Math.ceil(row.durationLate / 60))}`;
-            durationText = `-${formatDuration(Math.ceil(row.durationLate / 60))}`;
-            break;
-          case 'Adherent':
-            statusClass = 'status-adherent';
-            statusText = 'On Time';
-            durationText = '0m';
-            break;
-          case 'AWOL':
-            statusClass = 'status-awol';
-            statusText = 'AWOL';
-            durationText = 'N/A';
-            break;
-        }
-        
-        html += `
+      <table class="schedule-table">
+        <thead>
           <tr>
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
-            <td>${escapeHtml(row.date)}</td>
-            <td>${row.scheduledStart ? escapeHtml(formatTime(row.scheduledStart)) : 'N/A'}</td>
-            <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'N/A'}</td>
-            <td><span class="${statusClass}">${statusText}</span></td>
-            <td>${durationText}</td>
-            <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
-            <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
+            <th class="sortable" data-sort="userName">User</th>
+            <th class="sortable" data-sort="teamNames">Team</th>
+            <th class="sortable" data-sort="date">Date</th>
+            <th>Scheduled Start</th>
+            <th>Actual Start</th>
+            <th class="sortable" data-sort="status">Status</th>
+            <th class="sortable" data-sort="durationLate">Duration</th>
+            <th>Scheduled Activity</th>
+            <th>Actual Activity</th>
           </tr>
-        `;
-      });
+        </thead>
+        <tbody>
+    `;
+    
+    data.forEach(row => {
+      let statusClass = '';
+      let statusText = '';
+      let durationText = '';
       
-      html += `</tbody></table>`;
-      
-      contentContainer.innerHTML = html;
-      
-      addLateReportTableSorting();
-    }
-
-    function addLateReportTableSorting() {
-      const table = document.querySelector('#lateResultsContent table');
-      if (!table) return;
-      
-      const headers = table.querySelectorAll('th.sortable');
-      headers.forEach(header => {
-        header.addEventListener('click', () => {
-          const sortField = header.getAttribute('data-sort');
-          const currentSort = document.getElementById('lateSort').value;
-          const currentOrder = document.getElementById('lateSortOrder').value;
-          
-          if (sortField === currentSort) {
-            document.getElementById('lateSortOrder').value = currentOrder === 'asc' ? 'desc' : 'asc';
-          } else {
-            document.getElementById('lateSort').value = sortField;
-            document.getElementById('lateSortOrder').value = 'asc';
-          }
-          
-          applyLateReportSorting();
-        });
-      });
-    }
-
-    function applyLateReportSorting() {
-      const data = currentDisplayedData.late;
-      const sortField = document.getElementById('lateSort').value;
-      const sortOrder = document.getElementById('lateSortOrder').value;
-      
-      if (!data || data.length === 0) return;
-      
-      const sortedData = [...data].sort((a, b) => {
-        let aVal = a[sortField];
-        let bVal = b[sortField];
-        
-        if (sortField === 'date') {
-          aVal = new Date(aVal.split('-').reverse().join('-'));
-          bVal = new Date(bVal.split('-').reverse().join('-'));
-        }
-        
-        if (sortField === 'durationLate') {
-          aVal = aVal || 0;
-          bVal = bVal || 0;
-        }
-        
-        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-      
-      currentDisplayedData.late = sortedData;
-      renderLateReportResults(sortedData);
-    }
-
-    // ===== TIME OWED TAB FUNCTIONS =====
-    async function generateTimeOwedReport() {
-      const buIds = dropdowns.timeOwedBu ? dropdowns.timeOwedBu.getSelectedValues() : [];
-      const muIds = dropdowns.timeOwedMu ? dropdowns.timeOwedMu.getSelectedValues() : [];
-      const userIds = dropdowns.timeOwedUser ? dropdowns.timeOwedUser.getSelectedValues() : [];
-      const startDateRaw = document.getElementById('timeOwedStartDate').value;
-      const endDateRaw = document.getElementById('timeOwedEndDate').value;
-
-      if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
-        showMessage('Please select business unit, management unit, users, and date range', 'error');
-        return;
+      switch(row.status) {
+        case 'Late':
+          statusClass = 'status-late';
+          statusText = `Late by ${formatDuration(Math.ceil(row.durationLate / 60))}`;
+          durationText = `+${formatDuration(Math.ceil(row.durationLate / 60))}`;
+          break;
+        case 'Early':
+          statusClass = 'status-early';
+          statusText = `Early by ${formatDuration(Math.ceil(row.durationLate / 60))}`;
+          durationText = `-${formatDuration(Math.ceil(row.durationLate / 60))}`;
+          break;
+        case 'Adherent':
+          statusClass = 'status-adherent';
+          statusText = 'On Time';
+          durationText = '0m';
+          break;
+        case 'AWOL':
+          statusClass = 'status-awol';
+          statusText = 'AWOL';
+          durationText = 'N/A';
+          break;
       }
-
-      const button = document.getElementById('generateTimeOwedReportBtn');
-      const originalLabel = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Generating time owed report...';
-
-      showTabProgress('timeOwed', true);
-      updateTabProgress('timeOwed', 10, 'Starting...');
-
-      try {
-        updateTabProgress('timeOwed', 20, 'Loading activity codes...');
-        await loadActivityCodes(buIds[0]);
-        
-        updateTabProgress('timeOwed', 30, 'Loading schedule data...');
-        const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        
-        updateTabProgress('timeOwed', 60, 'Loading actual activity data...');
-        const actualData = await getActualActivityDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
-        
-        updateTabProgress('timeOwed', 90, 'Generating report...');
-        const timeOwedData = generateTimeOwedData(scheduleData, actualData);
-        
-        currentTimeOwedData = timeOwedData;
-        currentDisplayedData.timeowed = [...timeOwedData];
-        updateTabProgress('timeOwed', 95, 'Rendering results...');
-        renderTimeOwedResults(timeOwedData);
-        updateTabProgress('timeOwed', 100, 'Complete!');
-        
-        showMessage('Time owed report generated successfully', 'success');
-      } catch (err) {
-        console.error('Error generating time owed report:', err);
-        updateTabProgress('timeOwed', 0, `Error: ${err.message}`);
-        showMessage(`Failed to generate time owed report: ${err.message}`, 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = originalLabel;
-        setTimeout(() => {
-          showTabProgress('timeOwed', false);
-        }, 1000);
-      }
-    }
-
-    async function getActualActivityDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
-      const startDateApi = convertToApiFormat(startDate);
-      const endDateApi = convertToApiFormat(endDate);
-
-      try {
-        const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
-        const jobResult = await pollHistoricalAdherenceJob(jobId);
-        const actualData = await processJobResults(jobResult, businessUnitId);
-        
-        // Filter for 'offline' activities (Agent Unavailable, Off Queue, etc.)
-        const offlineActivities = actualData.filter(activity => {
-          const activityName = activity.activityLabel.toLowerCase();
-          const activityCategory = activity.activityCategory ? activity.activityCategory.toLowerCase() : '';
-          
-          return activityName.includes('unavailable') || 
-                 activityName.includes('off queue') ||
-                 activityName.includes('off-queue') ||
-                 activityName.includes('logged out') ||
-                 activityName.includes('sign off') ||
-                 activityCategory.includes('unavailable') ||
-                 activityCategory.includes('offqueue');
-        });
-        
-        console.log(`Found ${offlineActivities.length} offline activities out of ${actualData.length} total activities`);
-        
-        return offlineActivities;
-      } catch (err) {
-        console.error('Error getting actual activity data for time owed:', err);
-        return [];
-      }
-    }
-
-    function generateTimeOwedData(scheduleData, actualData) {
-      const timeOwedReport = [];
       
-      console.log(`Generating time owed report with ${scheduleData.length} schedule items and ${actualData.length} offline activities`);
-      
-      const scheduleByUserDate = {};
-      
-      // Filter schedule to only include work activities
-      const filteredScheduleData = scheduleData.filter(scheduleItem => {
-        const activityName = scheduleItem.activityLabel || '';
-        const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
-        
-        return !activityName.toLowerCase().includes('time off') &&
-               !activityName.toLowerCase().includes('holiday') &&
-               !activityName.toLowerCase().includes('sick') &&
-               !activityName.toLowerCase().includes('absence') &&
-               !activityName.toLowerCase().includes('vacation') &&
-               !activityName.toLowerCase().includes('leave') &&
-               activityCategory !== 'TimeOff';
-      });
-      
-      // Group schedule by user and date
-      filteredScheduleData.forEach(scheduleItem => {
-        const key = `${scheduleItem.userId}_${scheduleItem.date}`;
-        if (!scheduleByUserDate[key]) {
-          scheduleByUserDate[key] = [];
-        }
-        scheduleByUserDate[key].push(scheduleItem);
-      });
-      
-      // Group actual offline activities by user and date
-      const offlineByUserDate = {};
-      actualData.forEach(offlineItem => {
-        const key = `${offlineItem.userId}_${offlineItem.date}`;
-        if (!offlineByUserDate[key]) {
-          offlineByUserDate[key] = [];
-        }
-        offlineByUserDate[key].push(offlineItem);
-      });
-      
-      // Process each user/date combination
-      Object.keys(scheduleByUserDate).forEach(key => {
-        const [userId, date] = key.split('_');
-        const userSchedule = scheduleByUserDate[key];
-        
-        // Sort schedule by end time to find last scheduled activity of the day
-        userSchedule.sort((a, b) => {
-          const aTime = a.end ? a.end.getTime() : 0;
-          const bTime = b.end ? b.end.getTime() : 0;
-          return bTime - aTime; // Sort descending to get last activity first
-        });
-        
-        const lastScheduledActivity = userSchedule[0];
-        
-        if (!lastScheduledActivity || !lastScheduledActivity.end) {
-          console.log(`No end time for user ${userId} on ${date}`);
-          return;
-        }
-        
-        const scheduledEndTime = lastScheduledActivity.end;
-        
-        // Get offline activities for this user/date
-        const userOfflineActivities = offlineByUserDate[key] || [];
-        
-        // Filter out 23:59 end times - these indicate agent hasn't logged in (default/placeholder)
-        const validOfflineActivities = userOfflineActivities.filter(activity => {
-            const endTime = activity.endTime;
-            const endHours = endTime.getHours();
-            const endMinutes = endTime.getMinutes();
-            // Exclude 23:59 end times (these are default/placeholder values)
-            return !(endHours === 23 && endMinutes === 59);
-        });
+      html += `
+        <tr>
+          <td>${escapeHtml(row.userName)}</td>
+          <td>${escapeHtml(row.teamNames || 'No Team')}</td>
+          <td>${escapeHtml(row.date)}</td>
+          <td>${row.scheduledStart ? escapeHtml(formatTime(row.scheduledStart)) : 'N/A'}</td>
+          <td>${row.actualStart ? escapeHtml(formatTime(row.actualStart)) : 'N/A'}</td>
+          <td><span class="${statusClass}">${statusText}</span></td>
+          <td>${durationText}</td>
+          <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
+          <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
+        </tr>
+      `;
+    });
+    
+    html += `</tbody></table>`;
+    
+    contentContainer.innerHTML = html;
+    
+    addLateReportTableSorting();
+  }
 
-        if (validOfflineActivities.length === 0) {
-            // No valid offline activities found - agent didn't log off properly
-            // Skip this entry instead of adding it to the report
-            return;
-        }
-
-        // Find the NEAREST offline activity to scheduled end time from VALID activities
-        let nearestOfflineActivity = null;
-        let minTimeDiff = Infinity;
-
-        validOfflineActivities.forEach(offlineActivity => {
-            const offlineTime = offlineActivity.endTime;
-            const timeDiff = Math.abs(offlineTime - scheduledEndTime);
-            
-            if (timeDiff < minTimeDiff) {
-                minTimeDiff = timeDiff;
-                nearestOfflineActivity = offlineActivity;
-            }
-        });
-
-        if (!nearestOfflineActivity) {
-            // No nearest offline activity found - skip this entry
-            return;
-        }
+  function addLateReportTableSorting() {
+    const table = document.querySelector('#lateResultsContent table');
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th.sortable');
+    headers.forEach(header => {
+      header.addEventListener('click', () => {
+        const sortField = header.getAttribute('data-sort');
+        const currentSort = document.getElementById('lateSort').value;
+        const currentOrder = document.getElementById('lateSortOrder').value;
         
-        const actualOfflineTime = nearestOfflineActivity.endTime;
-        
-        // Calculate time difference in minutes
-        const timeDiffMinutes = Math.round((scheduledEndTime - actualOfflineTime) / (1000 * 60));
-        
-        // Determine status and time owed
-        let status, timeOwed, timeOwedType;
-        
-        if (timeDiffMinutes > 5) { // Using 5-minute grace period
-          // Logged out BEFORE scheduled end (left early)
-          status = 'Left Early';
-          timeOwed = timeDiffMinutes; // Time OWED TO BUSINESS (agent left early)
-          timeOwedType = 'toBusiness';
-        } else if (timeDiffMinutes < -5) {
-          // Logged out AFTER scheduled end (worked over)
-          status = 'Worked Over';
-          timeOwed = Math.abs(timeDiffMinutes); // Time OWED TO AGENT (worked extra)
-          timeOwedType = 'toAgent';
+        if (sortField === currentSort) {
+          document.getElementById('lateSortOrder').value = currentOrder === 'asc' ? 'desc' : 'asc';
         } else {
-          // Within 5 minutes of scheduled time
-          status = 'Completed';
-          timeOwed = 0;
-          timeOwedType = 'none';
+          document.getElementById('lateSort').value = sortField;
+          document.getElementById('lateSortOrder').value = 'asc';
         }
         
-        timeOwedReport.push({
-          userId: userId,
-          userName: lastScheduledActivity.userName,
-          teamNames: lastScheduledActivity.teamNames || 'No Team',
-          date: date,
-          scheduledEnd: scheduledEndTime,
-          actualOfflineTime: actualOfflineTime,
-          status: status,
-          timeOwed: timeOwed,
-          timeOwedType: timeOwedType,
-          scheduledActivity: lastScheduledActivity.activityLabel,
-          actualActivity: nearestOfflineActivity.activityLabel
-        });
+        applyLateReportSorting();
       });
+    });
+  }
+
+  function applyLateReportSorting() {
+    const data = currentDisplayedData.late;
+    const sortField = document.getElementById('lateSort').value;
+    const sortOrder = document.getElementById('lateSortOrder').value;
+    
+    if (!data || data.length === 0) return;
+    
+    const sortedData = [...data].sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
       
-      console.log(`Generated ${timeOwedReport.length} time owed report entries`);
-      return timeOwedReport;
+      if (sortField === 'date') {
+        aVal = new Date(aVal.split('-').reverse().join('-'));
+        bVal = new Date(bVal.split('-').reverse().join('-'));
+      }
+      
+      if (sortField === 'durationLate') {
+        aVal = aVal || 0;
+        bVal = bVal || 0;
+      }
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    currentDisplayedData.late = sortedData;
+    renderLateReportResults(sortedData);
+  }
+
+  // ===== TIME OWED TAB FUNCTIONS =====
+  async function generateTimeOwedReport() {
+    const buIds = dropdowns.timeOwedBu ? dropdowns.timeOwedBu.getSelectedValues() : [];
+    const muIds = dropdowns.timeOwedMu ? dropdowns.timeOwedMu.getSelectedValues() : [];
+    const userIds = dropdowns.timeOwedUser ? dropdowns.timeOwedUser.getSelectedValues() : [];
+    const startDateRaw = document.getElementById('timeOwedStartDate').value;
+    const endDateRaw = document.getElementById('timeOwedEndDate').value;
+
+    if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
+      showMessage('Please select business unit, management unit, users, and date range', 'error');
+      return;
     }
 
-    function renderTimeOwedResults(data) {
-      const container = document.getElementById('timeOwedResults');
-      const contentContainer = document.getElementById('timeOwedResultsContent');
-      container.style.display = 'block';
+    const button = document.getElementById('generateTimeOwedReportBtn');
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Generating time owed report...';
+
+    showTabProgress('timeOwed', true);
+    updateTabProgress('timeOwed', 10, 'Starting...');
+
+    try {
+      updateTabProgress('timeOwed', 20, 'Loading activity codes...');
+      await loadActivityCodes(buIds[0]);
       
-      if (!data || data.length === 0) {
-        contentContainer.innerHTML = `
-          <div class="info-message">
-            No time owed data found for the selected period.
-          </div>
-        `;
+      updateTabProgress('timeOwed', 30, 'Loading schedule data...');
+      const scheduleData = await getScheduleDataForLateReport(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+      
+      updateTabProgress('timeOwed', 60, 'Loading actual activity data...');
+      const actualData = await getActualActivityDataForTimeOwed(muIds[0], userIds, startDateRaw, endDateRaw, buIds[0]);
+      
+      updateTabProgress('timeOwed', 90, 'Generating report...');
+      const timeOwedData = generateTimeOwedData(scheduleData, actualData);
+      
+      currentTimeOwedData = timeOwedData;
+      currentDisplayedData.timeowed = [...timeOwedData];
+      updateTabProgress('timeOwed', 95, 'Rendering results...');
+      renderTimeOwedResults(timeOwedData);
+      updateTabProgress('timeOwed', 100, 'Complete!');
+      
+      showMessage('Time owed report generated successfully', 'success');
+    } catch (err) {
+      console.error('Error generating time owed report:', err);
+      updateTabProgress('timeOwed', 0, `Error: ${err.message}`);
+      showMessage(`Failed to generate time owed report: ${err.message}`, 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+      setTimeout(() => {
+        showTabProgress('timeOwed', false);
+      }, 1000);
+    }
+  }
+
+  async function getActualActivityDataForTimeOwed(managementUnitId, userIds, startDate, endDate, businessUnitId) {
+    const startDateApi = convertToApiFormat(startDate);
+    const endDateApi = convertToApiFormat(endDate);
+
+    try {
+      const jobId = await createHistoricalAdherenceQuery(managementUnitId, userIds, startDateApi, endDateApi);
+      const jobResult = await pollHistoricalAdherenceJob(jobId);
+      const actualData = await processJobResults(jobResult, businessUnitId);
+      
+      // Filter for 'offline' activities (Agent Unavailable, Off Queue, etc.)
+      const offlineActivities = actualData.filter(activity => {
+        const activityName = activity.activityLabel.toLowerCase();
+        const activityCategory = activity.activityCategory ? activity.activityCategory.toLowerCase() : '';
+        
+        return activityName.includes('unavailable') || 
+               activityName.includes('off queue') ||
+               activityName.includes('off-queue') ||
+               activityName.includes('logged out') ||
+               activityName.includes('sign off') ||
+               activityCategory.includes('unavailable') ||
+               activityCategory.includes('offqueue');
+      });
+      
+      console.log(`Found ${offlineActivities.length} offline activities out of ${actualData.length} total activities`);
+      
+      return offlineActivities;
+    } catch (err) {
+      console.error('Error getting actual activity data for time owed:', err);
+      return [];
+    }
+  }
+
+  function generateTimeOwedData(scheduleData, actualData) {
+    const timeOwedReport = [];
+    
+    console.log(`Generating time owed report with ${scheduleData.length} schedule items and ${actualData.length} offline activities`);
+    
+    const scheduleByUserDate = {};
+    
+    // Filter schedule to only include work activities
+    const filteredScheduleData = scheduleData.filter(scheduleItem => {
+      const activityName = scheduleItem.activityLabel || '';
+      const activityCategory = getActivityCategory(scheduleItem.businessUnitId, scheduleItem.activityCodeId);
+      
+      return !activityName.toLowerCase().includes('time off') &&
+             !activityName.toLowerCase().includes('holiday') &&
+             !activityName.toLowerCase().includes('sick') &&
+             !activityName.toLowerCase().includes('absence') &&
+             !activityName.toLowerCase().includes('vacation') &&
+             !activityName.toLowerCase().includes('leave') &&
+             activityCategory !== 'TimeOff';
+    });
+    
+    // Group schedule by user and date
+    filteredScheduleData.forEach(scheduleItem => {
+      const key = `${scheduleItem.userId}_${scheduleItem.date}`;
+      if (!scheduleByUserDate[key]) {
+        scheduleByUserDate[key] = [];
+      }
+      scheduleByUserDate[key].push(scheduleItem);
+    });
+    
+    // Group actual offline activities by user and date
+    const offlineByUserDate = {};
+    actualData.forEach(offlineItem => {
+      const key = `${offlineItem.userId}_${offlineItem.date}`;
+      if (!offlineByUserDate[key]) {
+        offlineByUserDate[key] = [];
+      }
+      offlineByUserDate[key].push(offlineItem);
+    });
+    
+    // Process each user/date combination
+    Object.keys(scheduleByUserDate).forEach(key => {
+      const [userId, date] = key.split('_');
+      const userSchedule = scheduleByUserDate[key];
+      
+      // Sort schedule by end time to find last scheduled activity of the day
+      userSchedule.sort((a, b) => {
+        const aTime = a.end ? a.end.getTime() : 0;
+        const bTime = b.end ? b.end.getTime() : 0;
+        return bTime - aTime; // Sort descending to get last activity first
+      });
+      
+      const lastScheduledActivity = userSchedule[0];
+      
+      if (!lastScheduledActivity || !lastScheduledActivity.end) {
+        console.log(`No end time for user ${userId} on ${date}`);
         return;
       }
       
-      // Calculate statistics
-      const leftEarlyCount = data.filter(item => item.status === 'Left Early').length;
-      const completedCount = data.filter(item => item.status === 'Completed').length;
-      const workedOverCount = data.filter(item => item.status === 'Worked Over').length;
-      const noLogoffCount = data.filter(item => item.status === 'No Logoff Found' || item.status === 'No Valid Logoff').length;
+      const scheduledEndTime = lastScheduledActivity.end;
       
-      // Calculate totals
-      const totalTimeOwedToBusiness = data
-        .filter(item => item.timeOwedType === 'toBusiness')
-        .reduce((sum, item) => sum + item.timeOwed, 0);
-        
-      const totalTimeOwedToAgent = data
-        .filter(item => item.timeOwedType === 'toAgent')
-        .reduce((sum, item) => sum + item.timeOwed, 0);
-        
-      const totalTimeOwed = totalTimeOwedToBusiness + totalTimeOwedToAgent;
+      // Get offline activities for this user/date
+      const userOfflineActivities = offlineByUserDate[key] || [];
       
-      // Calculate averages
-      const avgTimeOwedToBusiness = leftEarlyCount > 0 ? totalTimeOwedToBusiness / leftEarlyCount : 0;
-      const avgTimeOwedToAgent = workedOverCount > 0 ? totalTimeOwedToAgent / workedOverCount : 0;
-      
-      let html = `
-        <h3 class="section-title">Time Owed Report</h3>
-        <div class="schedule-meta">
-          <span class="pill">Total Shifts: ${data.length}</span>
-          <span class="pill" style="background: #fee2e2; color: #b42318;">Left Early: ${leftEarlyCount}</span>
-          <span class="pill" style="background: #dcfce7; color: #166534;">Completed: ${completedCount}</span>
-          <span class="pill" style="background: #dbeafe; color: #1e40af;">Worked Over: ${workedOverCount}</span>
-          <span class="pill" style="background: #f3f4f6; color: #374151;">No Logoff: ${noLogoffCount}</span>
-        </div>
-        
-        <!-- Time Owed Summary -->
-        <div class="chart-wrapper" style="margin-bottom: 20px;">
-          <h4>Time Owed Summary</h4>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px;">
-            <div class="metric-card" style="background: #fee2e2; border-color: #fecaca;">
-              <div class="metric-label">Time Owed TO BUSINESS</div>
-              <div class="metric-value" style="color: #b42318;">${formatDuration(totalTimeOwedToBusiness)}</div>
-              <div style="font-size: 12px; color: #b42318;">(${leftEarlyCount} agents)</div>
-            </div>
-            <div class="metric-card" style="background: #dbeafe; border-color: #bfdbfe;">
-              <div class="metric-label">Time Owed TO AGENT</div>
-              <div class="metric-value" style="color: #1e40af;">${formatDuration(totalTimeOwedToAgent)}</div>
-              <div style="font-size: 12px; color: #1e40af;">(${workedOverCount} agents)</div>
-            </div>
-            <div class="metric-card" style="background: #f0f9ff; border-color: #e0f2fe;">
-              <div class="metric-label">Avg Owed to Business</div>
-              <div class="metric-value" style="color: #0c4a6e;">${formatDuration(avgTimeOwedToBusiness)}</div>
-              <div style="font-size: 12px; color: #0c4a6e;">per agent (left early)</div>
-            </div>
-            <div class="metric-card" style="background: #f0f9ff; border-color: #e0f2fe;">
-              <div class="metric-label">Avg Owed to Agent</div>
-              <div class="metric-value" style="color: #0c4a6e;">${formatDuration(avgTimeOwedToAgent)}</div>
-              <div style="font-size: 12px; color: #0c4a6e;">per agent (worked over)</div>
-            </div>
-          </div>
-        </div>
-        
-        <table class="schedule-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="userName">User</th>
-              <th class="sortable" data-sort="teamNames">Team</th>
-              <th class="sortable" data-sort="date">Date</th>
-              <th>Scheduled End</th>
-              <th>Actual Logout Time</th>
-              <th class="sortable" data-sort="status">Status</th>
-              <th class="sortable" data-sort="timeOwed">Time Owed</th>
-              <th>Owed To</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.forEach(row => {
-        let statusClass = '';
-        let statusText = '';
-        let owedToText = '';
-        let owedToClass = '';
-        
-        switch(row.status) {
-          case 'Left Early':
-            statusClass = 'status-logged-out-early';
-            statusText = `Left ${formatDuration(row.timeOwed)} early`;
-            owedToText = 'BUSINESS';
-            owedToClass = 'status-time-owed';
-            break;
-          case 'Completed':
-            statusClass = 'status-completed';
-            statusText = 'On Time';
-            owedToText = 'N/A';
-            owedToClass = '';
-            break;
-          case 'Worked Over':
-            statusClass = 'status-time-owed';
-            statusText = `Worked ${formatDuration(row.timeOwed)} over`;
-            owedToText = 'AGENT';
-            owedToClass = 'status-time-owed';
-            break;
-          case 'No Logoff Found':
-          case 'No Valid Logoff':
-            statusClass = 'status-awol';
-            statusText = 'No Logoff';
-            owedToText = 'N/A';
-            owedToClass = '';
-            break;
-        }
-        
-        html += `
-          <tr>
-            <td>${escapeHtml(row.userName)}</td>
-            <td>${escapeHtml(row.teamNames || 'No Team')}</td>
-            <td>${escapeHtml(row.date)}</td>
-            <td>${row.scheduledEnd ? escapeHtml(formatTime(row.scheduledEnd)) : 'N/A'}</td>
-            <td>${row.actualOfflineTime ? escapeHtml(formatTime(row.actualOfflineTime)) : 'N/A'}</td>
-            <td><span class="${statusClass}">${statusText}</span></td>
-            <td>${row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m'}</td>
-            <td>${owedToText ? `<span class="${owedToClass}">${owedToText}</span>` : 'N/A'}</td>
-            <td>${escapeHtml(row.scheduledActivity || 'N/A')}</td>
-            <td>${escapeHtml(row.actualActivity || 'N/A')}</td>
-          </tr>
-        `;
+      // Filter out 23:59 end times - these indicate agent hasn't logged in (default/placeholder)
+      const validOfflineActivities = userOfflineActivities.filter(activity => {
+          const endTime = activity.endTime;
+          const endHours = endTime.getHours();
+          const endMinutes = endTime.getMinutes();
+          // Exclude 23:59 end times (these are default/placeholder values)
+          return !(endHours === 23 && endMinutes === 59);
       });
-      
-      html += `</tbody></table>`;
-      
-      contentContainer.innerHTML = html;
-      
-      addTimeOwedTableSorting();
-    }
 
-    function addTimeOwedTableSorting() {
-      const table = document.querySelector('#timeOwedResultsContent table');
-      if (!table) return;
-      
-      const headers = table.querySelectorAll('th.sortable');
-      headers.forEach(header => {
-        header.addEventListener('click', () => {
-          const sortField = header.getAttribute('data-sort');
-          const currentSort = document.getElementById('timeOwedSort').value;
-          const currentOrder = document.getElementById('timeOwedSortOrder').value;
+      if (validOfflineActivities.length === 0) {
+          // No valid offline activities found - agent didn't log off properly
+          // Skip this entry instead of adding it to the report
+          return;
+      }
+
+      // Find the NEAREST offline activity to scheduled end time from VALID activities
+      let nearestOfflineActivity = null;
+      let minTimeDiff = Infinity;
+
+      validOfflineActivities.forEach(offlineActivity => {
+          const offlineTime = offlineActivity.endTime;
+          const timeDiff = Math.abs(offlineTime - scheduledEndTime);
           
-          if (sortField === currentSort) {
-            document.getElementById('timeOwedSortOrder').value = currentOrder === 'asc' ? 'desc' : 'asc';
-          } else {
-            document.getElementById('timeOwedSort').value = sortField;
-            document.getElementById('timeOwedSortOrder').value = 'asc';
+          if (timeDiff < minTimeDiff) {
+              minTimeDiff = timeDiff;
+              nearestOfflineActivity = offlineActivity;
           }
-          
-          applyTimeOwedSorting();
-        });
       });
-    }
 
-    function applyTimeOwedSorting() {
-      const data = currentDisplayedData.timeowed;
-      const sortField = document.getElementById('timeOwedSort').value;
-      const sortOrder = document.getElementById('timeOwedSortOrder').value;
+      if (!nearestOfflineActivity) {
+          // No nearest offline activity found - skip this entry
+          return;
+      }
       
-      if (!data || data.length === 0) return;
+      const actualOfflineTime = nearestOfflineActivity.endTime;
       
-      const sortedData = [...data].sort((a, b) => {
-        let aVal = a[sortField];
-        let bVal = b[sortField];
+      // Calculate time difference in minutes
+      const timeDiffMinutes = Math.round((scheduledEndTime - actualOfflineTime) / (1000 * 60));
+      
+      // Determine status and time owed
+      let status, timeOwed, timeOwedType;
+      
+      if (timeDiffMinutes > 5) { // Using 5-minute grace period
+        // Logged out BEFORE scheduled end (left early)
+        status = 'Left Early';
+        timeOwed = timeDiffMinutes; // Time OWED TO BUSINESS (agent left early)
+        timeOwedType = 'toBusiness';
+      } else if (timeDiffMinutes < -5) {
+        // Logged out AFTER scheduled end (worked over)
+        status = 'Worked Over';
+        timeOwed = Math.abs(timeDiffMinutes); // Time OWED TO AGENT (worked extra)
+        timeOwedType = 'toAgent';
+      } else {
+        // Within 5 minutes of scheduled time
+        status = 'Completed';
+        timeOwed = 0;
+        timeOwedType = 'none';
+      }
+      
+      timeOwedReport.push({
+        userId: userId,
+        userName: lastScheduledActivity.userName,
+        teamNames: lastScheduledActivity.teamNames || 'No Team',
+        date: date,
+        scheduledEnd: scheduledEndTime,
+        actualOfflineTime: actualOfflineTime,
+        status: status,
+        timeOwed: timeOwed,
+        timeOwedType: timeOwedType,
+        scheduledActivity: lastScheduledActivity.activityLabel,
+        actualActivity: nearestOfflineActivity.activityLabel
+      });
+    });
+    
+    console.log(`Generated ${timeOwedReport.length} time owed report entries`);
+    return timeOwedReport;
+  }
+
+  function renderTimeOwedResults(data) {
+    const container = document.getElementById('timeOwedResults');
+    const contentContainer = document.getElementById('timeOwedResultsContent');
+    container.style.display = 'block';
+    
+    if (!data || data.length === 0) {
+      contentContainer.innerHTML = `
+        <div class="info-message">
+          No time owed data found for the selected period.
+        </div>
+      `;
+      return;
+    }
+    
+    // Calculate statistics
+    const leftEarlyCount = data.filter(item => item.status === 'Left Early').length;
+    const completedCount = data.filter(item => item.status === 'Completed').length;
+    const workedOverCount = data.filter(item => item.status === 'Worked Over').length;
+    const noLogoffCount = data.filter(item => item.status === 'No Logoff Found' || item.status === 'No Valid Logoff').length;
+    
+    // Calculate totals
+    const totalTimeOwedToBusiness = data
+      .filter(item => item.timeOwedType === 'toBusiness')
+      .reduce((sum, item) => sum + item.timeOwed, 0);
+      
+    const totalTimeOwedToAgent = data
+      .filter(item => item.timeOwedType === 'toAgent')
+      .reduce((sum, item) => sum + item.timeOwed, 0);
+      
+    const totalTimeOwed = totalTimeOwedToBusiness + totalTimeOwedToAgent;
+    
+    // Calculate averages
+    const avgTimeOwedToBusiness = leftEarlyCount > 0 ? totalTimeOwedToBusiness / leftEarlyCount : 0;
+    const avgTimeOwedToAgent = workedOverCount > 0 ? totalTimeOwedToAgent / workedOverCount : 0;
+    
+    let html = `
+      <h3 class="section-title">Time Owed Report</h3>
+      <div class="schedule-meta">
+        <span class="pill">Total Shifts: ${data.length}</span>
+        <span class="pill" style="background: #fee2e2; color: #b42318;">Left Early: ${leftEarlyCount}</span>
+        <span class="pill" style="background: #dcfce7; color: #166534;">Completed: ${completedCount}</span>
+        <span class="pill" style="background: #dbeafe; color: #1e40af;">Worked Over: ${workedOverCount}</span>
+        <span class="pill" style="background: #f3f4f6; color: #374151;">No Logoff: ${noLogoffCount}</span>
+      </div>
+      
+      <!-- Time Owed Summary -->
+      <div class="chart-wrapper" style="margin-bottom: 20px;">
+        <h4>Time Owed Summary</h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px;">
+          <div class="metric-card" style="background: #fee2e2; border-color: #fecaca;">
+            <div class="metric-label">Time Owed TO BUSINESS</div>
+            <div class="metric-value" style="color: #b42318;">${formatDuration(totalTimeOwedToBusiness)}</div>
+            <div style="font-size: 12px; color: #b42318;">(${leftEarlyCount} agents)</div>
+          </div>
+          <div class="metric-card" style="background: #dbeafe; border-color: #bfdbfe;">
+            <div class="metric-label">Time Owed TO AGENT</div>
+            <div class="metric-value" style="color: #1e40af;">${formatDuration(totalTimeOwedToAgent)}</div>
+            <div style="font-size: 12px; color: #1e40af;">(${workedOverCount} agents)</div>
+          </div>
+          <div class="metric-card" style="background: #f0f9ff; border-color: #e0f2fe;">
+            <div class="metric-label">Avg Owed to Business</div>
+            <div class="metric-value" style="color: #0c4a6e;">${formatDuration(avgTimeOwedToBusiness)}</div>
+            <div style="font-size: 12px; color: #0c4a6e;">per agent (left early)</div>
+          </div>
+          <div class="metric-card" style="background: #f0f9ff; border-color: #e0f2fe;">
+            <div class="metric-label">Avg Owed to Agent</div>
+            <div class="metric-value" style="color: #0c4a6e;">${formatDuration(avgTimeOwedToAgent)}</div>
+            <div style="font-size: 12px; color: #0c4a6e;">per agent (worked over)</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- FIXED: Removed the last 2 columns from Time Owed table -->
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="userName">User</th>
+            <th class="sortable" data-sort="teamNames">Team</th>
+            <th class="sortable" data-sort="date">Date</th>
+            <th>Scheduled End</th>
+            <th>Actual Logout Time</th>
+            <th class="sortable" data-sort="status">Status</th>
+            <th class="sortable" data-sort="timeOwed">Time Owed</th>
+            <th>Owed To</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    data.forEach(row => {
+      let statusClass = '';
+      let statusText = '';
+      let owedToText = '';
+      let owedToClass = '';
+      
+      switch(row.status) {
+        case 'Left Early':
+          statusClass = 'status-logged-out-early';
+          statusText = `Left ${formatDuration(row.timeOwed)} early`;
+          owedToText = 'BUSINESS';
+          owedToClass = 'status-time-owed';
+          break;
+        case 'Completed':
+          statusClass = 'status-completed';
+          statusText = 'On Time';
+          owedToText = 'N/A';
+          owedToClass = '';
+          break;
+        case 'Worked Over':
+          statusClass = 'status-time-owed';
+          statusText = `Worked ${formatDuration(row.timeOwed)} over`;
+          owedToText = 'AGENT';
+          owedToClass = 'status-time-owed';
+          break;
+        case 'No Logoff Found':
+        case 'No Valid Logoff':
+          statusClass = 'status-awol';
+          statusText = 'No Logoff';
+          owedToText = 'N/A';
+          owedToClass = '';
+          break;
+      }
+      
+      html += `
+        <tr>
+          <td>${escapeHtml(row.userName)}</td>
+          <td>${escapeHtml(row.teamNames || 'No Team')}</td>
+          <td>${escapeHtml(row.date)}</td>
+          <td>${row.scheduledEnd ? escapeHtml(formatTime(row.scheduledEnd)) : 'N/A'}</td>
+          <td>${row.actualOfflineTime ? escapeHtml(formatTime(row.actualOfflineTime)) : 'N/A'}</td>
+          <td><span class="${statusClass}">${statusText}</span></td>
+          <td>${row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m'}</td>
+          <td>${owedToText ? `<span class="${owedToClass}">${owedToText}</span>` : 'N/A'}</td>
+        </tr>
+      `;
+    });
+    
+    html += `</tbody></table>`;
+    
+    contentContainer.innerHTML = html;
+    
+    addTimeOwedTableSorting();
+  }
+
+  function addTimeOwedTableSorting() {
+    const table = document.querySelector('#timeOwedResultsContent table');
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th.sortable');
+    headers.forEach(header => {
+      header.addEventListener('click', () => {
+        const sortField = header.getAttribute('data-sort');
+        const currentSort = document.getElementById('timeOwedSort').value;
+        const currentOrder = document.getElementById('timeOwedSortOrder').value;
         
-        if (sortField === 'date') {
-          aVal = new Date(aVal.split('-').reverse().join('-'));
-          bVal = new Date(bVal.split('-').reverse().join('-'));
+        if (sortField === currentSort) {
+          document.getElementById('timeOwedSortOrder').value = currentOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+          document.getElementById('timeOwedSort').value = sortField;
+          document.getElementById('timeOwedSortOrder').value = 'asc';
         }
         
-        if (sortField === 'timeOwed') {
-          aVal = aVal || 0;
-          bVal = bVal || 0;
-        }
+        applyTimeOwedSorting();
+      });
+    });
+  }
+
+  function applyTimeOwedSorting() {
+    const data = currentDisplayedData.timeowed;
+    const sortField = document.getElementById('timeOwedSort').value;
+    const sortOrder = document.getElementById('timeOwedSortOrder').value;
+    
+    if (!data || data.length === 0) return;
+    
+    const sortedData = [...data].sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+      
+      if (sortField === 'date') {
+        aVal = new Date(aVal.split('-').reverse().join('-'));
+        bVal = new Date(bVal.split('-').reverse().join('-'));
+      }
+      
+      if (sortField === 'timeOwed') {
+        aVal = aVal || 0;
+        bVal = bVal || 0;
+      }
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    currentDisplayedData.timeowed = sortedData;
+    renderTimeOwedResults(sortedData);
+  }
+
+  // ===== EXPORT FUNCTIONS =====
+  function exportToCSV(data, filename) {
+    if (!data || data.length === 0) {
+      showMessage('No data to export', 'error');
+      return;
+    }
+
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => 
+        headers.map(header => {
+          const value = row[header] || '';
+          return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+        }).join(',')
+      )
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function exportScheduleToCSV() {
+    if (currentDisplayedData.schedule.length === 0) {
+      showMessage('No schedule data to export', 'error');
+      return;
+    }
+
+    let exportData = currentDisplayedData.schedule;
+    const selectedActivities = dropdowns.activityFilter ? dropdowns.activityFilter.getSelectedValues() : [];
+    if (selectedActivities.length > 0) {
+      exportData = currentDisplayedData.schedule.filter(activity => 
+        selectedActivities.includes(activity.activityLabel)
+      );
+    }
+
+    const csvData = exportData.map(activity => ({
+      Date: activity.date,
+      User: activity.userName,
+      Team: activity.teamNames || 'No Team',
+      Activity: activity.activityLabel,
+      Start: formatTime(activity.start),
+      End: formatTime(activity.end),
+      Duration: formatDuration(activity.durationMinutes)
+    }));
+
+    exportToCSV(csvData, `schedule_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  function exportActualActivityToCSV() {
+    if (currentDisplayedData.actual.length === 0) {
+      showMessage('No actual activity data to export', 'error');
+      return;
+    }
+
+    let exportData = currentDisplayedData.actual;
+    const selectedActivities = dropdowns.actualActivityFilter ? dropdowns.actualActivityFilter.getSelectedValues() : [];
+    if (selectedActivities.length > 0) {
+      exportData = currentDisplayedData.actual.filter(activity => 
+        selectedActivities.includes(activity.activityLabel)
+      );
+    }
+
+    const csvData = exportData.map(activity => ({
+      Date: activity.date,
+      User: activity.userName,
+      Team: activity.teamNames || 'No Team',
+      Activity: activity.activityLabel,
+      Start: formatTime(activity.startTime),
+      End: formatTime(activity.endTime),
+      Duration: formatDuration(activity.durationMinutes)
+    }));
+
+    exportToCSV(csvData, `actual_activity_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  function exportOvertimeSummaryToCSV() {
+    if (currentDisplayedData.overtime.length === 0) {
+      showMessage('No overtime data to export', 'error');
+      return;
+    }
+
+    let exportData = currentDisplayedData.overtime;
+    const selectedActivities = dropdowns.overtimeActivityFilter ? dropdowns.overtimeActivityFilter.getSelectedValues() : [];
+    if (selectedActivities.length > 0) {
+      exportData = currentDisplayedData.overtime.filter(user => 
+        user.activities.some(activity => selectedActivities.includes(activity.activity))
+      );
+    }
+
+    const csvData = exportData.map(item => ({
+      Agent: item.user,
+      Team: item.teamNames || 'No Team',
+      'Total Overtime Hours': item.totalHours,
+      '1.0 Rate Hours': item.rate1Hours,
+      '1.5 Rate Hours': item.rate1_5Hours,
+      '2.0 Rate Hours': item.rate2Hours
+    }));
+
+    exportToCSV(csvData, `overtime_summary_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  function exportOvertimeDetailsToCSV() {
+    if (currentOvertimeData.length === 0) {
+      showMessage('No overtime data to export', 'error');
+      return;
+    }
+
+    let exportData = [];
+    const selectedActivities = dropdowns.overtimeActivityFilter ? dropdowns.overtimeActivityFilter.getSelectedValues() : [];
+    
+    currentOvertimeData.forEach(item => {
+      const filteredActivities = selectedActivities.length > 0 
+        ? item.activities.filter(activity => selectedActivities.includes(activity.activity))
+        : item.activities;
         
-        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-      
-      currentDisplayedData.timeowed = sortedData;
-      renderTimeOwedResults(sortedData);
-    }
-
-    // ===== EXPORT FUNCTIONS =====
-    function exportToCSV(data, filename) {
-      if (!data || data.length === 0) {
-        showMessage('No data to export', 'error');
-        return;
-      }
-
-      const headers = Object.keys(data[0]);
-      const csvContent = [
-        headers.join(','),
-        ...data.map(row => 
-          headers.map(header => {
-            const value = row[header] || '';
-            return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
-          }).join(',')
-        )
-      ].join('\n');
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', filename);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    function exportScheduleToCSV() {
-      if (currentDisplayedData.schedule.length === 0) {
-        showMessage('No schedule data to export', 'error');
-        return;
-      }
-
-      let exportData = currentDisplayedData.schedule;
-      const selectedActivities = dropdowns.activityFilter ? dropdowns.activityFilter.getSelectedValues() : [];
-      if (selectedActivities.length > 0) {
-        exportData = currentDisplayedData.schedule.filter(activity => 
-          selectedActivities.includes(activity.activityLabel)
-        );
-      }
-
-      const csvData = exportData.map(activity => ({
-        Date: activity.date,
-        User: activity.userName,
-        Team: activity.teamNames || 'No Team',
-        Activity: activity.activityLabel,
-        Start: formatTime(activity.start),
-        End: formatTime(activity.end),
-        Duration: formatDuration(activity.durationMinutes)
-      }));
-
-      exportToCSV(csvData, `schedule_${new Date().toISOString().split('T')[0]}.csv`);
-    }
-
-    function exportActualActivityToCSV() {
-      if (currentDisplayedData.actual.length === 0) {
-        showMessage('No actual activity data to export', 'error');
-        return;
-      }
-
-      let exportData = currentDisplayedData.actual;
-      const selectedActivities = dropdowns.actualActivityFilter ? dropdowns.actualActivityFilter.getSelectedValues() : [];
-      if (selectedActivities.length > 0) {
-        exportData = currentDisplayedData.actual.filter(activity => 
-          selectedActivities.includes(activity.activityLabel)
-        );
-      }
-
-      const csvData = exportData.map(activity => ({
-        Date: activity.date,
-        User: activity.userName,
-        Team: activity.teamNames || 'No Team',
-        Activity: activity.activityLabel,
-        Start: formatTime(activity.startTime),
-        End: formatTime(activity.endTime),
-        Duration: formatDuration(activity.durationMinutes)
-      }));
-
-      exportToCSV(csvData, `actual_activity_${new Date().toISOString().split('T')[0]}.csv`);
-    }
-
-    function exportOvertimeSummaryToCSV() {
-      if (currentDisplayedData.overtime.length === 0) {
-        showMessage('No overtime data to export', 'error');
-        return;
-      }
-
-      let exportData = currentDisplayedData.overtime;
-      const selectedActivities = dropdowns.overtimeActivityFilter ? dropdowns.overtimeActivityFilter.getSelectedValues() : [];
-      if (selectedActivities.length > 0) {
-        exportData = currentDisplayedData.overtime.filter(user => 
-          user.activities.some(activity => selectedActivities.includes(activity.activity))
-        );
-      }
-
-      const csvData = exportData.map(item => ({
-        Agent: item.user,
-        Team: item.teamNames || 'No Team',
-        'Total Overtime Hours': item.totalHours,
-        '1.0 Rate Hours': item.rate1Hours,
-        '1.5 Rate Hours': item.rate1_5Hours,
-        '2.0 Rate Hours': item.rate2Hours
-      }));
-
-      exportToCSV(csvData, `overtime_summary_${new Date().toISOString().split('T')[0]}.csv`);
-    }
-
-    function exportOvertimeDetailsToCSV() {
-      if (currentOvertimeData.length === 0) {
-        showMessage('No overtime data to export', 'error');
-        return;
-      }
-
-      let exportData = [];
-      const selectedActivities = dropdowns.overtimeActivityFilter ? dropdowns.overtimeActivityFilter.getSelectedValues() : [];
-      
-      currentOvertimeData.forEach(item => {
-        const filteredActivities = selectedActivities.length > 0 
-          ? item.activities.filter(activity => selectedActivities.includes(activity.activity))
-          : item.activities;
-          
-        filteredActivities.forEach(activity => {
-          exportData.push({
-            Agent: item.user,
-            Team: item.teamNames || 'No Team',
-            Date: activity.date,
-            'Start Time': activity.startTime,
-            'End Time': activity.endTime,
-            Duration: activity.duration,
-            'Overtime Type': activity.activity,
-            Rate: activity.rate,
-            Hours: activity.hours
-          });
+      filteredActivities.forEach(activity => {
+        exportData.push({
+          Agent: item.user,
+          Team: item.teamNames || 'No Team',
+          Date: activity.date,
+          'Start Time': activity.startTime,
+          'End Time': activity.endTime,
+          Duration: activity.duration,
+          'Overtime Type': activity.activity,
+          Rate: activity.rate,
+          Hours: activity.hours
         });
       });
+    });
 
-      exportToCSV(exportData, `overtime_details_${new Date().toISOString().split('T')[0]}.csv`);
+    exportToCSV(exportData, `overtime_details_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  function exportAbsenceToCSV() {
+    if (currentDisplayedData.absence.length === 0) {
+      showMessage('No absence data to export', 'error');
+      return;
     }
 
-    function exportAbsenceToCSV() {
-      if (currentDisplayedData.absence.length === 0) {
-        showMessage('No absence data to export', 'error');
-        return;
-      }
-
-      let exportData = currentDisplayedData.absence;
-      const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
-      if (selectedActivities.length > 0) {
-        exportData = currentDisplayedData.absence.filter(user => 
-          user.absenceDetails.some(detail => selectedActivities.includes(detail.type))
-        );
-      }
-
-      const csvData = exportData.map(item => ({
-        Agent: item.user,
-        Team: item.teamNames || 'No Team',
-        'Total Absence Hours': item.totalHours,
-        'Absence Days': item.absenceDays,
-        Instances: item.instances,
-        'Average Hours per Instance': item.averageHoursPerInstance,
-        Status: item.exceedsThreshold ? 'Above Threshold' : 'Within Limits'
-      }));
-
-      exportToCSV(csvData, `absence_summary_${new Date().toISOString().split('T')[0]}.csv`);
+    let exportData = currentDisplayedData.absence;
+    const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
+    if (selectedActivities.length > 0) {
+      exportData = currentDisplayedData.absence.filter(user => 
+        user.absenceDetails.some(detail => selectedActivities.includes(detail.type))
+      );
     }
 
-    function exportAbsenceDetailsToCSV() {
-      if (currentAbsenceData.length === 0) {
-        showMessage('No absence data to export', 'error');
-        return;
-      }
+    const csvData = exportData.map(item => ({
+      Agent: item.user,
+      Team: item.teamNames || 'No Team',
+      'Total Absence Hours': item.totalHours,
+      'Absence Days': item.absenceDays,
+      Instances: item.instances,
+      'Average Hours per Instance': item.averageHoursPerInstance,
+      Status: item.exceedsThreshold ? 'Above Threshold' : 'Within Limits'
+    }));
 
-      let exportData = [];
-      const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
-      
-      currentAbsenceData.forEach(item => {
-        const filteredDetails = selectedActivities.length > 0 
-          ? item.absenceDetails.filter(detail => selectedActivities.includes(detail.type))
-          : item.absenceDetails;
-          
-        filteredDetails.forEach(detail => {
-          exportData.push({
-            Agent: item.user,
-            Team: item.teamNames || 'No Team',
-            Date: detail.date,
-            'Absence Type': detail.type,
-            Duration: detail.duration,
-            Hours: detail.hours
-          });
+    exportToCSV(csvData, `absence_summary_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  function exportAbsenceDetailsToCSV() {
+    if (currentAbsenceData.length === 0) {
+      showMessage('No absence data to export', 'error');
+      return;
+    }
+
+    let exportData = [];
+    const selectedActivities = dropdowns.absenceActivityFilter ? dropdowns.absenceActivityFilter.getSelectedValues() : [];
+    
+    currentAbsenceData.forEach(item => {
+      const filteredDetails = selectedActivities.length > 0 
+        ? item.absenceDetails.filter(detail => selectedActivities.includes(detail.type))
+        : item.absenceDetails;
+        
+      filteredDetails.forEach(detail => {
+        exportData.push({
+          Agent: item.user,
+          Team: item.teamNames || 'No Team',
+          Date: detail.date,
+          'Absence Type': detail.type,
+          Duration: detail.duration,
+          Hours: detail.hours
         });
       });
+    });
 
-      exportToCSV(exportData, `absence_details_${new Date().toISOString().split('T')[0]}.csv`);
+    exportToCSV(exportData, `absence_details_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  function exportLateReportToCSV() {
+    if (currentDisplayedData.late.length === 0) {
+      showMessage('No late report data to export', 'error');
+      return;
     }
 
-    function exportLateReportToCSV() {
-      if (currentDisplayedData.late.length === 0) {
-        showMessage('No late report data to export', 'error');
-        return;
-      }
+    const csvData = currentDisplayedData.late.map(row => ({
+      Date: row.date,
+      User: row.userName,
+      Team: row.teamNames || 'No Team',
+      'Scheduled Start': row.scheduledStart ? formatTime(row.scheduledStart) : 'N/A',
+      'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'N/A',
+      Status: row.status,
+      'Duration Late/Early': row.durationLate !== null ? 
+        (row.status === 'Late' ? `+${formatDuration(Math.ceil(row.durationLate / 60))}` : 
+         row.status === 'Early' ? `-${formatDuration(Math.ceil(row.durationLate / 60))}` : '0m') : 'N/A',
+      'Scheduled Activity': row.scheduledActivity || 'N/A',
+      'Actual Activity': row.actualActivity || 'N/A'
+    }));
 
-      const csvData = currentDisplayedData.late.map(row => ({
-        Date: row.date,
-        User: row.userName,
-        Team: row.teamNames || 'No Team',
-        'Scheduled Start': row.scheduledStart ? formatTime(row.scheduledStart) : 'N/A',
-        'Actual Start': row.actualStart ? formatTime(row.actualStart) : 'N/A',
-        Status: row.status,
-        'Duration Late/Early': row.durationLate !== null ? 
-          (row.status === 'Late' ? `+${formatDuration(Math.ceil(row.durationLate / 60))}` : 
-           row.status === 'Early' ? `-${formatDuration(Math.ceil(row.durationLate / 60))}` : '0m') : 'N/A',
-        'Scheduled Activity': row.scheduledActivity || 'N/A',
-        'Actual Activity': row.actualActivity || 'N/A'
-      }));
+    exportToCSV(csvData, `late_report_${new Date().toISOString().split('T')[0]}.csv`);
+  }
 
-      exportToCSV(csvData, `late_report_${new Date().toISOString().split('T')[0]}.csv`);
+  function exportTimeOwedReportToCSV() {
+    if (currentDisplayedData.timeowed.length === 0) {
+      showMessage('No time owed data to export', 'error');
+      return;
     }
 
-    function exportTimeOwedReportToCSV() {
-      if (currentDisplayedData.timeowed.length === 0) {
-        showMessage('No time owed data to export', 'error');
-        return;
-      }
+    // FIXED: Removed Scheduled Activity and Actual Activity from CSV export
+    const csvData = currentDisplayedData.timeowed.map(row => ({
+      Date: row.date,
+      User: row.userName,
+      Team: row.teamNames || 'No Team',
+      'Scheduled End': row.scheduledEnd ? formatTime(row.scheduledEnd) : 'N/A',
+      'Actual Logout Time': row.actualOfflineTime ? formatTime(row.actualOfflineTime) : 'N/A',
+      Status: row.status,
+      'Time Owed': row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m',
+      'Owed To': row.timeOwedType === 'toBusiness' ? 'BUSINESS' : 
+                 row.timeOwedType === 'toAgent' ? 'AGENT' : 'N/A'
+    }));
 
-      const csvData = currentDisplayedData.timeowed.map(row => ({
-        Date: row.date,
-        User: row.userName,
-        Team: row.teamNames || 'No Team',
-        'Scheduled End': row.scheduledEnd ? formatTime(row.scheduledEnd) : 'N/A',
-        'Actual Logout Time': row.actualOfflineTime ? formatTime(row.actualOfflineTime) : 'N/A',
-        Status: row.status,
-        'Time Owed': row.timeOwed > 0 ? formatDuration(row.timeOwed) : '0m',
-        'Owed To': row.timeOwedType === 'toBusiness' ? 'BUSINESS' : 
-                   row.timeOwedType === 'toAgent' ? 'AGENT' : 'N/A',
-        'Scheduled Activity': row.scheduledActivity || 'N/A',
-        'Actual Activity': row.actualActivity || 'N/A'
-      }));
-
-      exportToCSV(csvData, `time_owed_${new Date().toISOString().split('T')[0]}.csv`);
-    }
-  </script>
+    exportToCSV(csvData, `time_owed_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+</script>
 </body>
 </html>
