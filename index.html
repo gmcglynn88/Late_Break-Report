@@ -101,12 +101,6 @@
       margin-top: 12px
     }
     
-    .muted {
-      color: var(--text-light);
-      font-size: 12px;
-      margin-top: 4px
-    }
-    
     .section-title {
       margin: 0 0 10px;
       color: var(--secondary-color)
@@ -534,42 +528,36 @@
       </style>
       
       <div class="card">
-        <h2 class="section-title">Filters</h2>
+        <h2 class="section-title">Schedule Filters</h2>
         <div class="controls">
           <div>
-            <label for="businessUnitSelect">Business Unit</label>
+            <label>Business Unit</label>
             <div id="businessUnitDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required - Select only one</div>
           </div>
 
           <div>
-            <label for="managementUnitSelect">Management Unit</label>
+            <label>Management Unit</label>
             <div id="managementUnitDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required for schedule search</div>
           </div>
 
           <div>
             <label>Team</label>
             <div id="teamDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Optional – narrows users by team</div>
           </div>
 
           <div>
             <label>User</label>
             <div id="userDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required – schedule shown for this user</div>
           </div>
 
           <div>
-            <label for="startDate">Start date</label>
+            <label>Start Date</label>
             <input type="date" id="startDate" />
-            <div class="muted">e.g. 03-11-2025</div>
           </div>
 
           <div>
-            <label for="endDate">End date</label>
+            <label>End Date</label>
             <input type="date" id="endDate" />
-            <div class="muted">e.g. 08-11-2025</div>
           </div>
         </div>
 
@@ -580,15 +568,12 @@
         <div class="progress-text" id="scheduleProgressText"></div>
 
         <button id="loadScheduleBtn" class="full-width-btn">Load All Tab Data</button>
-        <div class="muted" style="text-align: center; margin-top: 8px;">
-          This will load data for ALL tabs using the selected parameters
-        </div>
       </div>
 
       <div id="results" class="card" style="display:none;">
         <div class="table-controls">
           <div class="sort-controls">
-            <label for="scheduleSort">Sort by:</label>
+            <label>Sort by:</label>
             <select id="scheduleSort">
               <option value="date">Date</option>
               <option value="user">User</option>
@@ -675,15 +660,14 @@
       </style>
       
       <div class="card">
-        <h2 class="section-title">Actual Activity (Historical Adherence)</h2>
+        <h2 class="section-title">Actual Activity Filters</h2>
         <div class="controls">
           <div>
-            <label for="actualBuSelect">Business Unit</label>
+            <label>Business Unit</label>
             <div id="actualBuDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required - Select only one</div>
           </div>
           <div>
-            <label for="actualMuSelect">Management Unit</label>
+            <label>Management Unit</label>
             <div id="actualMuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
@@ -695,11 +679,11 @@
             <div id="actualUserDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
-            <label for="actualStartDate">Start Date</label>
+            <label>Start Date</label>
             <input type="date" id="actualStartDate" />
           </div>
           <div>
-            <label for="actualEndDate">End Date</label>
+            <label>End Date</label>
             <input type="date" id="actualEndDate" />
           </div>
         </div>
@@ -716,7 +700,7 @@
       <div id="actualResults" class="card" style="display:none;">
         <div class="table-controls">
           <div class="sort-controls">
-            <label for="actualSort">Sort by:</label>
+            <label>Sort by:</label>
             <select id="actualSort">
               <option value="date">Date</option>
               <option value="user">User</option>
@@ -859,15 +843,14 @@
       </style>
       
       <div class="card">
-        <h2 class="section-title">Overtime Analysis</h2>
+        <h2 class="section-title">Overtime Filters</h2>
         <div class="controls">
           <div>
-            <label for="overtimeBuSelect">Business Unit</label>
+            <label>Business Unit</label>
             <div id="overtimeBuDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required - Select only one</div>
           </div>
           <div>
-            <label for="overtimeMuSelect">Management Unit</label>
+            <label>Management Unit</label>
             <div id="overtimeMuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
@@ -875,11 +858,11 @@
             <div id="overtimeTeamDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
-            <label for="overtimeStartDate">Start Date</label>
+            <label>Start Date</label>
             <input type="date" id="overtimeStartDate" />
           </div>
           <div>
-            <label for="overtimeEndDate">End Date</label>
+            <label>End Date</label>
             <input type="date" id="overtimeEndDate" />
           </div>
         </div>
@@ -896,7 +879,7 @@
       <div id="overtimeResults" class="card" style="display:none;">
         <div class="table-controls">
           <div class="sort-controls">
-            <label for="overtimeSort">Sort by:</label>
+            <label>Sort by:</label>
             <select id="overtimeSort">
               <option value="user">User</option>
               <option value="totalHours">Total Hours</option>
@@ -1103,15 +1086,14 @@
       </style>
       
       <div class="card">
-        <h2 class="section-title">Absence Analytics</h2>
+        <h2 class="section-title">Absence Filters</h2>
         <div class="controls">
           <div>
-            <label for="absenceBuSelect">Business Unit</label>
+            <label>Business Unit</label>
             <div id="absenceBuDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required - Select only one</div>
           </div>
           <div>
-            <label for="absenceMuSelect">Management Unit</label>
+            <label>Management Unit</label>
             <div id="absenceMuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
@@ -1119,17 +1101,16 @@
             <div id="absenceTeamDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
-            <label for="absenceStartDate">Start Date</label>
+            <label>Start Date</label>
             <input type="date" id="absenceStartDate" />
           </div>
           <div>
-            <label for="absenceEndDate">End Date</label>
+            <label>End Date</label>
             <input type="date" id="absenceEndDate" />
           </div>
           <div>
-            <label for="absenceThreshold">Alert Threshold (days)</label>
+            <label>Alert Threshold (days)</label>
             <input type="number" id="absenceThreshold" value="2" min="0" step="0.5" />
-            <div class="muted">Threshold in days (e.g., 2 = 2 days)</div>
           </div>
         </div>
 
@@ -1145,7 +1126,7 @@
       <div id="absenceResults" class="card" style="display:none;">
         <div class="table-controls">
           <div class="sort-controls">
-            <label for="absenceSort">Sort by:</label>
+            <label>Sort by:</label>
             <select id="absenceSort">
               <option value="user">User</option>
               <option value="totalHours">Total Hours</option>
@@ -1217,15 +1198,14 @@
       </style>
       
       <div class="card">
-        <h2 class="section-title">Late Report Configuration</h2>
+        <h2 class="section-title">Late Report Filters</h2>
         <div class="controls">
           <div>
-            <label for="lateBuSelect">Business Unit</label>
+            <label>Business Unit</label>
             <div id="lateBuDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required - Select only one</div>
           </div>
           <div>
-            <label for="lateMuSelect">Management Unit</label>
+            <label>Management Unit</label>
             <div id="lateMuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
@@ -1237,17 +1217,16 @@
             <div id="lateUserDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
-            <label for="lateStartDate">Start Date</label>
+            <label>Start Date</label>
             <input type="date" id="lateStartDate" />
           </div>
           <div>
-            <label for="lateEndDate">End Date</label>
+            <label>End Date</label>
             <input type="date" id="lateEndDate" />
           </div>
           <div>
-            <label for="lateThreshold">Late Threshold (seconds)</label>
+            <label>Late Threshold (seconds)</label>
             <input type="number" id="lateThreshold" value="30" min="0" step="1" />
-            <div class="muted">Seconds allowed before being marked late</div>
           </div>
         </div>
 
@@ -1263,7 +1242,7 @@
       <div id="lateResults" class="card" style="display:none;">
         <div class="table-controls">
           <div class="sort-controls">
-            <label for="lateSort">Sort by:</label>
+            <label>Sort by:</label>
             <select id="lateSort">
               <option value="userName">User</option>
               <option value="date">Date</option>
@@ -1323,15 +1302,14 @@
       </style>
       
       <div class="card">
-        <h2 class="section-title">Time Owed Report</h2>
+        <h2 class="section-title">Time Owed Filters</h2>
         <div class="controls">
           <div>
-            <label for="timeOwedBuSelect">Business Unit</label>
+            <label>Business Unit</label>
             <div id="timeOwedBuDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required - Select only one</div>
           </div>
           <div>
-            <label for="timeOwedMuSelect">Management Unit</label>
+            <label>Management Unit</label>
             <div id="timeOwedMuDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
@@ -1343,11 +1321,11 @@
             <div id="timeOwedUserDropdown" class="checkbox-dropdown"></div>
           </div>
           <div>
-            <label for="timeOwedStartDate">Start Date</label>
+            <label>Start Date</label>
             <input type="date" id="timeOwedStartDate" />
           </div>
           <div>
-            <label for="timeOwedEndDate">End Date</label>
+            <label>End Date</label>
             <input type="date" id="timeOwedEndDate" />
           </div>
         </div>
@@ -1364,7 +1342,7 @@
       <div id="timeOwedResults" class="card" style="display:none;">
         <div class="table-controls">
           <div class="sort-controls">
-            <label for="timeOwedSort">Sort by:</label>
+            <label>Sort by:</label>
             <select id="timeOwedSort">
               <option value="userName">User</option>
               <option value="date">Date</option>
@@ -1625,7 +1603,7 @@
       return allItems;
     }
 
-    // ===== MODIFIED CHECKBOX DROPDOWN FUNCTIONS (Single Selection for Business Units) =====
+    // ===== MODIFIED CHECKBOX DROPDOWN FUNCTIONS (Single Selection for Business Units AND Management Units) =====
     function createCheckboxDropdown(containerId, { placeholder, searchPlaceholder, onSelectionChange, singleSelection = false } = {}){
       const root = document.getElementById(containerId);
       if (!root) {
@@ -2148,18 +2126,19 @@
     }
 
     function initializeDropdowns() {
-      // Schedule tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
+      // Schedule tab dropdowns - BUSINESS UNIT and MANAGEMENT UNIT are SINGLE SELECTION
       dropdowns.businessUnit = createCheckboxDropdown('businessUnitDropdown', { 
         placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
         onSelectionChange: handleBusinessUnitChange,
-        singleSelection: true  // This makes it single selection
+        singleSelection: true
       });
       
       dropdowns.managementUnit = createCheckboxDropdown('managementUnitDropdown', { 
-        placeholder: 'Select management units', 
+        placeholder: 'Select management unit', 
         searchPlaceholder: 'Search management units...',
-        onSelectionChange: handleManagementUnitChange
+        onSelectionChange: handleManagementUnitChange,
+        singleSelection: true  // Changed to single selection
       });
       
       dropdowns.team = createCheckboxDropdown('teamDropdown', { 
@@ -2172,18 +2151,19 @@
         searchPlaceholder: 'Search users...' 
       });
       
-      // Actual Activity tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
+      // Actual Activity tab dropdowns - BUSINESS UNIT and MANAGEMENT UNIT are SINGLE SELECTION
       dropdowns.actualBu = createCheckboxDropdown('actualBuDropdown', { 
         placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
         onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'actual'),
-        singleSelection: true  // This makes it single selection
+        singleSelection: true
       });
       
       dropdowns.actualMu = createCheckboxDropdown('actualMuDropdown', { 
-        placeholder: 'Select management units', 
+        placeholder: 'Select management unit', 
         searchPlaceholder: 'Search management units...',
-        onSelectionChange: (selected) => handleActualManagementUnitChange(selected)
+        onSelectionChange: (selected) => handleActualManagementUnitChange(selected),
+        singleSelection: true  // Changed to single selection
       });
       
       dropdowns.actualTeam = createCheckboxDropdown('actualTeamDropdown', { 
@@ -2196,18 +2176,19 @@
         searchPlaceholder: 'Search users...' 
       });
       
-      // Overtime tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
+      // Overtime tab dropdowns - BUSINESS UNIT and MANAGEMENT UNIT are SINGLE SELECTION
       dropdowns.overtimeBu = createCheckboxDropdown('overtimeBuDropdown', { 
         placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
         onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'overtime'),
-        singleSelection: true  // This makes it single selection
+        singleSelection: true
       });
       
       dropdowns.overtimeMu = createCheckboxDropdown('overtimeMuDropdown', { 
-        placeholder: 'Select management units', 
+        placeholder: 'Select management unit', 
         searchPlaceholder: 'Search management units...',
-        onSelectionChange: (selected) => handleOvertimeManagementUnitChange(selected)
+        onSelectionChange: (selected) => handleOvertimeManagementUnitChange(selected),
+        singleSelection: true  // Changed to single selection
       });
       
       dropdowns.overtimeTeam = createCheckboxDropdown('overtimeTeamDropdown', { 
@@ -2215,18 +2196,19 @@
         searchPlaceholder: 'Search teams...' 
       });
       
-      // Absence tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
+      // Absence tab dropdowns - BUSINESS UNIT and MANAGEMENT UNIT are SINGLE SELECTION
       dropdowns.absenceBu = createCheckboxDropdown('absenceBuDropdown', { 
         placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
         onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'absence'),
-        singleSelection: true  // This makes it single selection
+        singleSelection: true
       });
       
       dropdowns.absenceMu = createCheckboxDropdown('absenceMuDropdown', { 
-        placeholder: 'Select management units', 
+        placeholder: 'Select management unit', 
         searchPlaceholder: 'Search management units...',
-        onSelectionChange: (selected) => handleAbsenceManagementUnitChange(selected)
+        onSelectionChange: (selected) => handleAbsenceManagementUnitChange(selected),
+        singleSelection: true  // Changed to single selection
       });
       
       dropdowns.absenceTeam = createCheckboxDropdown('absenceTeamDropdown', { 
@@ -2234,18 +2216,19 @@
         searchPlaceholder: 'Search teams...' 
       });
       
-      // Late Report tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
+      // Late Report tab dropdowns - BUSINESS UNIT and MANAGEMENT UNIT are SINGLE SELECTION
       dropdowns.lateBu = createCheckboxDropdown('lateBuDropdown', { 
         placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
         onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'late'),
-        singleSelection: true  // This makes it single selection
+        singleSelection: true
       });
       
       dropdowns.lateMu = createCheckboxDropdown('lateMuDropdown', { 
-        placeholder: 'Select management units', 
+        placeholder: 'Select management unit', 
         searchPlaceholder: 'Search management units...',
-        onSelectionChange: (selected) => handleLateManagementUnitChange(selected)
+        onSelectionChange: (selected) => handleLateManagementUnitChange(selected),
+        singleSelection: true  // Changed to single selection
       });
       
       dropdowns.lateTeam = createCheckboxDropdown('lateTeamDropdown', { 
@@ -2258,18 +2241,19 @@
         searchPlaceholder: 'Search users...' 
       });
       
-      // Time Owed tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
+      // Time Owed tab dropdowns - BUSINESS UNIT and MANAGEMENT UNIT are SINGLE SELECTION
       dropdowns.timeOwedBu = createCheckboxDropdown('timeOwedBuDropdown', { 
         placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
         onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'timeowed'),
-        singleSelection: true  // This makes it single selection
+        singleSelection: true
       });
       
       dropdowns.timeOwedMu = createCheckboxDropdown('timeOwedMuDropdown', { 
-        placeholder: 'Select management units', 
+        placeholder: 'Select management unit', 
         searchPlaceholder: 'Search management units...',
-        onSelectionChange: (selected) => handleTimeOwedManagementUnitChange(selected)
+        onSelectionChange: (selected) => handleTimeOwedManagementUnitChange(selected),
+        singleSelection: true  // Changed to single selection
       });
       
       dropdowns.timeOwedTeam = createCheckboxDropdown('timeOwedTeamDropdown', { 
@@ -2282,7 +2266,7 @@
         searchPlaceholder: 'Search users...' 
       });
       
-      // Activity filter dropdowns - FIXED: Added onSelectionChange handlers
+      // Activity filter dropdowns
       dropdowns.activityFilter = createCheckboxDropdown('activityFilterDropdown', { 
         placeholder: 'Filter by activity type', 
         searchPlaceholder: 'Search activities...',
@@ -5117,7 +5101,6 @@
         </div>
       </div>
       
-      <!-- FIXED: Removed the last 2 columns from Time Owed table -->
       <table class="schedule-table">
         <thead>
           <tr>
@@ -5468,7 +5451,6 @@
       return;
     }
 
-    // FIXED: Removed Scheduled Activity and Actual Activity from CSV export
     const csvData = currentDisplayedData.timeowed.map(row => ({
       Date: row.date,
       User: row.userName,
