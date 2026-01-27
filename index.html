@@ -539,7 +539,7 @@
           <div>
             <label for="businessUnitSelect">Business Unit</label>
             <div id="businessUnitDropdown" class="checkbox-dropdown"></div>
-            <div class="muted">Required</div>
+            <div class="muted">Required - Select only one</div>
           </div>
 
           <div>
@@ -680,6 +680,7 @@
           <div>
             <label for="actualBuSelect">Business Unit</label>
             <div id="actualBuDropdown" class="checkbox-dropdown"></div>
+            <div class="muted">Required - Select only one</div>
           </div>
           <div>
             <label for="actualMuSelect">Management Unit</label>
@@ -863,6 +864,7 @@
           <div>
             <label for="overtimeBuSelect">Business Unit</label>
             <div id="overtimeBuDropdown" class="checkbox-dropdown"></div>
+            <div class="muted">Required - Select only one</div>
           </div>
           <div>
             <label for="overtimeMuSelect">Management Unit</label>
@@ -1106,6 +1108,7 @@
           <div>
             <label for="absenceBuSelect">Business Unit</label>
             <div id="absenceBuDropdown" class="checkbox-dropdown"></div>
+            <div class="muted">Required - Select only one</div>
           </div>
           <div>
             <label for="absenceMuSelect">Management Unit</label>
@@ -1219,6 +1222,7 @@
           <div>
             <label for="lateBuSelect">Business Unit</label>
             <div id="lateBuDropdown" class="checkbox-dropdown"></div>
+            <div class="muted">Required - Select only one</div>
           </div>
           <div>
             <label for="lateMuSelect">Management Unit</label>
@@ -1324,6 +1328,7 @@
           <div>
             <label for="timeOwedBuSelect">Business Unit</label>
             <div id="timeOwedBuDropdown" class="checkbox-dropdown"></div>
+            <div class="muted">Required - Select only one</div>
           </div>
           <div>
             <label for="timeOwedMuSelect">Management Unit</label>
@@ -1620,8 +1625,8 @@
       return allItems;
     }
 
-    // ===== CHECKBOX DROPDOWN FUNCTIONS (Common) =====
-    function createCheckboxDropdown(containerId, { placeholder, searchPlaceholder, onSelectionChange } = {}){
+    // ===== MODIFIED CHECKBOX DROPDOWN FUNCTIONS (Single Selection for Business Units) =====
+    function createCheckboxDropdown(containerId, { placeholder, searchPlaceholder, onSelectionChange, singleSelection = false } = {}){
       const root = document.getElementById(containerId);
       if (!root) {
         console.error(`Container ${containerId} not found`);
@@ -1637,16 +1642,27 @@
 
       const panel = document.createElement('div');
       panel.className = 'cd-panel';
+      
+      // Hide Select All button for single selection dropdowns
+      const selectAllHtml = singleSelection ? '' : `
+        <div class="cd-selectall">
+          <label><input type="checkbox" data-cd="selectall"/> Select all</label>
+        </div>
+      `;
+      
+      // Hide Clear button for single selection dropdowns
+      const clearButtonHtml = singleSelection ? '' : `
+        <button type="button" data-cd="clear">Clear</button>
+      `;
+      
       panel.innerHTML = `
         <div class="cd-header">
           <input type="text" class="cd-search" placeholder="${searchPlaceholder}" />
           <div class="cd-actions">
-            <button type="button" data-cd="clear">Clear</button>
+            ${clearButtonHtml}
           </div>
         </div>
-        <div class="cd-selectall">
-          <label><input type="checkbox" data-cd="selectall"/> Select all</label>
-        </div>
+        ${selectAllHtml}
         <div class="cd-list"></div>
         <div class="cd-footer">
           <span data-cd="summary">0 selected</span>
@@ -1668,21 +1684,47 @@
         const ft = filter.trim().toLowerCase();
         list.innerHTML = '';
         const filtered = !ft ? options : options.filter(o => (o.label||'').toLowerCase().includes(ft));
-        if (!filtered.length){ list.innerHTML = `<div class="cd-item" style="color:#6C757D">No matches</div>`; return; }
+        if (!filtered.length){ 
+          list.innerHTML = `<div class="cd-item" style="color:#6C757D">No matches</div>`; 
+          return; 
+        }
         filtered.forEach(o=>{
           const id = `${containerId}__${o.value}`;
           const row = document.createElement('div');
           row.className = 'cd-item';
-          row.innerHTML = `
-            <label for="${id}">
-              <input type="checkbox" id="${id}" value="${o.value}" ${selected.has(o.value)?'checked':''}/>
-              <span>${o.label || o.value}</span>
-            </label>
-          `;
-          const cb = row.querySelector('input');
-          cb.addEventListener('change', ()=>{
-            if (cb.checked) selected.add(o.value); else selected.delete(o.value);
-            updateSummary(); updateSelectAllState();
+          
+          // Use radio buttons for single selection
+          if (singleSelection) {
+            row.innerHTML = `
+              <label for="${id}">
+                <input type="radio" id="${id}" name="${containerId}_radio" value="${o.value}" ${selected.has(o.value)?'checked':''}/>
+                <span>${o.label || o.value}</span>
+              </label>
+            `;
+          } else {
+            row.innerHTML = `
+              <label for="${id}">
+                <input type="checkbox" id="${id}" value="${o.value}" ${selected.has(o.value)?'checked':''}/>
+                <span>${o.label || o.value}</span>
+              </label>
+            `;
+          }
+          
+          const input = row.querySelector('input');
+          input.addEventListener('change', ()=>{
+            if (singleSelection) {
+              // For radio buttons, clear all and add only the selected one
+              selected.clear();
+              if (input.checked) {
+                selected.add(o.value);
+              }
+            } else {
+              // For checkboxes, toggle selection
+              if (input.checked) selected.add(o.value); 
+              else selected.delete(o.value);
+            }
+            updateSummary(); 
+            updateSelectAllState();
             if (onSelectionChange) {
               onSelectionChange(Array.from(selected));
             }
@@ -1690,40 +1732,57 @@
           list.appendChild(row);
         });
       }
+      
       function updateSummary(){
-        trigger.querySelector('.count').textContent = `${selected.size} selected`;
-        summary.textContent = `${selected.size} selected`;
+        if (singleSelection) {
+          trigger.querySelector('.count').textContent = selected.size > 0 ? '1 selected' : '0 selected';
+          summary.textContent = selected.size > 0 ? '1 selected' : '0 selected';
+        } else {
+          trigger.querySelector('.count').textContent = `${selected.size} selected`;
+          summary.textContent = `${selected.size} selected`;
+        }
       }
+      
       function updateSelectAllState(){
+        if (singleSelection) return; // No select all for single selection
+        
         const total = options.length, count = selected.size;
-        selectAll.indeterminate = count>0 && count<total;
-        selectAll.checked = total>0 && count===total;
+        if (selectAll) {
+          selectAll.indeterminate = count>0 && count<total;
+          selectAll.checked = total>0 && count===total;
+        }
       }
 
       trigger.addEventListener('click', ()=>{ panel.classList.toggle('open'); search.focus(); });
       document.addEventListener('click', (e)=>{ if (!root.contains(e.target)) panel.classList.remove('open'); });
       search.addEventListener('input', ()=> render(search.value));
-      clearBtn.addEventListener('click', ()=>{ 
-        selected.clear(); 
-        render(search.value); 
-        updateSummary(); 
-        updateSelectAllState();
-        if (onSelectionChange) {
-          onSelectionChange([]);
-        }
-      });
-      selectAll.addEventListener('change', ()=>{
-        if (selectAll.checked) {
-          options.forEach(o=> selected.add(o.value));
-        } else {
-          selected.clear();
-        }
-        render(search.value); 
-        updateSummary();
-        if (onSelectionChange) {
-          onSelectionChange(Array.from(selected));
-        }
-      });
+      
+      if (clearBtn) {
+        clearBtn.addEventListener('click', ()=>{ 
+          selected.clear(); 
+          render(search.value); 
+          updateSummary(); 
+          updateSelectAllState();
+          if (onSelectionChange) {
+            onSelectionChange([]);
+          }
+        });
+      }
+      
+      if (selectAll) {
+        selectAll.addEventListener('change', ()=>{
+          if (selectAll.checked) {
+            options.forEach(o=> selected.add(o.value));
+          } else {
+            selected.clear();
+          }
+          render(search.value); 
+          updateSummary();
+          if (onSelectionChange) {
+            onSelectionChange(Array.from(selected));
+          }
+        });
+      }
 
       function setOptions(newOptions){
         options = newOptions || [];
@@ -1900,6 +1959,12 @@
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
 
+      // Check if more than one business unit is selected
+      if (buIds.length > 1) {
+        showMessage('Please select only ONE business unit', 'error');
+        return null;
+      }
+      
       if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDate || !endDate) {
         showMessage('Please select business unit, management unit, users, and date range', 'error');
         return null;
@@ -2083,11 +2148,12 @@
     }
 
     function initializeDropdowns() {
-      // Schedule tab dropdowns
+      // Schedule tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
       dropdowns.businessUnit = createCheckboxDropdown('businessUnitDropdown', { 
-        placeholder: 'Select business units', 
+        placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
-        onSelectionChange: handleBusinessUnitChange
+        onSelectionChange: handleBusinessUnitChange,
+        singleSelection: true  // This makes it single selection
       });
       
       dropdowns.managementUnit = createCheckboxDropdown('managementUnitDropdown', { 
@@ -2106,11 +2172,12 @@
         searchPlaceholder: 'Search users...' 
       });
       
-      // Actual Activity tab dropdowns
+      // Actual Activity tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
       dropdowns.actualBu = createCheckboxDropdown('actualBuDropdown', { 
-        placeholder: 'Select business units', 
+        placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
-        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'actual')
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'actual'),
+        singleSelection: true  // This makes it single selection
       });
       
       dropdowns.actualMu = createCheckboxDropdown('actualMuDropdown', { 
@@ -2129,11 +2196,12 @@
         searchPlaceholder: 'Search users...' 
       });
       
-      // Overtime tab dropdowns
+      // Overtime tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
       dropdowns.overtimeBu = createCheckboxDropdown('overtimeBuDropdown', { 
-        placeholder: 'Select business units', 
+        placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
-        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'overtime')
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'overtime'),
+        singleSelection: true  // This makes it single selection
       });
       
       dropdowns.overtimeMu = createCheckboxDropdown('overtimeMuDropdown', { 
@@ -2147,11 +2215,12 @@
         searchPlaceholder: 'Search teams...' 
       });
       
-      // Absence tab dropdowns
+      // Absence tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
       dropdowns.absenceBu = createCheckboxDropdown('absenceBuDropdown', { 
-        placeholder: 'Select business units', 
+        placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
-        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'absence')
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'absence'),
+        singleSelection: true  // This makes it single selection
       });
       
       dropdowns.absenceMu = createCheckboxDropdown('absenceMuDropdown', { 
@@ -2165,11 +2234,12 @@
         searchPlaceholder: 'Search teams...' 
       });
       
-      // Late Report tab dropdowns
+      // Late Report tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
       dropdowns.lateBu = createCheckboxDropdown('lateBuDropdown', { 
-        placeholder: 'Select business units', 
+        placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
-        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'late')
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'late'),
+        singleSelection: true  // This makes it single selection
       });
       
       dropdowns.lateMu = createCheckboxDropdown('lateMuDropdown', { 
@@ -2188,11 +2258,12 @@
         searchPlaceholder: 'Search users...' 
       });
       
-      // Time Owed tab dropdowns
+      // Time Owed tab dropdowns - BUSINESS UNIT is SINGLE SELECTION
       dropdowns.timeOwedBu = createCheckboxDropdown('timeOwedBuDropdown', { 
-        placeholder: 'Select business units', 
+        placeholder: 'Select business unit', 
         searchPlaceholder: 'Search business units...',
-        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'timeowed')
+        onSelectionChange: (selected) => handleAnalyticsBuChange(selected, 'timeowed'),
+        singleSelection: true  // This makes it single selection
       });
       
       dropdowns.timeOwedMu = createCheckboxDropdown('timeOwedMuDropdown', { 
@@ -3274,6 +3345,12 @@
       const startDateApi = convertToApiFormat(startDateRaw);
       const endDateApi = convertToApiFormat(endDateRaw);
 
+      // Check if more than one business unit is selected
+      if (buIds.length > 1) {
+        showMessage('Please select only ONE business unit', 'error');
+        return;
+      }
+      
       if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateApi || !endDateApi) {
         showMessage('Please select business unit, management unit, users, and date range', 'error');
         return;
@@ -3584,6 +3661,12 @@
     const startDateApi = convertToApiFormat(startDate);
     const endDateApi = convertToApiFormat(endDate);
 
+    // Check if more than one business unit is selected
+    if (buIds.length > 1) {
+      showMessage('Please select only ONE business unit', 'error');
+      return;
+    }
+    
     if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
       showMessage('Please select business unit, management unit, and date range', 'error');
       return;
@@ -3878,6 +3961,12 @@
     const startDateApi = convertToApiFormat(startDate);
     const endDateApi = convertToApiFormat(endDate);
 
+    // Check if more than one business unit is selected
+    if (buIds.length > 1) {
+      showMessage('Please select only ONE business unit', 'error');
+      return;
+    }
+    
     if (buIds.length === 0 || muIds.length === 0 || !startDate || !endDate) {
       showMessage('Please select business unit, management unit, and date range', 'error');
       return;
@@ -4370,6 +4459,12 @@
     const endDateRaw = document.getElementById('lateEndDate').value;
     const thresholdSeconds = parseInt(document.getElementById('lateThreshold').value) || 30;
 
+    // Check if more than one business unit is selected
+    if (buIds.length > 1) {
+      showMessage('Please select only ONE business unit', 'error');
+      return;
+    }
+    
     if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
       showMessage('Please select business unit, management unit, users, and date range', 'error');
       return;
@@ -4724,6 +4819,12 @@
     const startDateRaw = document.getElementById('timeOwedStartDate').value;
     const endDateRaw = document.getElementById('timeOwedEndDate').value;
 
+    // Check if more than one business unit is selected
+    if (buIds.length > 1) {
+      showMessage('Please select only ONE business unit', 'error');
+      return;
+    }
+    
     if (buIds.length === 0 || muIds.length === 0 || userIds.length === 0 || !startDateRaw || !endDateRaw) {
       showMessage('Please select business unit, management unit, users, and date range', 'error');
       return;
